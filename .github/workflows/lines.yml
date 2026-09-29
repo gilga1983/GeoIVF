@@ -1,0 +1,54 @@
+name: Line-model qualification
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'geoivf/lines.py'
+      - 'scripts/qualify_lines.py'
+      - 'tests/test_lines.py'
+      - '.github/workflows/lines.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-line-model-qualification
+  cancel-in-progress: false
+jobs:
+  lines:
+    if: github.repository == 'gilga1983/GeoIVF' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Environment and regression tests
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+          mkdir -p artifacts/lines
+          .venv/bin/pip freeze > artifacts/lines/packages.txt
+          git rev-parse HEAD > artifacts/lines/commit.txt
+          uname -a > artifacts/lines/host.txt
+          make -j2
+          GEOIVF_TEST_DIRECT=1 .venv/bin/python -m pytest -q --junitxml=artifacts/lines/tests.xml
+      - name: Canonical dataset
+        run: .venv/bin/python scripts/fetch_sift1m.py --report artifacts/lines/dataset.json
+      - name: Free lines, perpendicular norms, and capacity-preserving page refinement
+        run: |
+          .venv/bin/python scripts/qualify_lines.py \
+            --work "$RUNNER_TEMP/geoivf-lines-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --out artifacts/lines/results --queries 64 --nprobe 64
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: line-qualification-${{ github.run_id }}
+          path: artifacts/lines/
+          retention-days: 30
