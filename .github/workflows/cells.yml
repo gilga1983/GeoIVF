@@ -1,0 +1,57 @@
+name: Quantization-cell qualification
+on:
+  push:
+    branches: [experiment/quantization-cells]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-cell-qualification
+  cancel-in-progress: false
+jobs:
+  cells:
+    if: github.repository == 'gilga1983/GeoIVF' && (github.ref == 'refs/heads/experiment/quantization-cells' || github.ref == 'refs/heads/main')
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build kernels and test
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+          mkdir -p artifacts/cells
+          git rev-parse HEAD > artifacts/cells/commit.txt
+          git archive --format=zip HEAD > artifacts/cells/source.zip
+          .venv/bin/pip freeze > artifacts/cells/packages.txt
+          { uname -a; lscpu; g++ --version; uptime; } > artifacts/cells/host.txt
+          bash scripts/build_cells.sh 2>&1 | tee artifacts/cells/build.log
+          make -j2
+          GEOIVF_TEST_DIRECT=1 .venv/bin/python -m pytest -q --junitxml=artifacts/cells/tests.xml
+      - name: Canonical data
+        run: .venv/bin/python scripts/fetch_sift1m.py --report artifacts/cells/dataset.json
+      - name: Same-code pruning and native filter CPU
+        run: |
+          .venv/bin/python scripts/qualify_cells.py \
+            --work "$RUNNER_TEMP/geoivf-cells-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --out artifacts/cells/results --queries 64 --cpu-repeats 7 \
+            2>&1 | tee artifacts/cells/qualification.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quantization-cells-${{ github.run_id }}
+          path: artifacts/cells/
+          retention-days: 30
+      - name: Remove only this run's temporary payloads
+        if: always()
+        run: |
+          work="$RUNNER_TEMP/geoivf-cells-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          case "$work" in "$RUNNER_TEMP"/geoivf-cells-*) rm -rf -- "$work" ;; *) exit 1 ;; esac
