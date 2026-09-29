@@ -32,7 +32,7 @@ def main():
     s.add_argument('--direct', action='store_true')
     s.add_argument('--summary', help='Certified independent PCA sidecar with cells.json')
     s.add_argument('--shape', choices=['ball','box','hybrid'], default='ball')
-    s.add_argument('--selection', choices=['bounds','fixed','adaptive'], default='bounds')
+    s.add_argument('--selection', choices=['bounds','fixed','adaptive','prepared'], default='bounds')
     s.add_argument('--scan', choices=['python','native'], default='python')
     s.add_argument('--pooled', action='store_true', help='Borrow reusable native read buffers')
     s.add_argument('--queue-depth', type=int, default=16)

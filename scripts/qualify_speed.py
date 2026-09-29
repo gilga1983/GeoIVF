@@ -65,6 +65,7 @@ def main():
     ap.add_argument('--repeats',type=int,default=5)
     ap.add_argument('--with-direct',action='store_true')
     ap.add_argument('--depth',type=int,default=16)
+    ap.add_argument('--prepared',action='store_true',help='compare prepared/fused planning with the native-speed baseline')
     args=ap.parse_args()
     if not 1<=args.timed_queries<=args.queries<=1000 or args.repeats<3 or not 1<=args.depth<=1024:
         ap.error('invalid campaign dimensions')
@@ -121,6 +122,13 @@ def run(args):
       'adaptive-b8-native':(cells[8],'combined','adaptive','native',64),
       'full-b6-native':(cells[6],'combined','bounds','native',64),
       'adaptive-b6-native':(cells[6],'combined','adaptive','native',64)}
+    if args.prepared:
+        methods = {name: methods[name] for name in (
+            'unfiltered-native','full-b8-native','adaptive-b8-native','adaptive-b6-native')}
+        methods.update({
+            'prepared-unfiltered':(plain,'none','prepared','native',0),
+            'prepared-b8-native':(cells[8],'combined','prepared','native',64),
+            'prepared-b6-native':(cells[6],'combined','prepared','native',64)})
     memory=MemoryReplay(layout/'vectors.pages')
     correctness=[];audits=0;plans={}
     for name,(idx,mode,selection,scan,window) in methods.items():
@@ -186,9 +194,15 @@ def run(args):
         measure('memory',[(name,memory) for name in methods])
         if args.with_direct:
             pooled=PooledNative(layout/'vectors.pages',direct=True,uring=True,depth=args.depth)
-            copying=Native(layout/'vectors.pages',direct=True,uring=True,depth=args.depth)
-            readers.extend([pooled,copying]);pools.append(pooled)
-            measure('direct',[(name,pooled) for name in [
+            readers.append(pooled);pools.append(pooled)
+            copying=None
+            if not args.prepared:
+                copying=Native(layout/'vectors.pages',direct=True,uring=True,depth=args.depth)
+                readers.append(copying)
+            if args.prepared:
+                measure('direct',[(name,pooled) for name in methods])
+            else:
+                measure('direct',[(name,pooled) for name in [
                 'unfiltered-native','full-b8-native','adaptive-b8-native','adaptive-b6-native']]+
                 [('unfiltered-native',copying),('adaptive-b8-native',copying)])
         pool_info=[dict(mode=p.mode,reserved_bytes=p.reserved_bytes,allocation_count=p.allocations,
@@ -222,6 +236,7 @@ def run(args):
         elapsed_seconds=time.monotonic()-started,
         max_rss_kib=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
         real_direct_io_executed=args.with_direct,exclusive_host=False,
+        prepared_planner_executed=args.prepared,
         production_speedup_valid=False,
         limitations=['one small SIFT1M index, one seed, reused development queries',
           'shared host, no frequency control, pinned process does not reserve core',

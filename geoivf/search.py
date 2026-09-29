@@ -77,9 +77,9 @@ def search(index: Index, q: np.ndarray, reader, *, k: int = 10, nprobe: int = 8,
         raise ValueError('query dimension mismatch')
     if filtering not in ('none', 'radial', 'balls', 'combined'):
         raise ValueError('invalid filtering mode')
-    if scan not in ('python','native') or selection not in ('bounds','fixed','adaptive'):
+    if scan not in ('python','native') or selection not in ('bounds','fixed','adaptive','prepared'):
         raise ValueError('invalid scan/selection engine')
-    if selection != 'bounds' and filtering != 'none' and not callable(getattr(index,'select',None)):
+    if selection not in ('bounds','prepared') and filtering != 'none' and not callable(getattr(index,'select',None)):
         raise ValueError('threshold selection requires a compatible index')
     t0 = time.perf_counter_ns()
     if preassigned_lists is None:
@@ -99,6 +99,13 @@ def search(index: Index, q: np.ndarray, reader, *, k: int = 10, nprobe: int = 8,
     best = []  # Exact distances of fetched FP32 vectors, with ID tie-breaking.
     q64 = q.astype(np.float64)
     try:
+        planner = None
+        if selection == 'prepared':
+            from .prepared import PreparedPlanner
+            setup = time.perf_counter_ns()
+            planner = PreparedPlanner(index,q,mode=filtering,window_pages=window_pages,
+                gap_pages=gap_pages,max_extent_pages=max_extent_pages)
+            stat.filter_us += (time.perf_counter_ns()-setup)/1000
         stage = 0
         for li in lists:
             start, end = map(int, index.ranges[li])
@@ -111,29 +118,37 @@ def search(index: Index, q: np.ndarray, reader, *, k: int = 10, nprobe: int = 8,
                 if filtering != 'none' and found < k:
                     take = max(1, math.ceil((k-found)/capacity))
                 stop = min(end, cursor+take)
-                pages = np.arange(cursor, stop, dtype=np.int64)
                 tau = (math.sqrt(native.tau2) if native is not None else
                        math.sqrt(best[-1][0]) if len(best) == k else math.inf)
                 t = time.perf_counter_ns()
-                if selection == 'bounds' or filtering == 'none':
-                    lb = index.bounds(q, pages, int(li), filtering)
-                    keep = lb <= tau
+                if planner is not None:
+                    extents, selected_count = planner.plan(cursor,stop,int(li),tau)
+                    if audit_sink is not None:
+                        pages = np.arange(cursor,stop,dtype=np.int64)
+                        rejected = pages[planner.keep[:len(pages)] == 0]
+                        rejected_lb = index.bounds(q,rejected,int(li),filtering)
+                        audit_sink.extend((int(p),float(tau),float(v))
+                                          for p,v in zip(rejected,rejected_lb))
                 else:
-                    keep = index.select(q, pages, int(li), filtering, tau,
-                                        strategy=2 if selection == 'adaptive' else 1)
-                    lb = None
-                selected = pages[keep]
-                if audit_sink is not None:
-                    # Recompute rejected bounds only in separate correctness runs.
-                    # Audit payload reads happen AFTER search, never in timed runs.
-                    rejected = pages[~keep]
-                    rejected_lb = (lb[~keep] if lb is not None else
-                                   index.bounds(q,rejected,int(li),filtering))
-                    audit_sink.extend((int(p),float(tau),float(v))
-                                      for p,v in zip(rejected,rejected_lb))
-                extents = coalesce(selected, gap_pages=gap_pages, max_pages=max_extent_pages)
+                    pages = np.arange(cursor, stop, dtype=np.int64)
+                    if selection == 'bounds' or filtering == 'none':
+                        lb = index.bounds(q, pages, int(li), filtering)
+                        keep = lb <= tau
+                    else:
+                        keep = index.select(q, pages, int(li), filtering, tau,
+                                            strategy=2 if selection == 'adaptive' else 1)
+                        lb = None
+                    selected = pages[keep]
+                    selected_count = len(selected)
+                    if audit_sink is not None:
+                        rejected = pages[~keep]
+                        rejected_lb = (lb[~keep] if lb is not None else
+                                       index.bounds(q,rejected,int(li),filtering))
+                        audit_sink.extend((int(p),float(tau),float(v))
+                                          for p,v in zip(rejected,rejected_lb))
+                    extents = coalesce(selected, gap_pages=gap_pages, max_pages=max_extent_pages)
                 stat.filter_us += (time.perf_counter_ns()-t)/1000
-                stat.selected_pages += len(selected)
+                stat.selected_pages += selected_count
                 cursor = stop
                 if not extents:
                     continue
@@ -169,7 +184,7 @@ def search(index: Index, q: np.ndarray, reader, *, k: int = 10, nprobe: int = 8,
                 stat.distance_us += (time.perf_counter_ns()-t)/1000
                 fetched = sum(count for _, count in extents)
                 stat.read_pages += fetched
-                stat.gap_pages_read += fetched-len(selected)
+                stat.gap_pages_read += fetched-selected_count
                 stat.read_requests += len(extents)
                 stat.read_bytes += fetched*page_size
                 stat.read_stages += 1
