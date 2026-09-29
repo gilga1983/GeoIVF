@@ -95,3 +95,64 @@ class Native:
         if self.handle:
             self.lib.gio_close(self.handle)
             self.handle = None
+
+
+class PooledNative(Native):
+    """Reusable aligned buffers with explicit one-stage borrowing.
+
+    Call release(buffers) after consuming a stage. A new read is forbidden while
+    views are outstanding. No output byte copy is made, and allocated buffer
+    capacity is bounded and reported. Underlying I/O completion rules are unchanged.
+    """
+    def __init__(self, path, *, max_pool_bytes=64 << 20, **kwargs):
+        if max_pool_bytes < 4096: raise ValueError('pool budget is too small')
+        super().__init__(path, **kwargs)
+        self.pool = []
+        self.active = None
+        self.max_pool_bytes=max_pool_bytes
+        self.reserved_bytes=0
+        self.allocations=0
+        self.mode += '-pooled-borrowed'
+
+    def read(self, requests):
+        if not self.handle: raise ValueError('closed reader')
+        if self.active is not None: raise RuntimeError('release previous stage before reading')
+        if not requests: return []
+        if any(o<0 or n<1 or n>1<<30 for o,n in requests): raise ValueError('invalid native request')
+        sizes=[1 << max(12,(n-1).bit_length()) for _,n in requests]
+        if sum(sizes)>self.max_pool_bytes: raise MemoryError('stage exceeds bounded I/O pool')
+        # Drop oversized idle reservations before growing the pool when needed.
+        projected=sum(max(sizes[i],len(self.pool[i]) if i<len(self.pool) else 0)
+                      for i in range(len(sizes)))
+        projected+=sum(len(b) for b in self.pool[len(sizes):])
+        if projected>self.max_pool_bytes:
+            for b in self.pool: b.close()
+            self.pool=[]
+        for i,size in enumerate(sizes):
+            if i==len(self.pool):
+                self.pool.append(mmap.mmap(-1,size));self.allocations+=1
+            elif len(self.pool[i])<size:
+                self.pool[i].close();self.pool[i]=mmap.mmap(-1,size);self.allocations+=1
+        self.reserved_bytes=sum(len(b) for b in self.pool)
+        n=len(requests)
+        offsets=(C.c_uint64*n)(*(o for o,_ in requests))
+        lengths=(C.c_uint32*n)(*(sz for _,sz in requests))
+        pointers=(C.c_void_p*n)(*(C.addressof(C.c_char.from_buffer(b)) for b in self.pool[:n]))
+        rc=self.lib.gio_read(self.handle,n,offsets,lengths,pointers,self.err,len(self.err))
+        if rc: raise OSError(self.err.value.decode())
+        self.active=[memoryview(b)[:size] for b,(_,size) in zip(self.pool,requests)]
+        return self.active
+
+    def release(self, buffers):
+        if self.active is None:
+            if buffers: raise ValueError('no outstanding read stage')
+            return
+        if buffers is not self.active: raise ValueError('wrong borrowed buffer batch')
+        for view in self.active: view.release()
+        self.active=None
+
+    def close(self):
+        if self.active is not None: self.release(self.active)
+        for b in self.pool: b.close()
+        self.pool=[];self.reserved_bytes=0
+        super().close()

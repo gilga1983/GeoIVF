@@ -129,3 +129,32 @@ class CellIndex(Index):
             radial = np.maximum(self.radial[pages, 0]-r, r-self.radial[pages, 1])
             result = np.maximum(result, np.maximum(0, radial-guard))
         return result
+
+    def select(self, q, pages, li, mode, tau, *, strategy=2):
+        """Threshold-aware page mask. Preserves radial/geometry conjunction.
+
+        Does not return numerical lower bounds. Audit code may separately request
+        them; timed runs leave that diagnostic work disabled.
+        """
+        if mode not in ('none','balls','radial','combined') or strategy not in (1,2):
+            raise ValueError('invalid selection mode/strategy')
+        pp=np.ascontiguousarray(pages,dtype=np.int64)
+        if pp.ndim != 1 or np.any(pp<0) or np.any(pp>=self.meta['n_pages']):
+            raise ValueError('invalid page IDs')
+        if np.isnan(tau) or tau<0: raise ValueError('invalid threshold')
+        keep=np.ones(len(pp),dtype=bool)
+        if not len(pp) or mode=='none': return keep
+        q=np.asarray(q,dtype=np.float64)
+        if q.shape != (self.meta['d'],) or not np.isfinite(q).all():
+            raise ValueError('invalid query')
+        if np.isinf(tau): return keep  # initial seed reads cannot be disproved
+        guard=self.prepare(q)
+        if mode in ('radial','combined'):
+            if not 0 <= li < self.meta['nlist']: raise ValueError('invalid IVF list')
+            r=np.linalg.norm(q-self.centers[li])
+            radial=np.maximum(self.radial[pp,0]-r,r-self.radial[pp,1])
+            keep=np.maximum(0,radial-guard)<=tau
+        if mode in ('balls','combined') and np.any(keep):
+            slots=np.flatnonzero(keep)
+            keep[slots]=self.geometry(q,pp[slots],strategy=strategy,tau=tau).astype(bool)
+        return keep

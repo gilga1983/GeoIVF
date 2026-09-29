@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import numpy as np
 from .index import Index, vectors, train_faiss, build_assigned
-from .io import MemoryReplay, Pread, Native
+from .io import MemoryReplay, Pread, Native, PooledNative
 from .search import search, Trace
 from .mqsim import export
 
@@ -30,6 +30,11 @@ def main():
     s.add_argument('--out', required=True)
     s.add_argument('--backend', choices=['replay', 'pread', 'native', 'uring'], default='pread')
     s.add_argument('--direct', action='store_true')
+    s.add_argument('--summary', help='Certified independent PCA sidecar with cells.json')
+    s.add_argument('--shape', choices=['ball','box','hybrid'], default='ball')
+    s.add_argument('--selection', choices=['bounds','fixed','adaptive'], default='bounds')
+    s.add_argument('--scan', choices=['python','native'], default='python')
+    s.add_argument('--pooled', action='store_true', help='Borrow reusable native read buffers')
     s.add_argument('--queue-depth', type=int, default=16)
     s.add_argument('--filter', choices=['none', 'radial', 'balls', 'combined'], default='combined')
     s.add_argument('--nprobe', type=int, default=8)
@@ -59,7 +64,15 @@ def main():
     else:
         import faiss
         faiss.omp_set_num_threads(1)
-        index = Index(args.index)
+        if args.summary:
+            from .cells import CellIndex
+            index = CellIndex(args.index, args.summary, shape=args.shape)
+        else:
+            index = Index(args.index)
+        if args.selection != 'bounds' and args.filter != 'none' and not args.summary:
+            ap.error('--selection requires a certified --summary sidecar')
+        if args.pooled and args.backend not in ('native','uring'):
+            ap.error('--pooled requires native or uring')
         q = vectors(args.queries)
         if args.max_queries < 0:
             ap.error('--max-queries must be nonnegative')
@@ -76,7 +89,8 @@ def main():
         elif args.backend == 'pread':
             reader = Pread(index.path/'vectors.pages')
         else:
-            reader = Native(index.path/'vectors.pages', direct=args.direct,
+            reader_type = PooledNative if args.pooled else Native
+            reader = reader_type(index.path/'vectors.pages', direct=args.direct,
                             uring=args.backend == 'uring', depth=args.queue_depth)
         trace = Trace(out/'requests.jsonl') if args.trace else None
         rows, answers = [], []
@@ -85,7 +99,7 @@ def main():
                 ids, stats = search(index, query, reader, k=args.k, nprobe=args.nprobe,
                                     filtering=args.filter, window_pages=args.window_pages,
                                     gap_pages=args.gap_pages, max_extent_pages=args.max_extent_pages,
-                                    trace=trace, qid=qi)
+                                    trace=trace, qid=qi, selection=args.selection, scan=args.scan)
                 padded = np.full(args.k, -1, dtype=np.int64)
                 padded[:len(ids)] = ids
                 answers.append(padded)
@@ -103,7 +117,7 @@ def main():
                       index=index.meta, numpy_version=np.__version__, faiss_version=faiss.__version__,
                       mean={key: float(np.mean([r[key] for r in rows])) for key in rows[0]
                             if key != 'query_id'},
-                      timing_scope='Python harness including planning and copying; not optimized engine',
+                      timing_scope='Online staged search with selected scan/selection backend; Python coordinator',
                       io_scope='requested extents/bytes, not measured NVMe commands',
                       payload_backend_real_reads=args.backend != 'replay',
                       device_latency_measured=False)
