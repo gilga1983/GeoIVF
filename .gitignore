@@ -1,0 +1,9 @@
+__pycache__/
+.pytest_cache/
+.venv/
+build/
+artifacts/
+data/
+third_party/
+*.so
+*.pyc
