@@ -1,0 +1,56 @@
+name: RAM-first shortlist and certified verification
+on:
+  push:
+    branches: [experiment/ram-first]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-speed-qualification
+  cancel-in-progress: false
+jobs:
+  ramfirst:
+    if: github.repository == 'gilga1983/GeoIVF' && (github.ref == 'refs/heads/experiment/ram-first' || github.ref == 'refs/heads/main')
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile ranking, scanner and asynchronous reader; regression tests
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+          mkdir -p artifacts/ramfirst
+          git rev-parse HEAD > artifacts/ramfirst/commit.txt
+          git archive --format=zip HEAD > artifacts/ramfirst/source.zip
+          .venv/bin/pip freeze > artifacts/ramfirst/packages.txt
+          { uname -a; lscpu; lsblk -o NAME,TYPE,SIZE,ROTA,MOUNTPOINTS; g++ --version; uptime; } > artifacts/ramfirst/host.txt
+          bash scripts/build_ramfirst.sh --uring 2>&1 | tee artifacts/ramfirst/build.log
+          GEOIVF_TEST_DIRECT=1 GEOIVF_TEST_URING=1 .venv/bin/python -m pytest -q --junitxml=artifacts/ramfirst/tests.xml
+      - name: Canonical cached SIFT1M
+        run: .venv/bin/python scripts/fetch_sift1m.py --report artifacts/ramfirst/dataset.json
+      - name: Calibrate shortlist, freeze choices, evaluate fresh held-out queries
+        run: |
+          .venv/bin/python scripts/qualify_ramfirst.py \
+            --work "$RUNNER_TEMP/geoivf-ramfirst-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --out artifacts/ramfirst/results --development 128 --heldout 256 --repeats 3 \
+            2>&1 | tee artifacts/ramfirst/qualification.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ramfirst-${{ github.run_id }}
+          path: artifacts/ramfirst/
+          retention-days: 30
+      - name: Remove only this run's private scratch and payload copies
+        if: always()
+        run: |
+          work="$RUNNER_TEMP/geoivf-ramfirst-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          case "$work" in "$RUNNER_TEMP"/geoivf-ramfirst-*) rm -rf -- "$work" ;; *) exit 1 ;; esac
