@@ -1,0 +1,57 @@
+name: GeoIVF integration
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-integration-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  integration:
+    if: github.repository == 'gilga1983/GeoIVF' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 20
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Isolated Python environment
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install -r requirements.txt
+          mkdir -p artifacts
+          .venv/bin/python -m pip freeze > artifacts/python-lock.txt
+      - name: Build synchronous native reader
+        run: make -j2
+      - name: Unit tests and Faiss equivalence
+        run: GEOIVF_TEST_DIRECT=1 .venv/bin/python -m pytest -q --junitxml=artifacts/tests.xml
+      - name: Staged search and traces
+        run: .venv/bin/python scripts/smoke.py
+      - name: Build pinned upstream MQSim
+        run: bash scripts/setup_mqsim.sh
+      - name: MQSim integration
+        run: .venv/bin/python scripts/mqsim_smoke.py
+      - name: Record host and commit
+        if: always()
+        run: |
+          mkdir -p artifacts
+          git rev-parse HEAD > artifacts/commit.txt
+          uname -srmo > artifacts/host.txt
+          lscpu >> artifacts/host.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: geoivf-integration-${{ github.run_id }}
+          path: |
+            artifacts/*.txt
+            artifacts/*.xml
+            artifacts/smoke/*.json
+            artifacts/smoke/*.jsonl
+            artifacts/mqsim/
+          retention-days: 14
