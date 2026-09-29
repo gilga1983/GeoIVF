@@ -1,0 +1,56 @@
+name: Projection qualification
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'geoivf/projections.py'
+      - 'scripts/qualify_projections.py'
+      - 'tests/test_projections.py'
+      - '.github/workflows/projections.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-projection-qualification
+  cancel-in-progress: false
+defaults:
+  run:
+    shell: bash
+jobs:
+  projections:
+    if: github.repository == 'gilga1983/GeoIVF' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 40
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Environment and complete test suite
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+          mkdir -p artifacts/projections
+          git rev-parse HEAD > artifacts/projections/commit.txt
+          .venv/bin/pip freeze > artifacts/projections/packages.txt
+          uname -a > artifacts/projections/host.txt
+          bash scripts/setup_uring.sh
+          GEOIVF_TEST_DIRECT=1 GEOIVF_TEST_URING=1 .venv/bin/python -m pytest -q --junitxml=artifacts/projections/tests.xml
+      - name: Validate cached canonical dataset
+        run: .venv/bin/python scripts/fetch_sift1m.py --report artifacts/projections/dataset.json
+      - name: Fixed pages, stronger bounds, and matched scheduling controls
+        run: |
+          work="$(mktemp -d "$RUNNER_TEMP/geoivf-projections-XXXXXX")"
+          trap 'rm -rf -- "$work"' EXIT
+          .venv/bin/python scripts/qualify_projections.py --work "$work" \
+            --out artifacts/projections/results --queries 64 --nprobe 16 64 \
+            2>&1 | tee artifacts/projections/experiment.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: projection-qualification-${{ github.run_id }}
+          path: artifacts/projections/
+          retention-days: 30
