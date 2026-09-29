@@ -1,0 +1,90 @@
+name: Canonical qualification
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'geoivf/**'
+      - 'native/**'
+      - 'tests/**'
+      - 'scripts/qualify_sift1m.py'
+      - 'scripts/fetch_sift1m.py'
+      - 'scripts/setup_uring.sh'
+      - 'scripts/setup_clip.sh'
+      - '.github/workflows/qualification.yml'
+  workflow_dispatch:
+defaults:
+  run:
+    shell: bash
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-qualification
+  cancel-in-progress: false
+jobs:
+  dependencies:
+    if: github.repository == 'gilga1983/GeoIVF' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Environment
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt cmake
+          mkdir -p artifacts/upstream
+          .venv/bin/pip freeze > artifacts/upstream/packages.txt
+          git rev-parse HEAD > artifacts/upstream/commit.txt
+      - name: Build pinned liburing and run direct asynchronous tests
+        run: |
+          bash scripts/setup_uring.sh 2>&1 | tee artifacts/upstream/uring-build.log
+          GEOIVF_TEST_DIRECT=1 GEOIVF_TEST_URING=1 .venv/bin/python -m pytest -q --junitxml=artifacts/upstream/tests.xml
+      - name: Build upstream CLIP and HIVF-CLIP
+        if: always()
+        run: |
+          export PATH="$PWD/.venv/bin:$PATH"
+          bash scripts/setup_clip.sh 2>&1 | tee artifacts/upstream/clip-build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qualification-upstream-${{ github.run_id }}
+          path: artifacts/upstream/
+          retention-days: 30
+  sift1m:
+    if: github.repository == 'gilga1983/GeoIVF' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Environment
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+          mkdir -p artifacts/qualification
+          .venv/bin/pip freeze > artifacts/qualification/packages.txt
+          git rev-parse HEAD > artifacts/qualification/commit.txt
+          uname -a > artifacts/qualification/host.txt
+      - name: Shared canonical dataset cache
+        run: .venv/bin/python scripts/fetch_sift1m.py --report artifacts/qualification/dataset.json
+      - name: Development qualification, not a latency benchmark
+        run: |
+          .venv/bin/python scripts/qualify_sift1m.py \
+            --work "$RUNNER_TEMP/geoivf-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --out artifacts/qualification/results --queries 16 --nprobe 4 16 64
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qualification-sift1m-${{ github.run_id }}
+          path: artifacts/qualification/
+          retention-days: 30

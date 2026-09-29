@@ -68,7 +68,7 @@ def search(index: Index, q: np.ndarray, reader, *, k: int = 10, nprobe: int = 8,
            filtering: str = 'combined', window_pages: int = 64,
            gap_pages: int = 0, max_extent_pages: int = 256,
            trace: Trace | None = None, qid: int = 0,
-           numpy_test: bool = False):
+           numpy_test: bool = False, preassigned_lists=None, audit_sink=None):
     if not 1 <= k <= index.meta['n'] or window_pages < 0:
         raise ValueError('invalid k or window size')
     q = checked(np.asarray(q)[None, :])[0]
@@ -77,7 +77,13 @@ def search(index: Index, q: np.ndarray, reader, *, k: int = 10, nprobe: int = 8,
     if filtering not in ('none', 'radial', 'balls', 'combined'):
         raise ValueError('invalid filtering mode')
     t0 = time.perf_counter_ns()
-    lists = index.route(q, nprobe, numpy_test=numpy_test)
+    if preassigned_lists is None:
+        lists = index.route(q, nprobe, numpy_test=numpy_test)
+    else:
+        lists = np.asarray(preassigned_lists, dtype=np.int64)
+        if (lists.shape != (nprobe,) or len(np.unique(lists)) != nprobe
+                or np.any(lists < 0) or np.any(lists >= index.meta['nlist'])):
+            raise ValueError('invalid preassigned IVF lists')
     stat = Stats(route_us=(time.perf_counter_ns()-t0)/1000)
     page_size = index.meta['page_size']
     capacity, d = index.meta['capacity'], index.meta['d']
@@ -98,6 +104,10 @@ def search(index: Index, q: np.ndarray, reader, *, k: int = 10, nprobe: int = 8,
             t = time.perf_counter_ns()
             lb = index.bounds(q, pages, int(li), filtering)
             selected = pages[lb <= tau]  # Strict > is the only prune condition.
+            if audit_sink is not None:
+                # Only record decisions here. Audit reads occur after search.
+                audit_sink.extend((int(p), float(tau), float(v))
+                                  for p, v in zip(pages[lb > tau], lb[lb > tau]))
             extents = coalesce(selected, gap_pages=gap_pages, max_pages=max_extent_pages)
             stat.filter_us += (time.perf_counter_ns()-t)/1000
             stat.selected_pages += len(selected)
