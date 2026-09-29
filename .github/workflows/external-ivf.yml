@@ -1,0 +1,57 @@
+name: Released IVF and CLIP held-out comparison
+on:
+  push:
+    branches: [experiment/external-ivf]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  upstream:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Environment and native kernels
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt cmake
+          mkdir -p artifacts/external-ivf
+          git rev-parse HEAD > artifacts/external-ivf/commit.txt
+          git archive --format=zip HEAD > artifacts/external-ivf/source.zip
+          { uname -a; lscpu; g++ --version; uptime; } > artifacts/external-ivf/host.txt
+          .venv/bin/pip freeze > artifacts/external-ivf/packages.txt
+          bash scripts/build_execution.sh > artifacts/external-ivf/our-build.log 2>&1
+          .venv/bin/python -m pytest -q --junitxml=artifacts/external-ivf/tests.xml
+      - name: Compile released Faiss and CLIP search code with a measurement bridge
+        run: |
+          export PATH="$PWD/.venv/bin:$PATH"
+          bash scripts/build_external_clip.sh 2>&1 | tee artifacts/external-ivf/upstream-build.log
+      - name: Canonical dataset
+        run: .venv/bin/python scripts/fetch_sift1m.py --report artifacts/external-ivf/dataset.json
+      - name: Development calibration and untouched held-out queries
+        run: |
+          source build/external-env.sh
+          .venv/bin/python scripts/qualify_external_ivf.py \
+            --work "$RUNNER_TEMP/geoivf-external-ivf-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --out artifacts/external-ivf/results --queries 256 --development 128 --repeats 5 \
+            2>&1 | tee artifacts/external-ivf/qualification.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: external-ivf-${{ github.run_id }}
+          path: artifacts/external-ivf/
+          retention-days: 30
+      - name: Remove only this run's temporary payloads
+        if: always()
+        run: |
+          work="$RUNNER_TEMP/geoivf-external-ivf-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          case "$work" in "$RUNNER_TEMP"/geoivf-external-ivf-*) rm -rf -- "$work" ;; *) exit 1 ;; esac

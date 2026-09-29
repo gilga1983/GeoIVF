@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.24)
+project(geoivf_external LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+add_subdirectory(${CLIP_SOURCE} upstream)
+add_library(geoivf_upstream SHARED bridge.cpp)
+target_include_directories(geoivf_upstream PRIVATE ${CLIP_SOURCE}/src ${CLIP_SOURCE}/vendor/faiss)
+target_link_libraries(geoivf_upstream PRIVATE vlsm faiss OpenMP::OpenMP_CXX)
