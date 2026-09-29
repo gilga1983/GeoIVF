@@ -32,7 +32,9 @@ def cpu_benchmark(indices, queries, pages, taus, out, bits, repeats=7):
     """Equal candidate/threshold work, no I/O, projection and wrapper included.
 
     Uses final-radius thresholds only for this explicitly OFFLINE microbenchmark.
-    Both shapes use squared rejection tests; no per-vector square roots. Each
+    Both shapes use squared rejection tests; no per-vector square roots. Full
+    kernels evaluate all 64 coordinates of ALL active centers; early16 kernels
+    allow coordinate rejection and stop after a surviving center. Each
     trial scans all query candidate pages, in query/list order. Libraries and
     data are warm, not guaranteed to fit in cache. No CPU exclusivity is claimed.
     """
@@ -141,7 +143,7 @@ def main():
         meta=summarize_dependencies(physical,path,basis,dims=64,scheme='independent',bits=bits,projected_by_id=projected)
         certificate=certify_cells(physical,path,projected,path/'cells.json')
         save(args.out/f'cells{bits}-certificate.json',certificate)
-        builds.append(dict(bits=bits,**meta))
+        builds.append(dict(meta))
         # Legacy and native ball controls verify the common decoder/kernel change.
         legacy=DependentIndex(physical,path);evaluate(f'legacy-ball-b{bits}',legacy);del legacy
         indices={shape:CellIndex(physical,path,shape=shape) for shape in ['ball','box','hybrid']}
