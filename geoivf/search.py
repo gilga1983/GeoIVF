@@ -77,7 +77,7 @@ def search(index: Index, q: np.ndarray, reader, *, k: int = 10, nprobe: int = 8,
         raise ValueError('query dimension mismatch')
     if filtering not in ('none', 'radial', 'balls', 'combined'):
         raise ValueError('invalid filtering mode')
-    if scan not in ('python','native') or selection not in ('bounds','fixed','adaptive','prepared'):
+    if scan not in ('python','native','simd') or selection not in ('bounds','fixed','adaptive','prepared'):
         raise ValueError('invalid scan/selection engine')
     if selection not in ('bounds','prepared') and filtering != 'none' and not callable(getattr(index,'select',None)):
         raise ValueError('threshold selection requires a compatible index')
@@ -93,9 +93,10 @@ def search(index: Index, q: np.ndarray, reader, *, k: int = 10, nprobe: int = 8,
     page_size = index.meta['page_size']
     capacity, d = index.meta['capacity'], index.meta['d']
     native = None
-    if scan == 'native':
+    if scan != 'python':
         from .native_scan import NativeTopK
-        native = NativeTopK(index, q, k)
+        from .execution import SIMDTopK
+        native = (SIMDTopK if scan == 'simd' else NativeTopK)(index, q, k)
     best = []  # Exact distances of fetched FP32 vectors, with ID tie-breaking.
     q64 = q.astype(np.float64)
     try:

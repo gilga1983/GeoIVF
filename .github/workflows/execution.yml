@@ -1,0 +1,56 @@
+name: SIMD scanner and rolling I/O qualification
+on:
+  push:
+    branches: [experiment/simd-rolling]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-speed-qualification
+  cancel-in-progress: false
+jobs:
+  speed:
+    if: github.repository == 'gilga1983/GeoIVF' && (github.ref == 'refs/heads/experiment/simd-rolling' || github.ref == 'refs/heads/main')
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build native scanner and rolling reader; complete regressions
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+          mkdir -p artifacts/execution
+          git rev-parse HEAD > artifacts/execution/commit.txt
+          git archive --format=zip HEAD > artifacts/execution/source.zip
+          .venv/bin/pip freeze > artifacts/execution/packages.txt
+          { uname -a; lscpu; lsblk -o NAME,TYPE,SIZE,ROTA,MOUNTPOINTS; g++ --version; uptime; } > artifacts/execution/host.txt
+          bash scripts/build_execution.sh --uring 2>&1 | tee artifacts/execution/build.log
+          GEOIVF_TEST_DIRECT=1 GEOIVF_TEST_URING=1 .venv/bin/python -m pytest -q --junitxml=artifacts/execution/tests.xml
+      - name: Validate cached canonical dataset
+        run: .venv/bin/python scripts/fetch_sift1m.py --report artifacts/execution/dataset.json
+      - name: Same-plan optimizations and separately labeled window sweep
+        run: |
+          .venv/bin/python scripts/qualify_execution.py \
+            --work "$RUNNER_TEMP/geoivf-execution-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --out artifacts/execution/results --queries 64 --repeats 5 --depth 16 \
+            2>&1 | tee artifacts/execution/qualification.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: execution-speed-${{ github.run_id }}
+          path: artifacts/execution/
+          retention-days: 30
+      - name: Remove only this run's temporary payloads
+        if: always()
+        run: |
+          work="$RUNNER_TEMP/geoivf-execution-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          case "$work" in "$RUNNER_TEMP"/geoivf-execution-*) rm -rf -- "$work" ;; *) exit 1 ;; esac

@@ -33,8 +33,9 @@ def main():
     s.add_argument('--summary', help='Certified independent PCA sidecar with cells.json')
     s.add_argument('--shape', choices=['ball','box','hybrid'], default='ball')
     s.add_argument('--selection', choices=['bounds','fixed','adaptive','prepared'], default='bounds')
-    s.add_argument('--scan', choices=['python','native'], default='python')
+    s.add_argument('--scan', choices=['python','native','simd'], default='python')
     s.add_argument('--pooled', action='store_true', help='Borrow reusable native read buffers')
+    s.add_argument('--io-schedule', choices=['batch','rolling'], default='batch')
     s.add_argument('--queue-depth', type=int, default=16)
     s.add_argument('--filter', choices=['none', 'radial', 'balls', 'combined'], default='combined')
     s.add_argument('--nprobe', type=int, default=8)
@@ -73,6 +74,8 @@ def main():
             ap.error('--selection requires a certified --summary sidecar')
         if args.pooled and args.backend not in ('native','uring'):
             ap.error('--pooled requires native or uring')
+        if args.io_schedule == 'rolling' and (args.backend != 'uring' or not args.pooled):
+            ap.error('--io-schedule rolling requires --backend uring --pooled')
         q = vectors(args.queries)
         if args.max_queries < 0:
             ap.error('--max-queries must be nonnegative')
@@ -90,6 +93,9 @@ def main():
             reader = Pread(index.path/'vectors.pages')
         else:
             reader_type = PooledNative if args.pooled else Native
+            if args.io_schedule == 'rolling':
+                from .execution import RollingPooled
+                reader_type = RollingPooled
             reader = reader_type(index.path/'vectors.pages', direct=args.direct,
                             uring=args.backend == 'uring', depth=args.queue_depth)
         trace = Trace(out/'requests.jsonl') if args.trace else None
