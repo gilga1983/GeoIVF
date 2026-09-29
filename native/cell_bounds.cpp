@@ -52,8 +52,9 @@ static void kernel(const uint8_t* packed, const float* radii, const uint16_t* va
                 if constexpr (Shape != 1) rejected = rejected || sb > ball_limit;
                 if constexpr (Shape != 0) rejected = rejected || sx > box_limit;
                 if (!rejected) any = true;
-                // Same page-level exit rule for full and partial-coordinate kernels.
-                if (any) break;
+                // Full selection evaluates EVERY active center as a fixed-work control.
+                // Early selection also stops once one complete center admits a page.
+                if constexpr (Early) { if (any) break; }
             } else {
                 double lb = 0.0;
                 if constexpr (Shape != 1) lb = std::max(0.0, std::sqrt(sb) - r);
