@@ -30,6 +30,7 @@ jobs:
           { uname -a; lscpu; g++ --version; uptime; } > artifacts/external-ivf/host.txt
           .venv/bin/pip freeze > artifacts/external-ivf/packages.txt
           bash scripts/build_execution.sh > artifacts/external-ivf/our-build.log 2>&1
+          make -j2 >> artifacts/external-ivf/our-build.log 2>&1
           .venv/bin/python -m pytest -q --junitxml=artifacts/external-ivf/tests.xml
       - name: Compile released Faiss and CLIP search code with a measurement bridge
         run: |

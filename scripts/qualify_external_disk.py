@@ -75,9 +75,10 @@ def run(a):
         fbin(a.work/(name+'.fbin'),allq[ids]);gtbin(a.work/(name+'.gt'),gt[ids,:100],x,allq[ids])
     prefix=str(a.work/'diskann-index')
     def disk_run(tag,source,split,ls,beam):
+        # None maps to CachingStrategy::None; zero is rejected by upstream validation.
         phase=dict(queries=str(a.work/(split+'.fbin')),groundtruth=str(a.work/(split+'.gt')),
             search_list=ls,beam_width=beam,recall_at=10,num_threads=1,is_flat_search=False,
-            distance='squared_l2',vector_filters_file=None,num_nodes_to_cache=0,search_io_limit=None,post_processor=None)
+            distance='squared_l2',vector_filters_file=None,num_nodes_to_cache=None,search_io_limit=None,post_processor=None)
         cfg=dict(search_directories=[str(a.work)],jobs=[dict(type='disk-index',content=dict(source=source,search_phase=phase))])
         inp=a.out/(tag+'-input.json');out=a.out/(tag+'-output.json');save(inp,cfg)
         with (a.out/(tag+'.log')).open('w') as log:
