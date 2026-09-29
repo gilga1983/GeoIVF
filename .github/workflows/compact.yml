@@ -1,0 +1,66 @@
+name: Compact-segment qualification
+on:
+  push:
+    branches: [experiment/compact-segments]
+    paths:
+      - 'geoivf/compact.py'
+      - 'scripts/qualify_compact.py'
+      - 'tests/test_compact.py'
+      - '.github/workflows/compact.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-compact-segments
+  cancel-in-progress: false
+jobs:
+  compact:
+    if: github.repository == 'gilga1983/GeoIVF' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/experiment/compact-segments')
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Environment, source archive, complete tests
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+          mkdir -p artifacts/compact
+          git rev-parse HEAD > artifacts/compact/commit.txt
+          git archive --format=zip HEAD > artifacts/compact/source.zip
+          .venv/bin/pip freeze > artifacts/compact/packages.txt
+          uname -a > artifacts/compact/host.txt
+          bash scripts/setup_uring.sh 2>&1 | tee artifacts/compact/uring-build.log
+          GEOIVF_TEST_DIRECT=1 GEOIVF_TEST_URING=1 .venv/bin/python -m pytest -q --junitxml=artifacts/compact/tests.xml
+      - name: Canonical dataset
+        run: .venv/bin/python scripts/fetch_sift1m.py --report artifacts/compact/dataset.json
+      - name: Compact page construction and independent filtering diagnostics
+        run: |
+          .venv/bin/python scripts/qualify_compact.py \
+            --work "$RUNNER_TEMP/geoivf-compact-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --out artifacts/compact/results --queries 64 \
+            2>&1 | tee artifacts/compact/qualification.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compact-segments-${{ github.run_id }}
+          path: artifacts/compact/
+          retention-days: 30
+      - name: Remove this run's temporary payload copies
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, shutil
+          root = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
+          path = root / ('geoivf-compact-' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'])
+          assert path.parent == root and path.name.startswith('geoivf-compact-')
+          if path.exists(): shutil.rmtree(path)
+          PY
