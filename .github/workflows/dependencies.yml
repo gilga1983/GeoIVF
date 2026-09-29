@@ -1,0 +1,55 @@
+name: Dependent center qualification
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'geoivf/dependent.py'
+      - 'scripts/qualify_dependencies.py'
+      - 'tests/test_dependent.py'
+      - '.github/workflows/dependencies.yml'
+  workflow_dispatch:
+defaults:
+  run:
+    shell: bash
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-dependent-qualification
+  cancel-in-progress: false
+jobs:
+  dependencies:
+    if: github.repository == 'gilga1983/GeoIVF' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Environment and tests
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+          mkdir -p artifacts/dependencies
+          .venv/bin/pip freeze > artifacts/dependencies/packages.txt
+          git rev-parse HEAD > artifacts/dependencies/commit.txt
+          uname -a > artifacts/dependencies/host.txt
+          make -j2
+          GEOIVF_TEST_DIRECT=1 .venv/bin/python -m pytest -q --junitxml=artifacts/dependencies/tests.xml
+      - name: Canonical dataset
+        run: .venv/bin/python scripts/fetch_sift1m.py --report artifacts/dependencies/dataset.json
+      - name: Frozen page dependent-center comparison
+        run: |
+          .venv/bin/python scripts/qualify_dependencies.py \
+            --work "$RUNNER_TEMP/dependent-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --out artifacts/dependencies/results --queries 64 --nprobe 64 \
+            2>&1 | tee artifacts/dependencies/experiment.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependent-qualification-${{ github.run_id }}
+          path: artifacts/dependencies/
+          retention-days: 30
