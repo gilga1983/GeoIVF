@@ -1,100 +1,93 @@
 # Equal-budget rotation and full-space verification results, 2026-09-30
 
-## Provenance and experimental scope
+## Provenance
 
 Tested implementation: `b41724448f49f5d25c4ed0fb51601c15d1161915`.
-Successful workflow: `36655355595`; job `109698417919`.
-Runner: geoivf-gilga-Legion-Pro-7-16AFR10H-01.
-Artifact: `11072257558`, rotations-36655355595.
-Downloaded archive SHA256:
+Successful workflow: `36655355595`; job: `109698417919`.
+Runner: `geoivf-gilga-Legion-Pro-7-16AFR10H-01`.
+Artifact: `11072257558`, `rotations-36655355595`.
+Downloaded ZIP SHA256:
 `90665f26a865a38903fd05893be7ee16f319ebf2ca5ae53c7411297516d4fa54`.
 
-Full canonical SIFT1M: 1,000,000 unchanged 128D FP32 vectors, eight vectors per
-4 KiB page, 125445 pages, nlist=1024, nprobe=64, k=10, construction seed12345.
-Payload SHA256 remains
+This is a completed canonical SIFT1M experiment, not a prediction. It uses all
+1,000,000 unchanged 128D FP32 vectors, eight vectors per 4 KiB page, 125445 pages,
+nlist=1024, nprobe=64, k=10 and construction seed12345. All methods use the same
+GeoPack page membership/order and IVF candidate lists. The payload SHA256 is
 `8f1da77ff41f7e37c89fc3449ef6ba18a1901a50a394245a10d6b882fdee97e7`.
-All representations use the SAME page contents/order and candidate lists.
-PCA is fitted on the separate 100000-vector learning file. PQ/OPQ use a fixed
-50000-vector learning subset, never test queries. Scalar ranges use base-corpus
-min/max, so training/calibration sources are explicitly different for SQ and PQ.
 
-Development: 128 queries, permutation(seed=20260929)[:128]. All 78 development
-arms run three randomly interleaved direct-I/O rounds. Shortlist sizes are
-16/32/64/128/256. Choose the fastest >=99% strict Recall@10 setting separately
-for each representation and approximate/certified mode. Choices are frozen
-before evaluating NEW held-out queries permutation[1512:1768]. These 256 queries
-exclude the entire previous development pool and both earlier test cohorts.
+Development uses 128 queries from permutation(seed=20260929)[:128]. The 78 arms
+run three randomly interleaved direct-I/O rounds. R is swept over16/32/64/128/256.
+The fastest setting meeting 99% strict Recall@10 is frozen separately for every
+representation and approximate/certified mode. This does not jointly tune nprobe.
 
-Held-out: 25 predeclared/frozen arms, three rounds each of real direct I/O and
-RAM replay. These include fixed-R64 approximate comparisons for every encoding,
-all full-dimensional one-wave upper-bound variants, and three legacy controls.
-All exact reference answers have strict global Recall@10=99.375% on this cohort.
-Each held-out table row has 768 timing samples but only 256 distinct queries.
-No test-set parameter adjustment occurs. The fixed nprobe is NOT jointly tuned
-with the code family or shortlist in this representation experiment.
+The fresh held-out cohort is permutation[1512:1768], disjoint from the entire
+previous development pool and both previous 256-query test cohorts. Its25 arms
+include frozen choices, predeclared approximate R64 controls, all applicable
+one-wave upper-bound variants and three legacy controls. Held-out direct-I/O and
+RAM-replay phases each have three randomized interleaved rounds. Each reported
+held-out row has768 timing samples but only256 distinct queries. No test retuning.
+Full-vector IVF's global strict Recall@10 is99.375% on this new cohort.
 
-## Encoding and execution changes
+## Representations and fairness
 
-Each new representation uses 64 code bytes per vector plus an outward-rounded
-four-byte actual reconstruction-error radius: 544 geometry bytes/full page.
-The common eight-byte radial interval and shared/structural metadata are extra.
-No inverse rotation is used during search. Original vectors are fetched and
-verified in their original space. Means, matrices, scalar quantizers and PQ
-codebooks remain shared, not expanded into per-vector floating-point copies.
+Every representation stores64 code bytes/vector plus one outward-rounded FP32
+reconstruction-error radius:544 geometry bytes/full page. The common radial
+interval, shared matrices/codebooks and structural metadata are extra. Original
+SSD vectors are unchanged; queries are transformed, not candidates inverse-rotated.
 
-Seven code families: PCA64/SQ8; the same PCA64 subspace followed by a seeded
-random rotation/SQ8; centered original128/SQ4; PCA128/SQ4; random128/SQ4; PQ64x8;
-and OPQ followed by PQ64x8. PQ has 64 two-dimensional, 256-centroid codebooks.
+The seven families are PCA64/SQ8; the same PCA64 subspace with a seeded random
+rotation/SQ8; original128/SQ4; PCA128/SQ4; random128/SQ4; plain PQ64x8; OPQ+PQ64x8.
+PQ has64 two-dimensional codebooks, each containing256 codewords.
 
-PQ and OPQ training/encoding use Faiss 1.15.1. The OPQ pilot has 20 outer
-iterations, 20 initial PQ iterations and four subsequent PQ iterations, then a
-separate final 20-iteration PQ fit. Plain PQ has the same final training subset,
-seed and iteration budget. This is NOT exhaustive OPQ tuning or its default
-training schedule. OPQ must not be declared universally inferior from this run.
+PCA uses the separate100000-vector learning file. PQ/OPQ use the same fixed50000
+learning vectors. Scalar min/max ranges are calibrated on the indexed base data.
+No query trains the representation. OPQ has20 outer iterations,20 initial PQ
+iterations and four subsequent PQ iterations, then a separately trained final
+20-iteration PQ. Plain PQ uses the same final training budget and seed. This is
+not exhaustive OPQ tuning or its default schedule, so no universal OPQ ranking
+is justified by this run.
 
-All NEW representations use a common native FP64 lookup-table ranker, including
-query transformation and table construction INSIDE measured query time. This is
-not Faiss FastScan or an optimized product-quantized index benchmark. An SQ128
-scan has 128 scalar contributions and four-bit unpacking; a PQ64 scan has 64
-lookup contributions. The old PCA64 direct-arithmetic ranker is rerun separately
-to isolate the execution change. New and old PCA64 packed code bytes match
-exactly; numeric guards/shared matrix storage differ slightly.
+Faiss1.15.1 trains and encodes PQ/OPQ. All NEW representations use our common
+native FP64 lookup-table scanner, not Faiss FastScan. Table construction and
+query transformation are inside timing. SQ128 needs128 coordinate contributions
+and four-bit unpacking; PQ64 needs64 table contributions. Shared codebook costs
+are recorded separately. No expanded per-vector reconstruction table is retained.
 
-Verification uses the SAME SIMD FP64 exact scanner and pooled rolling
-io_uring/O_DIRECT reader at queue depth16. New RAM-first arms do not bridge gaps.
-The legacy staged control retains window256/gap2. Bounds certify all projected
-points after decoding actual stored records, not ideal unquantized centers.
+Old arithmetic-ranked PCA64 approximate/certified modes and the prepared staged
+control are rerun. New and old PCA64 packed codes match exactly; shared matrix
+shape and numerical guards differ slightly. This prevents a new LUT kernel's
+benefit from being attributed to rotation. All arms use the same SIMD FP64 exact
+scanner and pooled rolling io_uring/O_DIRECT reader, queue depth16. RAM-first
+verification uses no gap bridging; legacy staged uses window256/gap2.
 
-## 1. Rotation alone and fixed-shortlist ranking
+## Fixed-R64 held-out approximate comparison
 
-All rows below use R=64, one approximate verification wave, and the common new
-ranker. These fixed-R64 comparisons were specified before test evaluation.
-Exact-match queries means all ten returned IDs match exhaustive full-vector
-search over the selected IVF lists; it is stronger than global aggregate recall.
+These fixed-size comparisons were specified before test evaluation. Exact-match
+queries means all ten IDs equal the exhaustive answer over the selected IVF
+lists, which is stronger than matching aggregate global recall.
 
-| Representation | Strict global Recall@10 | IVF-reference Recall@10 | Exact-match queries | Pages/query | Direct mean ms |
+| Representation | Global Recall@10 | IVF-reference Recall@10 | Exact-match queries | Pages/query | Direct mean ms |
 |---|---:|---:|---:|---:|---:|
-| PCA64, SQ8 | 99.2578125% | 99.8828125% | 254/256 | 56.1992 | 4.7050 |
-| PCA64 + random rotation, SQ8 | 99.2578125% | 99.8828125% | 254/256 | 56.1289 | 4.7081 |
-| Original128, SQ4 | 99.3750000% | 100.0000000% | 256/256 | 56.3594 | 10.0408 |
-| Full PCA128, SQ4 | 98.8281250% | 99.4531250% | 244/256 | 56.8672 | 10.0157 |
-| Random128, SQ4 | 99.2968750% | 99.9218750% | 254/256 | 56.5703 | 9.9793 |
+| PCA64/SQ8 | 99.2578125% | 99.8828125% | 254/256 | 56.1992 | 4.7050 |
+| PCA64 + random/SQ8 | 99.2578125% | 99.8828125% | 254/256 | 56.1289 | 4.7081 |
+| Original128/SQ4 | 99.3750000% | 100.0000000% | 256/256 | 56.3594 | 10.0408 |
+| PCA128/SQ4 | 98.8281250% | 99.4531250% | 244/256 | 56.8672 | 10.0157 |
+| Random128/SQ4 | 99.2968750% | 99.9218750% | 254/256 | 56.5703 | 9.9793 |
 | Plain PQ64x8 | 99.3750000% | 100.0000000% | 256/256 | 56.2617 | 4.9643 |
 | OPQ + PQ64x8 | 99.3750000% | 100.0000000% | 256/256 | 56.2500 | 4.9937 |
 
-A random rotation within the existing PCA64 subspace gives no useful gain here.
-At this code budget, retaining all original coordinates can improve shortlist
-quality, but the uniform rotated scalar encodings are not automatically better.
-PCA128/SQ4 misses its predeclared 99% held-out target; it had met that target on
-development. It was NOT retuned after this failure.
+Random rotation within PCA64 adds no useful gain here. Full-dimensional coding
+can improve shortlist quality, but arbitrary rotation and coarse scalar coding
+do not automatically improve it. PCA128/SQ4 fails the predeclared99% held-out
+target despite meeting it on development. That failure is retained, not retuned.
 
-The full-dimensional PQ codes recover all candidate-set answers at R64 in this
-sample, without the roughly doubled scan work of the current SQ128 ranker.
-Neither approximate configuration has a universal no-additional-loss guarantee.
+PQ/OPQ recover every IVF-reference answer at R64 on this sample, without the
+roughly doubled scoring work of our current SQ128 implementation. Approximate
+mode still has no universal guarantee merely because this sample passed.
 
-## 2. Development-selected approximate operating points
+## Development-selected approximate operating points
 
-| Representation | Frozen R | Mean ms | Strict Recall@10 | IVF-reference matches | Pages/query |
+| Representation | Frozen R | Direct mean ms | Global Recall@10 | Exact-match queries | Pages/query |
 |---|---:|---:|---:|---:|---:|
 | PCA64/SQ8 | 64 | 4.7050 | 99.2578125% | 254/256 | 56.1992 |
 | PCA64 + random/SQ8 | 64 | 4.7081 | 99.2578125% | 254/256 | 56.1289 |
@@ -104,30 +97,25 @@ Neither approximate configuration has a universal no-additional-loss guarantee.
 | Plain PQ64x8 | 32 | 4.6469 | 99.3750000% | 255/256 | 28.9805 |
 | OPQ + PQ64x8 | 32 | 4.7017 | 99.3750000% | 256/256 | 28.9102 |
 
-Plain PQ and OPQ select half the shortlist and read about half as many pages as
-PCA64 while maintaining the full-IVF global recall on these test queries. For
-plain PQ/R32, one reference neighbor differs on query2311; that missed ID is not
-in the supplied global top10, so aggregate global recall remains unchanged.
-OPQ/R32 happens to match all reference answers in this sample. Do not describe
-approximate PQ/R32 as certified or exactly equivalent just because recall matches.
+PQ/OPQ select half the shortlist and read about half as many pages as PCA64 at
+similar mean latency. Plain PQ/R32 misses one IVF-reference ID on query2311, but
+that ID is not in the supplied global top10; global recall remains unchanged.
+OPQ/R32 happens to recover every reference answer. Neither approximate arm is
+certified. The nominal1.24% speed difference between selected plain PQ and PCA64
+is not a convincing runtime win on this shared host; traffic and ranking quality
+are the useful signals.
 
-The direct mean times of PCA64, PQ and OPQ selected approximate settings are
-close (4.65-4.71 ms). The 1.24% nominal mean difference between plain PQ/R32 and
-PCA64/R64 is not a persuasive runtime advantage on this shared host. The useful
-signal is the ranking/verification-traffic tradeoff, not a new speed headline.
+The old arithmetic PCA64/R64 ranker takes5.2812 ms on these same queries versus
+4.7050 ms with the new table scanner, with identical answers/page counts. Its
+10.91% mean improvement is an implementation effect, not a new geometry. RAM
+replay likewise changes3.5505 to2.8302 ms.
 
-The previous PCA64 arithmetic ranker takes5.2812 ms at R64 on these SAME queries,
-versus4.7050 ms for the new common table ranker, with identical answers/pages.
-That 10.91% mean improvement is an implementation change, not an effect of a
-new rotation. RAM replay likewise changes3.5505 to2.8302 ms. Do not attribute it
-to quantization geometry.
+## Certified two-wave completion
 
-## 3. Certified completion: plain full-dimensional PQ is promising
+All rows return exactly the full-vector IVF-candidate-set answer on all256 held-out
+queries, at global Recall@10=99.375%. Shortlist choices are development-only.
 
-All rows below return the independent IVF-candidate-set answer on ALL256 test
-queries, with global Recall@10=99.375%. Shortlist sizes were selected on development.
-
-| Representation | Frozen R | Pages/query | Mean decision waves | Direct mean ms | p95 ms |
+| Representation | Frozen R | Pages/query | Decision waves | Direct mean ms | p95 ms |
 |---|---:|---:|---:|---:|---:|
 | PCA64/SQ8 | 128 | 201.1133 | 1.6836 | 8.6465 | 12.0961 |
 | PCA64 + random/SQ8 | 128 | 202.7813 | 1.6914 | 8.6573 | 12.1499 |
@@ -137,50 +125,50 @@ queries, with global Recall@10=99.375%. Shortlist sizes were selected on develop
 | Plain PQ64x8 | 16 | 78.5625 | 2.0000 | 8.1054 | 9.4771 |
 | OPQ + PQ64x8 | 16 | 153.6563 | 2.0000 | 8.9312 | 11.0159 |
 
-Plain PQ's selected certified point requests60.94% fewer pages than the selected
-PCA64 point, with6.26% lower mean time in this run. These rows use different R;
-they describe frozen operating points, NOT a same-R causal isolation. The
-same-R32 DEVELOPMENT control also favors PQ:72.46875 versus176.75 pages/query,
-both returning the same IVF answer. Its means are7.8212 versus8.4253 ms.
+The selected plain-PQ point requests60.94% fewer pages than selected PCA64, with
+6.26% lower mean latency. These are frozen operating points with different R,
+not a same-R causal isolation. A same-R32 DEVELOPMENT control also favors PQ:
+72.46875 versus176.75 pages, at7.8212 versus8.4253 ms, with identical IVF answers.
 
-On held-out queries, PQ/R16 first fetches14.8711 pages and certification adds
-63.6914; every query uses a second wave. It averages71.0352 extents/query.
-The old arithmetic-certified R32 control requests195.0859 pages at9.1088 ms,
-and the staged control requests428.3477 pages at13.1297 ms in this campaign.
-These are fresh same-campaign controls, not copied from previous runtime reports.
+Held-out PQ/R16 initially reads14.8711 pages and completion adds63.6914. Every
+query requires the second wave; average extent count is71.0352. The prior
+arithmetic-certified R32 control takes9.1088 ms/195.0859 pages, while staged
+search takes13.1297 ms/428.3477 pages in this same campaign.
 
-The larger nominal PCA64 quantization accuracy does not make its bound tighter
-in full space: its radius describes only retained-coordinate error. Full PQ has
-larger reconstruction-error radii but no discarded dimensions. Ranking quality
-and bound tightness are different objectives, as the OPQ result also illustrates.
+PCA64's radius measures error only in retained coordinates. Full-dimensional PQ
+retains omitted directional information and supports a full-space error bound.
+Its larger quantization radius therefore does not imply a weaker certificate.
+OPQ's good shortlist recall but poorer certification illustrates that ranking
+quality and conservative-bound tightness are different optimization objectives.
 
-## 4. One-wave full-space upper bounds are valid but too loose here
+## One-wave upper-bound certificate
 
-For deployed transform T, certify beta>=||T||2 and, for full square transforms,
-0<alpha<=sigma_min(T). If r covers decoded error and d is query-to-code distance,
-use max(0,(d-r-guard)/beta) as a lower bound and (d+r+guard)/alpha as an upper bound.
-The kth smallest upper bound on DISTINCT candidate vectors is a valid pre-read
-threshold. Fetch all pages whose lower bounds do not exceed it, then rank their
-original vectors. This is one data-dependent wave, not one SSD command.
+For transform T, beta bounds its largest singular value above, while alpha bounds
+its smallest singular value below only for full square transforms. A measured
+reconstruction-error radius r and query-to-code distance d give guarded bounds
+max(0,(d-r-guard)/beta) and (d+r+guard)/alpha. For rectangular PCA64, alpha=0;
+its projected upper bound must NOT be used as an original-space upper bound.
+
+The kth smallest valid upper bound among distinct candidates supplies a pre-read
+threshold. Fetch every page whose lower bound does not exceed it and rank original
+vectors. All tested answers pass, but the threshold is often very loose.
 
 | Full-dimensional code | Pages/query | Direct mean ms | Decision waves | Mean reader calls |
 |---|---:|---:|---:|---:|
-| Original128/SQ4 | 1503.1172 | 25.9688 | 1 | 1.0664 |
-| PCA128/SQ4 | 5479.1445 | 48.3721 | 1 | 2.2656 |
-| Random128/SQ4 | 5929.8672 | 49.4467 | 1 | 2.4297 |
+| Original128/SQ4 | 1503.1172 | 25.9688 | 1 | 1.0742 |
+| PCA128/SQ4 | 5479.1445 | 48.3721 | 1 | 2.2695 |
+| Random128/SQ4 | 5929.8672 | 49.4467 | 1 | 2.4258 |
 | Plain PQ64x8 | 406.5820 | 10.1299 | 1 | 1.0000 |
 | OPQ + PQ64x8 | 1035.2031 | 16.2194 | 1 | 1.0000 |
 
-All one-wave certificates preserve every tested IVF answer. But even plain PQ
-requires5.18 times as many pages as its selected two-wave verifier. The initial
-read is valuable because its exact threshold is much tighter. Eliminating one
-more decision wave is not worth that traffic inflation in this setup. Large
-one-wave plans are safely split into bounded batches without recomputing their
-admission threshold; this is why reader calls can exceed decision waves.
+Even plain PQ reads5.18 times as many pages as its selected two-wave verifier.
+The first exact batch is valuable because it supplies a much tighter threshold.
+One decision wave is not one SSD command. Large plans are split into bounded
+reader calls without updating the admission threshold, preserving that contract.
 
-## 5. Distortion, codebook training and memory
+## Distortion, build cost, and resident arrays
 
-| Encoding | Mean decoded error in represented space | p95 error | Omitted-space norm mean | Build seconds | Directory arrays MiB |
+| Encoding | Mean represented-space error | p95 error | Mean omitted norm | Build s | Directory MiB |
 |---|---:|---:|---:|---:|---:|
 | PCA64/SQ8 | 3.0860 | 3.4335 | 96.9419 | 3.49 | 74.5137 |
 | PCA64 + random/SQ8 | 3.2256 | 3.5247 | 96.9419 | 3.44 | 74.5137 |
@@ -190,100 +178,82 @@ admission threshold; this is why reader calls can exceed decision waves.
 | Plain PQ64x8 | 23.0165 | 29.9389 | 0 | 56.40 | 74.7022 |
 | OPQ + PQ64x8 | 31.9869 | 40.9954 | 0 | 288.03 | 74.7022 |
 
-PCA64 error norms exclude omitted coordinates and are NOT directly comparable
-with full-dimensional reconstruction errors. All models have the same code plus
-radius budget; full PQ adds about0.19 MiB shared arrays versus the rectangular
-PCA64 model. Total runtime and read/query scratch are additional. PQ codebooks
-are not free. New PCA64 stores a128x64 matrix rather than the previous complete
-128x128 matrix, accounting for most of its small directory-size reduction.
+PCA64 errors exclude omitted coordinates, so they are not comparable directly to
+full-dimensional errors. Shared matrices/codebooks are charged: PQ adds about
+0.19 MiB versus the rectangular PCA64 directory, not zero bytes. New PCA64 stores
+a128x64 matrix rather than the old128x128 one. Runtime and query/read scratch are
+extra. All approximate arms still retain the common radius array.
 
-For this base corpus and min/max uniform quantizer, full rotations increase
-scalar reconstruction error relative to original coordinates. A possible reason
-is their different coordinate ranges/tails; this is an interpretation rather
-than an isolated causal experiment. The original axes are a necessary control.
+Rotated full-dimensional uniform quantizers have larger error than the original
+axes here. Different axis ranges/tails are a possible explanation, not an isolated
+causal result. The OPQ configuration also has larger mean error and certification
+traffic than plain PQ under this pilot budget. Further convergence/initialization
+checks are needed before treating that as representative of optimized OPQ.
 
-The trained OPQ variant does NOT beat plain PQ on decoded error or certified
-traffic under this fixed training budget, although it has excellent approximate
-shortlist outcomes. This warrants convergence/initialization/training checks
-before making any general statement about OPQ. Learned rotation is not a
-universal guarantee for a finite training procedure. The plain-PQ advantage
-shows that full-dimensional learned codebooks, not rotation alone, are useful
-in this experiment.
+Build seconds include model-specific learning, projection, encoding, packing,
+cover audits and writing. They exclude shared IVF/page construction and initial
+PCA fitting, so they are not complete normalized system-build costs.
 
-Build times above include transformation-specific learning, projection, encoding,
-packing, coverage checks and sidecar writing. They exclude shared IVF/layout and
-initial PCA fitting. Thus they are not complete normalized system-build costs.
+## CPU and limits
 
-## 6. Runtime decomposition and experimental limits
+Approximate PCA64/R64 spends3.2708 ms ranking versus3.5134 ms for PQ/R32; read
+stages cost0.9246 versus0.7462 ms. Better shortlists reduce storage traffic but
+ranking still dominates. Our SQ128 ranker costs roughly8.5 ms and is not an
+optimized production scalar-quantization baseline.
 
-Direct approximate PCA64/R64 spends3.2708 ms in ranking, versus3.5134 ms for
-PQ/R32. Read-stage time is0.9246 versus0.7462 ms. Better candidate quality saves
-I/O, but the ranker remains most of the query. The current full-dimensional SQ4
-ranker takes roughly8.5 ms and should not be treated as optimized scalar-quantizer
-performance. All table construction and unpacking are charged.
+Certified PQ/R16 spends4.9218 ms ranking/bound construction and1.6522 ms in reads,
+plus certificate/coalescing/exact scanning. RAM-replay mean is4.9904 ms versus
+PCA64/R128's4.9055 ms. The full-dimensional certified ranker currently also
+maintains the upper-bound heap in two-wave mode, where it is unnecessary work.
+No speedup from removing that work is claimed in this first implementation.
 
-Certified PQ/R16 spends4.9218 ms ranking/bound computation,1.6522 ms in reads,
-and additional certificate/coalescing/scanning work. Its RAM-replay mean is
-4.9904 ms versus4.9055 for PCA64/R128. Fewer verification pages do not eliminate
-the CPU cost of scoring the broad IVF candidate set. The full-dimensional
-certified ranker currently also computes the k-smallest upper-bound heap even
-for two-wave mode; removing unnecessary work is not evaluated here.
+Shared AMD Ryzen9 9955HX3D host,32 logical CPUs; CPU0 affinity does not reserve an
+exclusive core. Load averages start18.856/18.541/17.461 and end16.949/17.389/17.450.
+Frequency, unrelated workloads and device caching are uncontrolled. A file lock
+serializes GeoIVF timing campaigns only. Brief progress jobs read experiment logs.
+The payload fits host RAM; original data/oracle/all variants coexist in the
+research process. Peak RSS is about3.01 GiB, NOT deployment memory. The common
+read pool reserves6475776 bytes (6.176 MiB), not a per-arm steady-state figure.
 
-Host is the shared AMD Ryzen9 9955HX3D laptop, 32 logical CPUs; one process is
-pinned to CPU0, not an exclusive core. Timing-start load averages18.856/18.541/
-17.461, end16.949/17.389/17.450. CPU frequency, other workloads and device cache
-are uncontrolled. Only GeoIVF speed campaigns are serialized by the host lock.
-The light read-only progress jobs inspect the benchmark's logs, not its inputs.
+Direct reads genuinely use O_DIRECT, but this is not a cold-device or larger-than-
+RAM test. There is no new Faiss/CLIP/DiskANN timing run, matched RSS cap, concurrent
+QPS measurement, or physical NVMe-command instrumentation. Compare timings within
+this campaign, not against earlier runs on different cohorts and machine loads.
 
-The roughly490 MiB payload fits host RAM, while base/oracle/multiple variants
-coexist in this research process. Actual direct reads use O_DIRECT, but this
-is not cold-device or larger-than-RAM evidence. Peak benchmark RSS is about
-3.01 GiB and is NOT deployment memory. Common read pool peak is6475776 bytes
-(6.176 MiB); it is not a per-arm steady-state measurement. No new external
-Faiss/CLIP/DiskANN run, concurrent QPS, matched whole-process memory cap or
-physical NVMe-command instrumentation is included.
+## Validation
 
-## 7. Validation and artifact reconciliation
+All305 runner tests pass with no errors, failures or skips, including22 new
+rotation/PQ tests. Local suite:284passed,21 optional dependency skips. Additional
+local UBSan tests passed100 randomized exact-verification cases. Faiss/PQ/OPQ tests
+were executed on the runner, not locally where Faiss was unavailable.
 
-All305 runner tests passed, no errors, failures or skips. There are22 new
-rotation/PQ tests beyond the preceding283-test suite, including full-space
-upper/lower bound safety, rectangular-transform handling, scalar/PQ code budgets,
-actual decoded coverage, and certified answers. Local suite:284passed/21 optional
-dependency skips. An additional local UBSan check passed100 randomized exact
-verification cases with no errors. Local Faiss tests were not run; the runner
-executed them, including PQ and OPQ.
+All seven encodings audit coverage of every indexed vector after decoding actual
+packed records. The first two development queries per arm supply156 mechanics
+checks and695900 post-search rejected-page audits. These repeat pages/encodings,
+not independent vector samples or formal floating-point proofs.
 
-All seven built encodings audited coverage of every indexed vector. The first
-two development queries per arm supply156 mechanics checks, including695900
-post-search audited rejection decisions. These repeat vectors/pages across
-encodings and are not independent samples or formal floating-point proofs.
+68352 timed searches comprise29952 development-direct,19200 heldout-direct and
+19200 heldout-memory executions. All exact-mode results match the independent
+FP64 candidate-set oracle; repeated answers/counts agree. Approximate differences
+are measured. There are384 distinct queries,128development plus256test.
 
-68352 timed searches were recorded:29952 development-direct,19200 heldout-direct,
-and19200 heldout-memory. All exact-mode queries return the independent FP64
-candidate-set oracle answer, and all repeated method/query IDs and operation
-counts agree. Approximate discrepancies are retained and measured, not asserted
-away. There are384 distinct queries,128development plus256test.
-
-After download, archive SHA matched GitHub. All six new executable/workflow
-files matched the locally tested source hashes. An independent artifact script
-reconciled68352 CSV rows,22784 stored neighbor records and128 aggregate rows:
-query exclusions, recall/IVF recall, exact-match flags, all page/byte/wave equations,
-repeated counts, round means, medians/p95, and development-only frozen selection.
-It also checked305 test cases and all model code-budget/coverage metadata.
-These checks analyze archived evidence, not a second local SIFT1M run.
+Independent artifact verification reconciles ZIP SHA256, all six source files,
+68352 CSV rows,22784 saved neighbor records,128 aggregate rows, disjoint query
+sets, global/reference recall, exact-match flags, every page/byte/wave equation,
+repeated counts, timing means/medians/p95/rounds, frozen development choices,
+code-budget/coverage metadata and305 test cases. This is archived-evidence
+analysis, not a second local canonical benchmark.
 
 ## Decision
 
-Do not make rotation itself the leading optimization. Retain PCA64 as the
-established low-overhead reference and carry plain full-dimensional PQ with our
-page verifier as a promising equal-code-budget alternative. It can halve the
-approximate shortlist and substantially reduce certified traffic; its runtime
-advantage is modest because RAM scoring still dominates. Keep OPQ and the full
-uniform scalar encodings as measured alternatives, not a universal ranking.
+Rotation itself is not the leading improvement here. Keep PCA64 as a reference
+and carry plain full-dimensional PQ with the page verifier as a promising equal-
+code-budget alternative. It can halve the approximate shortlist and substantially
+reduce certified traffic; runtime changes remain modest because scoring dominates.
+OPQ and rotated scalar codecs remain explicit ablations, not a universal ranking.
 
-The full-space upper-bound construction is correct and reproducible, but a
-small first exact verification wave gives a better traffic/latency tradeoff
-than the tested all-RAM one-wave certificate. These findings support separating
-representation quality, verification contract and scoring implementation.
-Reproduction: docs/ROTATION_BUDGET.md and scripts/qualify_rotations.py. Preserve
-the downloaded artifact beyond GitHub's30-day retention period.
+Full-space one-wave certification is valid but less efficient than obtaining a
+tight threshold from a small initial exact batch in this experiment. Separating
+representation, verification contract, and ranker implementation remains useful.
+Reproduce via docs/ROTATION_BUDGET.md and scripts/qualify_rotations.py; preserve
+the artifact beyond GitHub's30-day retention period.
