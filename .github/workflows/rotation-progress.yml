@@ -1,0 +1,33 @@
+name: Inspect active rotation experiment progress
+on:
+  push:
+    branches: [experiment/rotation-progress]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.repository == 'gilga1983/GeoIVF' && github.ref == 'refs/heads/experiment/rotation-progress'
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 3
+    steps:
+      - name: Read bounded progress from the known run without changing it
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import csv,json,time
+          p=Path.home()/'geoivf-runners/runner01/_work/GeoIVF/GeoIVF/artifacts/rotations'
+          if (p/'commit.txt').read_text().strip()!='b41724448f49f5d25c4ed0fb51601c15d1161915':
+              raise SystemExit('Run identity mismatch; nothing read')
+          print('Verified active run identity')
+          log=p/'qualification.log'
+          if log.exists():
+              print('Last progress lines:')
+              for line in log.read_text(errors='replace').splitlines()[-12:]:print(line[:4000])
+          for name in ['builds.json','frozen-selection.json','rotation-results.json','timings.csv']:
+              f=p/'results'/name
+              if f.exists():
+                  print(name,'bytes',f.stat().st_size,'age_seconds',round(time.time()-f.stat().st_mtime,1))
+                  if name=='builds.json':
+                      print([(x['kind'],round(x['build_seconds'],2)) for x in json.loads(f.read_text())])
+          PY
