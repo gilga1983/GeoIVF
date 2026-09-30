@@ -1,0 +1,56 @@
+name: Equal-budget mixed-bit scalar verification
+on:
+  push:
+    branches: [experiment/mixed-bits]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-speed-qualification
+  cancel-in-progress: false
+jobs:
+  mixedbits:
+    if: github.repository == 'gilga1983/GeoIVF' && (github.ref == 'refs/heads/experiment/mixed-bits' || github.ref == 'refs/heads/main')
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 60
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build native mixed-bit decoder and regression tests
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+          mkdir -p artifacts/mixedbits
+          git rev-parse HEAD > artifacts/mixedbits/commit.txt
+          git archive --format=zip HEAD > artifacts/mixedbits/source.zip
+          .venv/bin/pip freeze > artifacts/mixedbits/packages.txt
+          { uname -a; lscpu; lsblk -o NAME,TYPE,SIZE,ROTA,MOUNTPOINTS; g++ --version; uptime; } > artifacts/mixedbits/host.txt
+          bash scripts/build_mixedbits.sh --uring 2>&1 | tee artifacts/mixedbits/build.log
+          GEOIVF_TEST_DIRECT=1 GEOIVF_TEST_URING=1 .venv/bin/python -m pytest -q --junitxml=artifacts/mixedbits/tests.xml
+      - name: Validate canonical cached SIFT1M
+        run: .venv/bin/python scripts/fetch_sift1m.py --report artifacts/mixedbits/dataset.json
+      - name: Allocate bits on calibration data and evaluate frozen choices
+        run: |
+          .venv/bin/python scripts/qualify_mixedbits.py \
+            --work "$RUNNER_TEMP/geoivf-mixedbits-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --out artifacts/mixedbits/results --development 128 --heldout 256 --repeats 3 \
+            2>&1 | tee artifacts/mixedbits/qualification.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mixedbits-${{ github.run_id }}
+          path: artifacts/mixedbits/
+          retention-days: 30
+      - name: Remove only this run's private scratch
+        if: always()
+        run: |
+          work="$RUNNER_TEMP/geoivf-mixedbits-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          case "$work" in "$RUNNER_TEMP"/geoivf-mixedbits-*) rm -rf -- "$work" ;; *) exit 1 ;; esac
