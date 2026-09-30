@@ -1,0 +1,39 @@
+name: Inspect mixed-bit experiment progress
+on:
+  push:
+    branches: [experiment/mixed-bits-progress]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 2
+    steps:
+      - name: Inspect only the verified experiment's progress files
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, time, xml.etree.ElementTree as ET
+          root=Path.home()/'geoivf-runners/runner06/_work/GeoIVF/GeoIVF/artifacts/mixedbits'
+          if (root/'commit.txt').read_text().strip()!='852a0a9ca697557bc38d70f930fd871fa021d8f1':
+              raise SystemExit('Identity mismatch; no experiment content read')
+          print('Verified mixed-bit run identity')
+          tests=root/'tests.xml'
+          if tests.exists():
+              print('Tests:',[x.attrib for x in ET.parse(tests).getroot().iter('testsuite')])
+          for name in ['builds.json','frozen-selection.json','mixedbits-results.json','timings.csv']:
+              p=root/'results'/name
+              if not p.exists():continue
+              print(name,'bytes',p.stat().st_size,'age_seconds',round(time.time()-p.stat().st_mtime,1))
+              if name=='builds.json':
+                  for m in json.loads(p.read_text()):
+                      print(json.dumps({k:m.get(k) for k in ['kind','radius_mean','radius_p95','allocation_bits','allocation_segments','allocation_mse','uniform4_calibration_mse','build_seconds']}))
+              if name=='frozen-selection.json':print(p.read_text())
+          log=root/'qualification.log'
+          if log.exists():
+              with log.open('rb') as f:
+                  f.seek(max(0,log.stat().st_size-12000));tail=f.read(12000).decode(errors='replace')
+              print('Progress tail:')
+              for line in tail.splitlines()[-5:]:print(line[:5000])
+          PY
