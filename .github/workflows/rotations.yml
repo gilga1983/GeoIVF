@@ -1,0 +1,56 @@
+name: Equal-budget rotations and full-space verification
+on:
+  push:
+    branches: [experiment/rotation-budget]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-speed-qualification
+  cancel-in-progress: false
+jobs:
+  rotations:
+    if: github.repository == 'gilga1983/GeoIVF' && (github.ref == 'refs/heads/experiment/rotation-budget' || github.ref == 'refs/heads/main')
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 45
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build and regression-test native rankers and direct readers
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+          mkdir -p artifacts/rotations
+          git rev-parse HEAD > artifacts/rotations/commit.txt
+          git archive --format=zip HEAD > artifacts/rotations/source.zip
+          .venv/bin/pip freeze > artifacts/rotations/packages.txt
+          { uname -a; lscpu; g++ --version; uptime; } > artifacts/rotations/host.txt
+          bash scripts/build_rotations.sh --uring 2>&1 | tee artifacts/rotations/build.log
+          GEOIVF_TEST_DIRECT=1 GEOIVF_TEST_URING=1 .venv/bin/python -m pytest -q --junitxml=artifacts/rotations/tests.xml
+      - name: Canonical cached SIFT1M
+        run: .venv/bin/python scripts/fetch_sift1m.py --report artifacts/rotations/dataset.json
+      - name: Fit codebooks, calibrate on development, freeze and evaluate fresh queries
+        run: |
+          .venv/bin/python scripts/qualify_rotations.py \
+            --work "$RUNNER_TEMP/geoivf-rotations-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --out artifacts/rotations/results --development 128 --heldout 256 --repeats 3 \
+            2>&1 | tee artifacts/rotations/qualification.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rotations-${{ github.run_id }}
+          path: artifacts/rotations/
+          retention-days: 30
+      - name: Remove only this run's temporary payload and code copies
+        if: always()
+        run: |
+          work="$RUNNER_TEMP/geoivf-rotations-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          case "$work" in "$RUNNER_TEMP"/geoivf-rotations-*) rm -rf -- "$work" ;; *) exit 1 ;; esac
