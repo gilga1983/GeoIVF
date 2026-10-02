@@ -1,7 +1,7 @@
 name: Integrated DiskANN portal latency
 on:
   push:
-    branches: [experiment/portal-integrated]
+    branches: [experiment/portal-integrated-fast]
   workflow_dispatch:
 permissions:
   contents: read
