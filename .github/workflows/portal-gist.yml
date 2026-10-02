@@ -1,0 +1,95 @@
+name: GIST1M DiskANN portal stress test
+on:
+  push:
+    branches: [experiment/portal-suite-gist]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-speed-qualification
+  cancel-in-progress: false
+jobs:
+  gist:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: bash
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Environment, disk preflight and regression tests
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+          mkdir -p artifacts/portal-gist
+          git rev-parse HEAD > artifacts/portal-gist/commit.txt
+          git archive --format=zip HEAD > artifacts/portal-gist/source.zip
+          .venv/bin/pip freeze > artifacts/portal-gist/packages.txt
+          { uname -a; lscpu; lsblk -o NAME,TYPE,SIZE,ROTA,MOUNTPOINTS; df -h; uptime; } > artifacts/portal-gist/host.txt
+          avail=$(df --output=avail -B1 "$HOME" | tail -1 | tr -d ' ')
+          need=$((20 * 1024 * 1024 * 1024))
+          if [ "$avail" -lt "$need" ]; then
+            echo "Need at least 20 GiB free for cached GIST + transient DiskANN build; have $avail bytes" >&2
+            exit 1
+          fi
+          .venv/bin/python -m py_compile scripts/fetch_ann_dataset.py scripts/qualify_portal_suite.py scripts/patch_diskann_start_points.py
+          bash scripts/build_execution.sh --uring > artifacts/portal-gist/geoivf-build.log 2>&1
+          .venv/bin/python -m pytest -q --junitxml=artifacts/portal-gist/tests.xml
+
+      - name: Cache and validate GIST1M
+        run: |
+          .venv/bin/python scripts/fetch_ann_dataset.py gist-960-euclidean --report artifacts/portal-gist/dataset.json
+
+      - name: Build pinned DiskANN3 with start-point-only carrier patch
+        run: |
+          rev=fcf90534174cf29c78c9f13b4cccf1fcabff85f5
+          git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN3
+          git -C third_party/DiskANN3 checkout --detach "$rev"
+          test "$(git -C third_party/DiskANN3 rev-parse HEAD)" = "$rev"
+          echo "$rev" > artifacts/portal-gist/upstream-commit.txt
+          export CARGO_HOME="$RUNNER_TEMP/geoivf-cargo-${GITHUB_RUN_ID}"
+          export RUSTUP_HOME="$RUNNER_TEMP/geoivf-rustup-${GITHUB_RUN_ID}"
+          mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
+          curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/geoivf-rustup-install-${GITHUB_RUN_ID}.sh"
+          sh "$RUNNER_TEMP/geoivf-rustup-install-${GITHUB_RUN_ID}.sh" -y --profile minimal --no-modify-path --default-toolchain 1.97.1
+          export PATH="$CARGO_HOME/bin:$PATH"
+          rustup component add rustfmt
+          export RUSTFLAGS='-C target-cpu=native'
+          .venv/bin/python scripts/patch_diskann_start_points.py third_party/DiskANN3
+          (cd third_party/DiskANN3 && cargo fmt --all)
+          git -C third_party/DiskANN3 diff --check
+          git -C third_party/DiskANN3 diff > artifacts/portal-gist/upstream-start-points.patch
+          (cd third_party/DiskANN3 && cargo build --locked --release -p diskann-benchmark --features disk-index) \
+            2>&1 | tee artifacts/portal-gist/upstream-build.log
+
+      - name: Run frozen one-portal policy on GIST1M
+        run: |
+          work="$RUNNER_TEMP/geoivf-portal-gist-${GITHUB_RUN_ID}"
+          .venv/bin/python scripts/qualify_portal_suite.py gist-960-euclidean \
+            --data "$HOME/.cache/geoivf/datasets/gist-960-euclidean.hdf5" \
+            --binary "$PWD/third_party/DiskANN3/target/release/diskann-benchmark" \
+            --work "$work" --out artifacts/portal-gist/results --repeats 3 \
+            2>&1 | tee artifacts/portal-gist/qualification.log
+          case "$work" in "$RUNNER_TEMP"/geoivf-portal-gist-*) rm -rf -- "$work" ;; *) exit 1 ;; esac
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: portal-gist-${{ github.run_id }}
+          path: artifacts/portal-gist/
+          retention-days: 30
+
+      - name: Clean private toolchain scratch
+        if: always()
+        run: |
+          for work in "$RUNNER_TEMP/geoivf-cargo-${GITHUB_RUN_ID}" "$RUNNER_TEMP/geoivf-rustup-${GITHUB_RUN_ID}"; do
+            case "$work" in "$RUNNER_TEMP"/geoivf-*) rm -rf -- "$work" ;; *) exit 1 ;; esac
+          done
