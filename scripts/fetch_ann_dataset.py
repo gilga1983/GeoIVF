@@ -13,13 +13,13 @@ DATASETS = {
     "gist-960-euclidean": dict(url="https://ann-benchmarks.com/gist-960-euclidean.hdf5", dim=960, distance="euclidean"),
     "yahoo-minilm-384-normalized": dict(
         url="https://huggingface.co/datasets/vector-index-bench/vibe/resolve/main/yahoo-minilm-384-normalized.hdf5",
-        dim=384, distance=("any","cosine","angular"), sha256="8b0519850249d7ea4aea258eb43ae837dca1bb2f7a85ee0a5145afdb699c4136"),
+        dim=384, distance=("normalized","any","cosine","angular"), sha256="8b0519850249d7ea4aea258eb43ae837dca1bb2f7a85ee0a5145afdb699c4136"),
     "coco-nomic-768-normalized": dict(
         url="https://huggingface.co/datasets/vector-index-bench/vibe/resolve/main/coco-nomic-768-normalized.hdf5",
-        dim=768, distance=("any","cosine","angular"), sha256="dd6391da4e010071832346e65ceb2e86adfd08ca83d7e0513d9ffac74e5e9131"),
+        dim=768, distance=("normalized","any","cosine","angular"), sha256="dd6391da4e010071832346e65ceb2e86adfd08ca83d7e0513d9ffac74e5e9131"),
     "imagenet-clip-512-normalized": dict(
         url="https://huggingface.co/datasets/vector-index-bench/vibe/resolve/main/imagenet-clip-512-normalized.hdf5",
-        dim=512, distance=("any","cosine","angular"), sha256="6899ae09fa8b51eb8261ce793a4298cfdc1de2e0db0f25a6b8403d51fe93c19a"),
+        dim=512, distance=("normalized","any","cosine","angular"), sha256="6899ae09fa8b51eb8261ce793a4298cfdc1de2e0db0f25a6b8403d51fe93c19a"),
 }
 
 def digest(path: Path) -> str:
