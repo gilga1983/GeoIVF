@@ -103,18 +103,20 @@ def build_portals(x, centers, labels, max_portals=MAX_PORTALS):
     nlist = len(centers)
     order = np.argsort(labels, kind="stable")
     counts = np.bincount(labels, minlength=nlist)
-    if np.min(counts) < max_portals:
-        raise ValueError(f"one IVF cell has only {int(np.min(counts))} vectors; need {max_portals}")
+    if np.min(counts) < 1:
+        raise ValueError("coarse IVF produced an empty cell")
     cuts = np.r_[0, np.cumsum(counts)]
-    ids_out = np.empty((nlist, max_portals), dtype=np.uint32)
-    vec_out = np.empty((nlist, max_portals, x.shape[1]), dtype=np.float32)
-    cover = np.empty((nlist, max_portals), dtype=np.float64)
+    invalid = np.iinfo(np.uint32).max
+    ids_out = np.full((nlist, max_portals), invalid, dtype=np.uint32)
+    vec_out = np.full((nlist, max_portals, x.shape[1]), np.nan, dtype=np.float32)
+    cover = np.full((nlist, max_portals), np.nan, dtype=np.float64)
 
     for li in range(nlist):
         ids = order[cuts[li]:cuts[li + 1]]
         pts = np.asarray(x[ids], dtype=np.float32)
         c = centers[li].astype(np.float64)
         d2c = np.sum((pts.astype(np.float64) - c) ** 2, axis=1)
+        available = min(max_portals, len(ids))
         chosen = []
         first = int(np.argmin(d2c))
         chosen.append(first)
@@ -122,7 +124,7 @@ def build_portals(x, centers, labels, max_portals=MAX_PORTALS):
         min_d2 = np.einsum("ij,ij->i", delta, delta)
         min_d2[first] = -1.0
 
-        for j in range(max_portals):
+        for j in range(available):
             if j:
                 nxt = int(np.argmax(min_d2))
                 if nxt in chosen:
@@ -138,7 +140,8 @@ def build_portals(x, centers, labels, max_portals=MAX_PORTALS):
             remain = min_d2[min_d2 >= 0]
             cover[li, j] = float(np.sqrt(remain.max())) if len(remain) else 0.0
 
-    if len(np.unique(ids_out)) != ids_out.size:
+    valid_ids = ids_out[ids_out != np.iinfo(np.uint32).max]
+    if len(np.unique(valid_ids)) != len(valid_ids):
         raise AssertionError("a portal ID appeared in more than one cell/slot")
     return ids_out, vec_out, cover, time.perf_counter() - t0
 
@@ -158,6 +161,11 @@ def portal_seed_rows(router, portal_ids, portal_vectors, queries, gt10, nprobe, 
         cells = cells[0]
         ids = portal_ids[cells, :portals_per_cell].reshape(-1)
         vecs = portal_vectors[cells, :portals_per_cell].reshape(-1, q.shape[0])
+        valid = ids != np.iinfo(np.uint32).max
+        if not np.any(valid):
+            raise AssertionError("selected coarse cells contain no portal")
+        ids = ids[valid]
+        vecs = vecs[valid]
         diff = vecs.astype(np.float64) - q.astype(np.float64)
         d2 = np.einsum("ij,ij->i", diff, diff)
         pick = int(np.argmin(d2))
