@@ -20,6 +20,16 @@ def patch_integrated_benchmark(path: Path) -> None:
 
     s = once(
         s,
+        """use diskann::utils::VectorRepr;
+""",
+        """use diskann::utils::VectorRepr;
+use diskann_vector::{distance::SquaredL2, PureDistanceFunction};
+""",
+        "SIMD L2 import",
+    )
+
+    s = once(
+        s,
         """    pub(super) mean_latency: f64,
     pub(super) p95_latency: MicroSeconds,
 """,
@@ -327,13 +337,7 @@ impl PortalRouter {
 
     #[inline]
     fn l2(a: &[f32], b: &[f32]) -> f32 {
-        a.iter()
-            .zip(b.iter())
-            .map(|(x, y)| {
-                let d = *x - *y;
-                d * d
-            })
-            .sum()
+        SquaredL2::evaluate(a, b)
     }
 
     fn route<T: VectorRepr>(&self, query: &[T], nprobe: usize) -> anyhow::Result<u32> {
@@ -351,10 +355,15 @@ impl PortalRouter {
         if k == 0 {
             anyhow::bail!("portal-router nprobe must be positive");
         }
+        if k > 32 {
+            anyhow::bail!("portal-router nprobe above frozen maximum of 32");
+        }
 
-        // Keep the nearest k coarse cells in sorted order. k <= 32 in our
-        // qualification protocol, avoiding a heap and keeping allocation tiny.
-        let mut best = vec![(f32::INFINITY, usize::MAX); k];
+        // Keep the nearest k coarse cells in a fixed stack buffer. The frozen
+        // qualification policy never exceeds 32, so there is no per-query heap
+        // allocation in the routing path.
+        let mut best_storage = [(f32::INFINITY, usize::MAX); 32];
+        let best = &mut best_storage[..k];
         for cell in 0..self.nlist {
             let base = cell * self.dim;
             let dist = Self::l2(&q, &self.centers[base..base + self.dim]);
@@ -373,7 +382,7 @@ impl PortalRouter {
         // the portal vector closest to the query.
         let mut winner = best[0].1;
         let mut winner_dist = f32::INFINITY;
-        for &(_, cell) in &best {
+        for &(_, cell) in best.iter() {
             let base = cell * self.dim;
             let dist = Self::l2(&q, &self.portal_vectors[base..base + self.dim]);
             if dist < winner_dist {
