@@ -310,7 +310,7 @@ def run(a):
         max_portal_table_bytes=deployed_portal_bytes(centers, MAX_PORTALS),
         max_portal_table_mib=deployed_portal_bytes(centers, MAX_PORTALS) / (1 << 20),
         mean_cover_radius_by_count={
-            str(m): float(np.mean(cover[:, m - 1])) for m in PORTALS_PER_CELL
+            str(m): float(np.nanmean(cover[:, m - 1])) for m in PORTALS_PER_CELL
         },
         portal_configs=portal_meta,
         control_ivfpq=dict(
