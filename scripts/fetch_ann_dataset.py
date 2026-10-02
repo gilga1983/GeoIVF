@@ -11,6 +11,15 @@ DATASETS = {
     "nytimes-256-angular": dict(url="https://ann-benchmarks.com/nytimes-256-angular.hdf5", dim=256, distance="angular"),
     "fashion-mnist-784-euclidean": dict(url="https://ann-benchmarks.com/fashion-mnist-784-euclidean.hdf5", dim=784, distance="euclidean"),
     "gist-960-euclidean": dict(url="https://ann-benchmarks.com/gist-960-euclidean.hdf5", dim=960, distance="euclidean"),
+    "yahoo-minilm-384-normalized": dict(
+        url="https://huggingface.co/datasets/vector-index-bench/vibe/resolve/main/yahoo-minilm-384-normalized.hdf5",
+        dim=384, distance=("any","cosine","angular"), sha256="8b0519850249d7ea4aea258eb43ae837dca1bb2f7a85ee0a5145afdb699c4136"),
+    "coco-nomic-768-normalized": dict(
+        url="https://huggingface.co/datasets/vector-index-bench/vibe/resolve/main/coco-nomic-768-normalized.hdf5",
+        dim=768, distance=("any","cosine","angular"), sha256="dd6391da4e010071832346e65ceb2e86adfd08ca83d7e0513d9ffac74e5e9131"),
+    "imagenet-clip-512-normalized": dict(
+        url="https://huggingface.co/datasets/vector-index-bench/vibe/resolve/main/imagenet-clip-512-normalized.hdf5",
+        dim=512, distance=("any","cosine","angular"), sha256="6899ae09fa8b51eb8261ce793a4298cfdc1de2e0db0f25a6b8403d51fe93c19a"),
 }
 
 def digest(path: Path) -> str:
@@ -30,7 +39,8 @@ def validate(path: Path, spec: dict) -> dict:
             raise ValueError("ground-truth shape mismatch")
         distance=f.attrs.get("distance","")
         if isinstance(distance,bytes): distance=distance.decode()
-        if distance!=spec["distance"]: raise ValueError(f"distance mismatch: {distance}")
+        accepted=spec["distance"] if isinstance(spec["distance"],tuple) else (spec["distance"],)
+        if distance not in accepted: raise ValueError(f"distance mismatch: {distance}; expected one of {accepted}")
         point_type=f.attrs.get("point_type","")
         if isinstance(point_type,bytes): point_type=point_type.decode()
         if point_type not in ("float","float32",""): raise ValueError(f"unsupported point type {point_type}")
@@ -41,10 +51,13 @@ def validate(path: Path, spec: dict) -> dict:
         for s in range(0,neighbors.shape[0],32768):
             ids=np.asarray(neighbors[s:s+32768],dtype=np.int64)
             if ids.min()<0 or ids.max()>=train.shape[0]: raise ValueError("ground-truth ID out of range")
+        observed=digest(path)
+        if spec.get("sha256") and observed!=spec["sha256"]:
+            raise ValueError(f"SHA256 mismatch for {path.name}")
         return dict(
             train_rows=int(train.shape[0]), test_rows=int(test.shape[0]), dimension=int(train.shape[1]),
             neighbors=int(neighbors.shape[1]), distance=distance, point_type=point_type or "float",
-            bytes=path.stat().st_size, sha256=digest(path),
+            bytes=path.stat().st_size, sha256=observed,
         )
 
 def main():
@@ -69,7 +82,9 @@ def main():
         else:
             report=validate(target,spec)
         out=dict(dataset=a.dataset,source=spec["url"],validated_unix=time.time(),files=report,
-                 checksum_status="observed SHA256; ANN-Benchmarks does not publish a signed checksum here")
+                 checksum_status=("verified against published VIBE/Hugging Face SHA256"
+                                  if spec.get("sha256") else
+                                  "observed SHA256; ANN-Benchmarks does not publish a signed checksum here"))
         print(json.dumps(out,indent=2),flush=True)
         if a.report:
             a.report.parent.mkdir(parents=True,exist_ok=True);a.report.write_text(json.dumps(out,indent=2)+"\n")
