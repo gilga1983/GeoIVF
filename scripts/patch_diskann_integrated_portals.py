@@ -274,12 +274,16 @@ impl PortalRouter {
         let vector_floats = nlist
             .checked_mul(dim)
             .ok_or_else(|| anyhow::anyhow!("portal-router shape overflow"))?;
+        let vector_bytes = vector_floats
+            .checked_mul(4)
+            .ok_or_else(|| anyhow::anyhow!("portal-router byte-size overflow"))?;
+        let id_bytes = nlist
+            .checked_mul(4)
+            .ok_or_else(|| anyhow::anyhow!("portal-router byte-size overflow"))?;
         let expected = 16usize
-            .checked_add(vector_floats.checked_mul(4).ok_or_else(|| {
-                anyhow::anyhow!("portal-router byte-size overflow")
-            })?)
-            .and_then(|n| n.checked_add(nlist.checked_mul(4)?))
-            .and_then(|n| n.checked_add(vector_floats.checked_mul(4)?))
+            .checked_add(vector_bytes)
+            .and_then(|n| n.checked_add(id_bytes))
+            .and_then(|n| n.checked_add(vector_bytes))
             .ok_or_else(|| anyhow::anyhow!("portal-router byte-size overflow"))?;
         if raw.len() != expected {
             anyhow::bail!(
@@ -335,6 +339,7 @@ impl PortalRouter {
     fn route<T: VectorRepr>(&self, query: &[T], nprobe: usize) -> anyhow::Result<u32> {
         let q = T::as_f32(query)
             .map_err(|e| anyhow::anyhow!("query conversion for portal routing failed: {:?}", e))?;
+        let q: &[f32] = &q;
         if q.len() != self.dim {
             anyhow::bail!(
                 "portal-router query dimension mismatch: got {}, expected {}",
