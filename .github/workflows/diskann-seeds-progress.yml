@@ -25,6 +25,13 @@ jobs:
                   f.seek(max(0,log.stat().st_size-12000)); tail=f.read().decode(errors='replace')
               print('Qualification tail:')
               for line in tail.splitlines()[-20:]: print(line[:4000])
+          for logname in ['dev-baseline.log','dev-np1-r1.log','dev-np4-r4.log','dev-np16-r8.log']:
+              lp=root/'results'/logname
+              if lp.exists():
+                  print(logname,'bytes',lp.stat().st_size,'age_s',round(time.time()-lp.stat().st_mtime,1))
+                  with lp.open('rb') as f:
+                      f.seek(max(0,lp.stat().st_size-5000)); txt=f.read().decode(errors='replace')
+                  for line in txt.splitlines()[-10:]: print(line[:3000])
           for name in ['seed-generation.json','development-results.json','frozen-selection.json','heldout-results.json','seeded-diskann-results.json']:
               p=root/'results'/name
               if p.exists():
