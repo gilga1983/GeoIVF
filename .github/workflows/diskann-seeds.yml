@@ -53,6 +53,7 @@ jobs:
           curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/geoivf-rustup-install-${GITHUB_RUN_ID}.sh"
           sh "$RUNNER_TEMP/geoivf-rustup-install-${GITHUB_RUN_ID}.sh" -y --profile minimal --no-modify-path --default-toolchain 1.97.1
           export PATH="$CARGO_HOME/bin:$PATH"
+          rustup component add rustfmt
           export RUSTFLAGS='-C target-cpu=native'
 
           .venv/bin/python scripts/patch_diskann_start_points.py third_party/DiskANN3
