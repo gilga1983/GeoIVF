@@ -20,10 +20,13 @@ FIXED_BEAM=8
 NLIST=1024
 K=10
 DATASET_SPECS={
-    "glove-200-angular":dict(dim=200,distance="angular"),
-    "nytimes-256-angular":dict(dim=256,distance="angular"),
-    "fashion-mnist-784-euclidean":dict(dim=784,distance="euclidean"),
-    "gist-960-euclidean":dict(dim=960,distance="euclidean"),
+    "glove-200-angular":dict(dim=200,distance=("angular",),normalize=True),
+    "nytimes-256-angular":dict(dim=256,distance=("angular",),normalize=True),
+    "fashion-mnist-784-euclidean":dict(dim=784,distance=("euclidean",),normalize=False),
+    "gist-960-euclidean":dict(dim=960,distance=("euclidean",),normalize=False),
+    "yahoo-minilm-384-normalized":dict(dim=384,distance=("any","cosine","angular"),normalize=True),
+    "coco-nomic-768-normalized":dict(dim=768,distance=("any","cosine","angular"),normalize=True),
+    "imagenet-clip-512-normalized":dict(dim=512,distance=("any","cosine","angular"),normalize=True),
 }
 
 def fbin(path,array):
@@ -57,7 +60,7 @@ def load_dataset(path,spec,seed):
         neigh=f["neighbors"]
         distance=f.attrs.get("distance","")
         if isinstance(distance,bytes):distance=distance.decode()
-        if x.ndim!=2 or x.shape[1]!=spec["dim"] or distance!=spec["distance"]: raise ValueError("dataset schema mismatch")
+        if x.ndim!=2 or x.shape[1]!=spec["dim"] or distance not in spec["distance"]: raise ValueError("dataset schema mismatch")
         rng=np.random.default_rng(seed)
         perm=rng.permutation(tests.shape[0])
         if len(perm)<384: raise ValueError("need at least 384 benchmark queries")
@@ -66,7 +69,7 @@ def load_dataset(path,spec,seed):
         held=np.asarray(tests[held_ids],dtype=np.float32,order="C")
         dev_gt=np.asarray(neigh[dev_ids,:100],dtype=np.int64)
         held_gt=np.asarray(neigh[held_ids,:100],dtype=np.int64)
-    if spec["distance"]=="angular":
+    if spec["normalize"]:
         x=normalize_rows(x);dev=normalize_rows(dev);held=normalize_rows(held)
     for gt in (dev_gt,held_gt):
         if gt.min()<0 or gt.max()>=len(x):raise ValueError("ground truth out of range")
@@ -199,8 +202,8 @@ def run(a):
         summary=summarize(rows)
         extra_bytes=int(centers.nbytes+portal_vecs.nbytes+portal_ids.nbytes)
         save(a.out/"portal-suite-result.json",dict(
-            dataset=a.dataset,dimension=int(x.shape[1]),train_rows=len(x),distance=spec["distance"],
-            angular_normalized=spec["distance"]=="angular",diskann_revision=PINNED_DISKANN,
+            dataset=a.dataset,dimension=int(x.shape[1]),train_rows=len(x),accepted_source_distances=list(spec["distance"]),
+            normalized_for_l2=bool(spec["normalize"]),diskann_revision=PINNED_DISKANN,
             fixed_policy=dict(nlist=NLIST,nprobes=list(FIXED_NPROBES),one_portal_per_cell=True,l=FIXED_L,beam=FIXED_BEAM,
                 max_degree=64,l_build=100,pq_chunks=pq_chunks,num_nodes_to_cache=None),
             portal_extra_bytes=extra_bytes,portal_extra_mib=extra_bytes/(1<<20),
