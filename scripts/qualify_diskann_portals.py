@@ -146,8 +146,7 @@ def build_portals(x, centers, labels, max_portals=MAX_PORTALS):
 def portal_seed_rows(router, portal_ids, portal_vectors, queries, gt10, nprobe, portals_per_cell):
     if not 1 <= portals_per_cell <= portal_ids.shape[1]:
         raise ValueError("invalid portal count")
-    router.nprobe = 1 if hasattr(router, "nprobe") else getattr(router, "nprobe", 1)
-    # IndexFlatL2 ignores nprobe; request the number of coarse cells directly.
+    # IndexFlatL2 is exact over the 1024 coarse centroids; request the desired cells directly.
     router.search(np.ascontiguousarray(queries[:1]), nprobe)
     rows = np.empty((len(queries), 1), dtype=np.uint32)
     elapsed = []
