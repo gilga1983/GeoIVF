@@ -180,8 +180,8 @@ def run(a):
     pq_hash = hashlib.sha256(pq_centroids.tobytes()).hexdigest()
     seed_root = a.out / "seeds"
     seed_root.mkdir()
-    seed_meta = {}
-    seed_files = {}
+    seed_meta = {"development": {}, "heldout": {}}
+    seed_files = {"development": {}, "heldout": {}}
     for split, ids in (("development", dev_ids), ("heldout", held_ids)):
         q = allq[ids]
         gt10 = gt[ids, :10]
@@ -191,8 +191,8 @@ def run(a):
                 path = seed_root / f"{split}-np{nprobe}-r{count}.ubin"
                 fbin(path, rows, dtype="<u4")
                 key = f"np{nprobe}-r{count}"
-                seed_files[split, key] = path
-                seed_meta[split, key] = dict(
+                seed_files[split][key] = path
+                seed_meta[split][key] = dict(
                     nprobe=nprobe, seed_count=count, rows=len(rows),
                     sha256=hashlib.sha256(path.read_bytes()).hexdigest(), **timing
                 )
@@ -228,9 +228,9 @@ def run(a):
                 print("development seeded", key, flush=True)
                 row = disk_run(
                     a.binary, a.work, a.out, f"dev-{key}", "development", load,
-                    seed_files["development", key],
+                    seed_files["development"][key],
                 )
-                sm = seed_meta["development", key]["mean_ms"]
+                sm = seed_meta["development"][key]["mean_ms"]
                 dev_rows.append(dict(
                     method="ivfpq-seeded", seed_config=key, nprobe=nprobe, seed_count=count,
                     seed_mean_ms=sm, composed_mean_ms=sm + float(row["mean_latency"]) / 1000.0,
@@ -265,9 +265,9 @@ def run(a):
                 count = int(key.split("-")[1][1:])
                 row = disk_run(
                     a.binary, a.work, a.out, f"held-{key}-r{rep}", "heldout", load,
-                    seed_files["heldout", key],
+                    seed_files["heldout"][key],
                 )
-                sm = seed_meta["heldout", key]["mean_ms"]
+                sm = seed_meta["heldout"][key]["mean_ms"]
                 held_rows.append(dict(
                     round=rep, method="ivfpq-seeded", seed_config=key, nprobe=nprobe, seed_count=count,
                     seed_mean_ms=sm, composed_mean_ms=sm + float(row["mean_latency"]) / 1000.0,
