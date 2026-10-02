@@ -15,7 +15,7 @@ from scripts.qualify_speed import save
 
 PINNED_DISKANN="fcf90534174cf29c78c9f13b4cccf1fcabff85f5"
 FIXED_NPROBES=(1,8,32)
-FIXED_L=60
+FIXED_LS=(60,100,200,400)
 FIXED_BEAM=8
 NLIST=1024
 K=10
@@ -32,6 +32,12 @@ def fbin(path,array):
         np.asarray(a.shape,dtype="<u4").tofile(f)
         for s in range(0,len(a),32768):
             np.asarray(a[s:s+32768],dtype="<f4",order="C").tofile(f)
+
+def ubin(path,array):
+    a=np.asarray(array,dtype="<u4",order="C")
+    with Path(path).open("wb") as f:
+        np.asarray(a.shape,dtype="<u4").tofile(f)
+        a.tofile(f)
 
 def gtbin(path,ids,x,q):
     ids=np.asarray(ids,dtype="<u4",order="C")
@@ -118,7 +124,7 @@ def result_rows(obj):
 
 def disk_run(binary,work,out,tag,split,source,seed_file=None):
     phase=dict(queries=str(work/f"{split}.fbin"),groundtruth=str(work/f"{split}.gt"),
-        search_list=[FIXED_L],beam_width=FIXED_BEAM,recall_at=K,num_threads=1,is_flat_search=False,
+        search_list=list(FIXED_LS),beam_width=FIXED_BEAM,recall_at=K,num_threads=1,is_flat_search=False,
         distance="squared_l2",vector_filters_file=None,num_nodes_to_cache=None,search_io_limit=None,post_processor=None)
     cfg=dict(search_directories=[str(work)],jobs=[dict(type="disk-index",content=dict(source=source,search_phase=phase))])
     inp=out/f"{tag}-input.json";output=out/f"{tag}-output.json";save(inp,cfg)
@@ -129,31 +135,40 @@ def disk_run(binary,work,out,tag,split,source,seed_file=None):
         subprocess.run([str(binary),"run","--input-file",str(inp),"--output-file",str(output)],
             stdout=log,stderr=subprocess.STDOUT,env=env,check=True)
     rows=result_rows(json.loads(output.read_text()))
-    if len(rows)!=1:raise ValueError(f"expected one DiskANN row, got {len(rows)}")
-    return dict(rows[0],source_output=output.name)
+    if len(rows)!=len(FIXED_LS):
+        raise ValueError(f"expected {len(FIXED_LS)} DiskANN rows, got {len(rows)}")
+    by_l={int(r["search_l"]):dict(r,source_output=output.name) for r in rows}
+    if sorted(by_l)!=sorted(FIXED_LS):
+        raise ValueError(f"unexpected L values: {sorted(by_l)}")
+    return [by_l[l] for l in FIXED_LS]
 
 def summarize(rows):
     result={}
     names=["medoid"]+[f"portal-np{x}" for x in FIXED_NPROBES]
     for name in names:
-        rr=[r for r in rows if r["method"]==name]
-        result[name]=dict(
-            rounds=len(rr),recall_percent=float(np.mean([r["recall"] for r in rr])),
-            mean_diskann_us=float(np.mean([r["mean_latency"] for r in rr])),
-            mean_ios=float(np.mean([r["mean_ios"] for r in rr])),
-            mean_io_us=float(np.mean([r["mean_io_time"] for r in rr])),
-            mean_cpu_us=float(np.mean([r["mean_cpu_time"] for r in rr])),
-            mean_comparisons=float(np.mean([r["mean_comparisons"] for r in rr])),
-            mean_hops=float(np.mean([r["mean_hops"] for r in rr])),
-            route_mean_ms=float(np.mean([r["route_mean_ms"] for r in rr])),
-            composed_mean_ms=float(np.mean([r["composed_mean_ms"] for r in rr])),
-        )
-    base=result["medoid"]
-    for name,s in result.items():
-        if name=="medoid":continue
-        s["io_reduction_fraction_vs_medoid"]=1-s["mean_ios"]/base["mean_ios"]
-        s["comparison_reduction_fraction_vs_medoid"]=1-s["mean_comparisons"]/base["mean_comparisons"]
-        s["recall_delta_points_vs_medoid"]=s["recall_percent"]-base["recall_percent"]
+        result[name]={}
+        for l in FIXED_LS:
+            rr=[r for r in rows if r["method"]==name and int(r["search_l"])==l]
+            if len(rr)==0:
+                raise ValueError(f"missing rows for {name} L={l}")
+            result[name][str(l)]=dict(
+                rounds=len(rr),recall_percent=float(np.mean([r["recall"] for r in rr])),
+                mean_diskann_us=float(np.mean([r["mean_latency"] for r in rr])),
+                mean_ios=float(np.mean([r["mean_ios"] for r in rr])),
+                mean_io_us=float(np.mean([r["mean_io_time"] for r in rr])),
+                mean_cpu_us=float(np.mean([r["mean_cpu_time"] for r in rr])),
+                mean_comparisons=float(np.mean([r["mean_comparisons"] for r in rr])),
+                mean_hops=float(np.mean([r["mean_hops"] for r in rr])),
+                route_mean_ms=float(np.mean([r["route_mean_ms"] for r in rr])),
+                composed_mean_ms=float(np.mean([r["composed_mean_ms"] for r in rr])),
+            )
+    for l in FIXED_LS:
+        base=result["medoid"][str(l)]
+        for name in names[1:]:
+            arm=result[name][str(l)]
+            arm["io_reduction_fraction_vs_medoid_same_l"]=1-arm["mean_ios"]/base["mean_ios"]
+            arm["comparison_reduction_fraction_vs_medoid_same_l"]=1-arm["mean_comparisons"]/base["mean_comparisons"]
+            arm["recall_delta_points_vs_medoid_same_l"]=arm["recall_percent"]-base["recall_percent"]
     return result
 
 def run(a):
@@ -162,7 +177,7 @@ def run(a):
     seed=int.from_bytes(hashlib.sha256(a.dataset.encode()).digest()[:8],"little")
     x,dev,held,dev_gt,held_gt,dev_ids,held_ids=load_dataset(a.data,spec,seed)
     save(a.out/"cohorts.json",dict(dataset=a.dataset,seed=seed,development_ids=dev_ids.tolist(),heldout_ids=held_ids.tolist(),
-        policy_frozen=True,nprobe_arms=list(FIXED_NPROBES),l=FIXED_L,beam=FIXED_BEAM))
+        policy_frozen=True,nprobe_arms=list(FIXED_NPROBES),l_sweep=list(FIXED_LS),beam=FIXED_BEAM))
 
     print(f"{a.dataset}: {len(x)} x {x.shape[1]}; build fixed 1024-cell router",flush=True)
     t=time.perf_counter();centers,labels=train_faiss(x,NLIST,12345,min(100000,len(x)));ivf_build_s=time.perf_counter()-t
@@ -179,7 +194,7 @@ def run(a):
         seeds[split]={};route_stats[split]={}
         for npb in FIXED_NPROBES:
             rows,st=portal_seeds(router,portal_ids,portal_vecs,q,npb)
-            path=a.out/f"{split}-portal-np{npb}.ubin";fbin(path,rows)
+            path=a.out/f"{split}-portal-np{npb}.ubin";ubin(path,rows)
             seeds[split][npb]=path;route_stats[split][npb]=st
 
     prefix=str(a.work/"diskann-index")
@@ -198,20 +213,21 @@ def run(a):
             for arm in arms:
                 split="heldout"
                 if arm=="medoid":
-                    r=disk_run(a.binary,a.work,a.out,f"{split}-{arm}-r{rep}",split,build if rep==0 else load)
+                    rr=disk_run(a.binary,a.work,a.out,f"{split}-{arm}-r{rep}",split,build if rep==0 else load)
                     route_ms=0.0
                 else:
-                    npb=int(arm.split("np")[1]);r=disk_run(a.binary,a.work,a.out,f"{split}-{arm}-r{rep}",split,load,seeds[split][npb])
+                    npb=int(arm.split("np")[1]);rr=disk_run(a.binary,a.work,a.out,f"{split}-{arm}-r{rep}",split,load,seeds[split][npb])
                     route_ms=route_stats[split][npb]["mean_ms"]
-                rows.append(dict(round=rep,method=arm,route_mean_ms=route_ms,
-                    composed_mean_ms=route_ms+float(r["mean_latency"])/1000.0,**r))
+                for r in rr:
+                    rows.append(dict(round=rep,method=arm,route_mean_ms=route_ms,
+                        composed_mean_ms=route_ms+float(r["mean_latency"])/1000.0,**r))
         save(a.out/"heldout-rows.json",rows)
         summary=summarize(rows)
         extra_bytes=int(centers.nbytes+portal_vecs.nbytes+portal_ids.nbytes)
         save(a.out/"portal-suite-result.json",dict(
             dataset=a.dataset,dimension=int(x.shape[1]),train_rows=len(x),distance=spec["distance"],
             angular_normalized=spec["distance"]=="angular",diskann_revision=PINNED_DISKANN,
-            fixed_policy=dict(nlist=NLIST,nprobes=list(FIXED_NPROBES),one_portal_per_cell=True,l=FIXED_L,beam=FIXED_BEAM,
+            fixed_policy=dict(nlist=NLIST,nprobes=list(FIXED_NPROBES),one_portal_per_cell=True,l_sweep=list(FIXED_LS),beam=FIXED_BEAM,
                 max_degree=64,l_build=100,pq_chunks=pq_chunks,num_nodes_to_cache=None),
             portal_extra_bytes=extra_bytes,portal_extra_mib=extra_bytes/(1<<20),
             ivf_build_seconds=ivf_build_s,portal_build_seconds=portal_build_s,
@@ -219,7 +235,7 @@ def run(a):
             disk_files={p.name:p.stat().st_size for p in a.work.glob("diskann-index*") if p.is_file()},
             elapsed_seconds=time.monotonic()-started,
             limitations=[
-                "No per-dataset policy tuning; fixed nprobe arms 1/8/32 and L60/beam8.",
+                "No per-dataset portal tuning; fixed nprobe arms 1/8/32 and common L sweep 60/100/200/400 with beam8.",
                 "Portal0 is geometric nearest-to-centroid, not graph-trained.",
                 "Angular data are unit-normalized then searched by squared L2; this preserves cosine ordering for nonzero vectors.",
                 "DiskANN mean_ios is provider vertex-load work, not independently measured NVMe commands.",
