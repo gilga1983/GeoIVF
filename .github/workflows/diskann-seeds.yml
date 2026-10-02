@@ -46,10 +46,6 @@ jobs:
           git -C third_party/DiskANN3 checkout --detach "$rev"
           test "$(git -C third_party/DiskANN3 rev-parse HEAD)" = "$rev"
           echo "$rev" > artifacts/diskann-seeds/upstream-commit.txt
-          .venv/bin/python scripts/patch_diskann_start_points.py third_party/DiskANN3
-          (cd third_party/DiskANN3 && cargo fmt --all)
-          git -C third_party/DiskANN3 diff --check
-          git -C third_party/DiskANN3 diff > artifacts/diskann-seeds/upstream-start-points.patch
 
           export CARGO_HOME="$RUNNER_TEMP/geoivf-cargo-${GITHUB_RUN_ID}"
           export RUSTUP_HOME="$RUNNER_TEMP/geoivf-rustup-${GITHUB_RUN_ID}"
@@ -58,6 +54,11 @@ jobs:
           sh "$RUNNER_TEMP/geoivf-rustup-install-${GITHUB_RUN_ID}.sh" -y --profile minimal --no-modify-path --default-toolchain 1.97.1
           export PATH="$CARGO_HOME/bin:$PATH"
           export RUSTFLAGS='-C target-cpu=native'
+
+          .venv/bin/python scripts/patch_diskann_start_points.py third_party/DiskANN3
+          (cd third_party/DiskANN3 && cargo fmt --all)
+          git -C third_party/DiskANN3 diff --check
+          git -C third_party/DiskANN3 diff > artifacts/diskann-seeds/upstream-start-points.patch
           (cd third_party/DiskANN3 && cargo build --locked --release -p diskann-benchmark --features disk-index) \
             2>&1 | tee artifacts/diskann-seeds/upstream-build.log
 
