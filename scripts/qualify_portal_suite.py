@@ -44,6 +44,16 @@ def gtbin(path,ids,x,q):
             d=np.sum((x[block].astype(np.float64)-qq[:,None,:])**2,axis=2).astype("<f4")
             d.tofile(f)
 
+def h5_take_rows(dataset, ids):
+    """Read arbitrary HDF5 rows while preserving caller order."""
+    ids=np.asarray(ids,dtype=np.int64)
+    order=np.argsort(ids,kind="stable")
+    sorted_ids=ids[order]
+    values=np.asarray(dataset[sorted_ids])
+    inverse=np.empty_like(order)
+    inverse[order]=np.arange(len(order))
+    return values[inverse]
+
 def normalize_rows(a):
     a=np.asarray(a,dtype=np.float32,order="C")
     norms=np.linalg.norm(a.astype(np.float64),axis=1)
@@ -62,10 +72,10 @@ def load_dataset(path,spec,seed):
         perm=rng.permutation(tests.shape[0])
         if len(perm)<384: raise ValueError("need at least 384 benchmark queries")
         dev_ids=perm[:128]; held_ids=perm[128:384]
-        dev=np.asarray(tests[dev_ids],dtype=np.float32,order="C")
-        held=np.asarray(tests[held_ids],dtype=np.float32,order="C")
-        dev_gt=np.asarray(neigh[dev_ids,:100],dtype=np.int64)
-        held_gt=np.asarray(neigh[held_ids,:100],dtype=np.int64)
+        dev=np.asarray(h5_take_rows(tests,dev_ids),dtype=np.float32,order="C")
+        held=np.asarray(h5_take_rows(tests,held_ids),dtype=np.float32,order="C")
+        dev_gt=np.asarray(h5_take_rows(neigh,dev_ids)[:,:100],dtype=np.int64)
+        held_gt=np.asarray(h5_take_rows(neigh,held_ids)[:,:100],dtype=np.int64)
     if spec["distance"]=="angular":
         x=normalize_rows(x);dev=normalize_rows(dev);held=normalize_rows(held)
     for gt in (dev_gt,held_gt):
