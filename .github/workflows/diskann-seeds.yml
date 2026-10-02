@@ -35,6 +35,7 @@ jobs:
           .venv/bin/pip freeze > artifacts/diskann-seeds/packages.txt
           { uname -a; lscpu; lsblk -o NAME,TYPE,SIZE,ROTA,MOUNTPOINTS; uptime; } > artifacts/diskann-seeds/host.txt
           .venv/bin/python -m py_compile scripts/patch_diskann_start_points.py scripts/qualify_diskann_seeds.py
+          bash scripts/build_execution.sh --uring > artifacts/diskann-seeds/geoivf-build.log 2>&1
           .venv/bin/python -m pytest -q --junitxml=artifacts/diskann-seeds/tests.xml
           .venv/bin/python scripts/fetch_sift1m.py --report artifacts/diskann-seeds/dataset.json
 
