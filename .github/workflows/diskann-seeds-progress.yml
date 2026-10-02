@@ -1,0 +1,34 @@
+name: Inspect seeded DiskANN experiment progress
+on:
+  push:
+    branches: [experiment/diskann-seeds-progress]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 2
+    steps:
+      - name: Read bounded progress from active carrier run
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,time
+          root=Path('/home/gilga/geoivf-runners/runner02/_work/GeoIVF/GeoIVF/artifacts/diskann-seeds')
+          if (root/'commit.txt').read_text().strip()!='b1f2c0cde4f7af0b6d7896899fb5858fac453b48':
+              raise SystemExit('active run identity mismatch')
+          print('Verified active seeded-DiskANN run identity')
+          log=root/'qualification.log'
+          if log.exists():
+              with log.open('rb') as f:
+                  f.seek(max(0,log.stat().st_size-12000)); tail=f.read().decode(errors='replace')
+              print('Qualification tail:')
+              for line in tail.splitlines()[-20:]: print(line[:4000])
+          for name in ['seed-generation.json','development-results.json','frozen-selection.json','heldout-results.json','seeded-diskann-results.json']:
+              p=root/'results'/name
+              if p.exists():
+                  print(name,'bytes',p.stat().st_size,'age_s',round(time.time()-p.stat().st_mtime,1))
+                  if name in ('frozen-selection.json','seeded-diskann-results.json'):
+                      print(p.read_text()[:12000])
+          PY
