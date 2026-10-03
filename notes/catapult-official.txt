@@ -1,0 +1,1 @@
+Official CatapultDB artifact intake branch. Pinned upstream revision is recorded by CI.
