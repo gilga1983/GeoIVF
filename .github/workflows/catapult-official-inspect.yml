@@ -1,0 +1,63 @@
+name: Inspect official CatapultDB artifact
+on:
+  push:
+    branches: [experiment/catapult-official]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-catapult-official
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Clone official CatapultDB repository
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts/catapult-official
+          git clone --depth 1 https://gitlab.epfl.ch/randl/catapult.git third_party/catapult
+          git -C third_party/catapult rev-parse HEAD | tee artifacts/catapult-official/commit.txt
+          git -C third_party/catapult remote -v > artifacts/catapult-official/remotes.txt
+          git -C third_party/catapult log -1 --date=iso-strict --pretty=fuller > artifacts/catapult-official/head.txt
+          find third_party/catapult -maxdepth 3 -type f -not -path '*/.git/*' | sort > artifacts/catapult-official/tree.txt
+          cp -f third_party/catapult/README* artifacts/catapult-official/ 2>/dev/null || true
+          cp -f third_party/catapult/Cargo.toml artifacts/catapult-official/ 2>/dev/null || true
+          cp -f third_party/catapult/Cargo.lock artifacts/catapult-official/ 2>/dev/null || true
+          cp -f third_party/catapult/pyproject.toml artifacts/catapult-official/ 2>/dev/null || true
+          cp -f third_party/catapult/requirements*.txt artifacts/catapult-official/ 2>/dev/null || true
+          cp -f third_party/catapult/Makefile artifacts/catapult-official/ 2>/dev/null || true
+          cp -f third_party/catapult/Dockerfile* artifacts/catapult-official/ 2>/dev/null || true
+          git -C third_party/catapult archive --format=zip HEAD > artifacts/catapult-official/source.zip
+
+      - name: Record build metadata
+        run: |
+          set -euxo pipefail
+          {
+            uname -a
+            lscpu
+            python3 --version || true
+            cargo --version || true
+            rustc --version || true
+            cmake --version || true
+            g++ --version || true
+          } > artifacts/catapult-official/environment.txt
+
+          if [ -f third_party/catapult/Cargo.toml ]; then
+            (cd third_party/catapult && cargo metadata --no-deps --format-version 1)               > artifacts/catapult-official/cargo-metadata.json
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: catapult-official-inspect-${{ github.run_id }}
+          path: artifacts/catapult-official/
+          retention-days: 30
