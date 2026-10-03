@@ -73,8 +73,11 @@ fn main() {
         let end = i + 1;
         if end % chunk_size == 0 || end == queries.len() {
             let chunk_elapsed = chunk_start.elapsed().as_secs_f64();
-            let begin = end - (end % chunk_size).max(if end == queries.len() { end % chunk_size } else { 0 });
-            let actual_begin = if end % chunk_size == 0 { end - chunk_size } else { end - (end % chunk_size) };
+            let actual_begin = if end % chunk_size == 0 {
+                end - chunk_size
+            } else {
+                end - (end % chunk_size)
+            };
             let count = end - actual_begin;
             let chunk_qps = if chunk_elapsed > 0.0 {
                 count as f64 / chunk_elapsed
