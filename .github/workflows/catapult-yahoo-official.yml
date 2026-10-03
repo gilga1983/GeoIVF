@@ -1,0 +1,170 @@
+name: Official CatapultDB Yahoo baseline
+on:
+  push:
+    branches: [experiment/catapult-official]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-catapult-yahoo
+  cancel-in-progress: false
+
+jobs:
+  yahoo:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: bash
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare environment and Yahoo VIBE workload
+        run: |
+          set -euxo pipefail
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+          mkdir -p artifacts/catapult-yahoo
+          .venv/bin/python scripts/fetch_ann_dataset.py yahoo-minilm-384-normalized \
+            --report artifacts/catapult-yahoo/dataset-source.json
+          .venv/bin/python scripts/prepare_catapult_official_yahoo.py \
+            --data "$HOME/.cache/geoivf/datasets/yahoo-minilm-384-normalized.hdf5" \
+            --out artifacts/catapult-yahoo
+          git rev-parse HEAD > artifacts/catapult-yahoo/geoivf-commit.txt
+          { uname -a; lscpu; free -h; df -h; } > artifacts/catapult-yahoo/host.txt
+
+      - name: Build pinned official C++ DiskANN
+        run: |
+          set -euxo pipefail
+          rev=78256bbab4685e1774e78d331e081a153be26823
+          git clone --branch cpp_main --single-branch https://github.com/microsoft/DiskANN.git third_party/DiskANN-cpp
+          git -C third_party/DiskANN-cpp checkout --detach "$rev"
+          git -C third_party/DiskANN-cpp submodule update --init --recursive
+          test "$(git -C third_party/DiskANN-cpp rev-parse HEAD)" = "$rev"
+          echo "$rev" > artifacts/catapult-yahoo/diskann-cpp-commit.txt
+          cmake -S third_party/DiskANN-cpp -B third_party/DiskANN-cpp/build -DCMAKE_BUILD_TYPE=Release \
+            2>&1 | tee artifacts/catapult-yahoo/diskann-cmake.log
+          cmake --build third_party/DiskANN-cpp/build -j4 --target build_memory_index search_memory_index \
+            2>&1 | tee artifacts/catapult-yahoo/diskann-build.log
+
+      - name: Build one shared Vamana graph and run true medoid DiskANN
+        run: |
+          set -euxo pipefail
+          work="$RUNNER_TEMP/catapult-yahoo-${GITHUB_RUN_ID}"
+          mkdir -p "$work"
+          third_party/DiskANN-cpp/build/apps/build_memory_index \
+            --data_type float --dist_fn l2 \
+            --data_path "$PWD/artifacts/catapult-yahoo/base.fbin" \
+            --index_path_prefix "$work/shared_vamana" \
+            -R 64 -L 100 --alpha 1.2 -T 4 \
+            2>&1 | tee artifacts/catapult-yahoo/diskann-index-build.log
+
+          third_party/DiskANN-cpp/build/apps/search_memory_index \
+            --data_type float --dist_fn l2 \
+            --index_path_prefix "$work/shared_vamana" \
+            --query_file "$PWD/artifacts/catapult-yahoo/queries.fbin" \
+            --gt_file "$PWD/artifacts/catapult-yahoo/groundtruth.bin" \
+            -K 10 -L 20 40 60 100 200 \
+            --result_path "$PWD/artifacts/catapult-yahoo/diskann-res" -T 1 \
+            2>&1 | tee artifacts/catapult-yahoo/diskann-search.log
+
+          {
+            ls -lh "$work"/shared_vamana*
+            sha256sum "$work"/shared_vamana "$work"/shared_vamana.data
+          } > artifacts/catapult-yahoo/shared-graph-audit.txt
+          echo "$work" > artifacts/catapult-yahoo/work-path.txt
+
+      - name: Clone and build untouched official CatapultDB
+        run: |
+          set -euxo pipefail
+          rev=7d473050e0a69079d8fc17158f2967486e54380b
+          git clone https://gitlab.epfl.ch/randl/catapult.git third_party/catapult
+          git -C third_party/catapult checkout --detach "$rev"
+          test "$(git -C third_party/catapult rev-parse HEAD)" = "$rev"
+          echo "$rev" > artifacts/catapult-yahoo/catapult-official-commit.txt
+
+          CARGO_HOME="$RUNNER_TEMP/catapult-cargo-${GITHUB_RUN_ID}"
+          RUSTUP_HOME="$RUNNER_TEMP/catapult-rustup-${GITHUB_RUN_ID}"
+          mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
+          curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/catapult-rustup-install-${GITHUB_RUN_ID}.sh"
+          CARGO_HOME="$CARGO_HOME" RUSTUP_HOME="$RUSTUP_HOME" \
+            sh "$RUNNER_TEMP/catapult-rustup-install-${GITHUB_RUN_ID}.sh" \
+            -y --profile minimal --no-modify-path --default-toolchain nightly
+          echo "CARGO_HOME=$CARGO_HOME" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$RUSTUP_HOME" >> "$GITHUB_ENV"
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Build official binary and external result-ID wrapper
+        run: |
+          set -euxo pipefail
+          cargo test --release --locked --manifest-path third_party/catapult/Cargo.toml \
+            2>&1 | tee artifacts/catapult-yahoo/catapult-tests.log
+          cargo build --release --locked --manifest-path third_party/catapult/Cargo.toml \
+            2>&1 | tee artifacts/catapult-yahoo/catapult-build.log
+          cargo build --release --manifest-path catapult_eval/Cargo.toml \
+            2>&1 | tee artifacts/catapult-yahoo/catapult-eval-build.log
+
+      - name: Run official CatapultDB HEAD off and on
+        run: |
+          set -euxo pipefail
+          work="$(cat artifacts/catapult-yahoo/work-path.txt)"
+          graph="$work/shared_vamana"
+          payload="$work/shared_vamana.data"
+          queries="$PWD/artifacts/catapult-yahoo/queries.npy"
+          official="$PWD/third_party/catapult/target/release/catapult"
+          evalbin="$PWD/catapult_eval/target/release/catapult-official-eval"
+
+          cpu=$(.venv/bin/python - <<'PY'
+          import os
+          print(sorted(os.sched_getaffinity(0))[0])
+          PY
+          )
+          echo "$cpu" > artifacts/catapult-yahoo/cpu.txt
+
+          for beam in 20 40 60 100 200; do
+            for arm in off on; do
+              extra=()
+              if [ "$arm" = on ]; then extra+=(--catapults); fi
+              for rep in 0 1 2; do
+                taskset -c "$cpu" "$official" \
+                  --queries "$queries" --graph "$graph" --payload "$payload" \
+                  "${extra[@]}" --threads 1 --num-neighbors 10 --beam-width "$beam" \
+                  2>&1 | tee "artifacts/catapult-yahoo/catapult-$arm-b$beam-r$rep.log"
+              done
+
+              taskset -c "$cpu" "$evalbin" \
+                "$graph" "$payload" "$queries" \
+                "$PWD/artifacts/catapult-yahoo/catapult-$arm-b$beam" \
+                10 "$beam" "$arm" \
+                2>&1 | tee "artifacts/catapult-yahoo/catapult-$arm-b$beam-eval.log"
+            done
+          done
+
+      - name: Summarize matched-graph baseline
+        run: |
+          set -euxo pipefail
+          .venv/bin/python scripts/summarize_catapult_official_yahoo.py \
+            --dir artifacts/catapult-yahoo \
+            2>&1 | tee artifacts/catapult-yahoo/summary.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: catapult-yahoo-official-${{ github.run_id }}
+          path: artifacts/catapult-yahoo/
+          retention-days: 30
+
+      - name: Clean scratch
+        if: always()
+        run: |
+          if [ -f artifacts/catapult-yahoo/work-path.txt ]; then
+            work="$(cat artifacts/catapult-yahoo/work-path.txt)"
+            case "$work" in "$RUNNER_TEMP"/catapult-yahoo-*) rm -rf -- "$work" ;; *) true ;; esac
+          fi
+          rm -rf "$RUNNER_TEMP/catapult-cargo-${GITHUB_RUN_ID}" "$RUNNER_TEMP/catapult-rustup-${GITHUB_RUN_ID}"
