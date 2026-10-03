@@ -64,9 +64,26 @@ fn main() {
     );
 
     let start = Instant::now();
+    let chunk_size: usize = 1000;
+    let mut chunk_start = Instant::now();
+    let mut chunks: Vec<(usize, usize, f64, f64)> = Vec::new();
     let mut rows: Vec<Vec<usize>> = Vec::with_capacity(queries.len());
-    for query in &queries {
+    for (i, query) in queries.iter().enumerate() {
         rows.push(black_box(graph.beam_search(query, k, beam)));
+        let end = i + 1;
+        if end % chunk_size == 0 || end == queries.len() {
+            let chunk_elapsed = chunk_start.elapsed().as_secs_f64();
+            let begin = end - (end % chunk_size).max(if end == queries.len() { end % chunk_size } else { 0 });
+            let actual_begin = if end % chunk_size == 0 { end - chunk_size } else { end - (end % chunk_size) };
+            let count = end - actual_begin;
+            let chunk_qps = if chunk_elapsed > 0.0 {
+                count as f64 / chunk_elapsed
+            } else {
+                0.0
+            };
+            chunks.push((actual_begin, end, chunk_elapsed, chunk_qps));
+            chunk_start = Instant::now();
+        }
     }
     let elapsed = start.elapsed().as_secs_f64();
     let qps = if elapsed > 0.0 {
@@ -88,6 +105,14 @@ fn main() {
     }
     ubin.flush().unwrap();
 
+    let chunks_path = out_prefix.with_extension("chunks.tsv");
+    let mut chunks_out = BufWriter::new(File::create(&chunks_path).unwrap());
+    writeln!(chunks_out, "begin\tend\telapsed_seconds\tqps").unwrap();
+    for (begin, end, chunk_elapsed, chunk_qps) in &chunks {
+        writeln!(chunks_out, "{begin}\t{end}\t{chunk_elapsed:.9}\t{chunk_qps:.6}").unwrap();
+    }
+    chunks_out.flush().unwrap();
+
     let summary_path = out_prefix.with_extension("txt");
     let mut summary = BufWriter::new(File::create(&summary_path).unwrap());
     writeln!(summary, "queries={}", rows.len()).unwrap();
@@ -97,6 +122,7 @@ fn main() {
     writeln!(summary, "num_hash=10").unwrap();
     writeln!(summary, "catapult_capacity=30").unwrap();
     writeln!(summary, "engine_seed=42").unwrap();
+    writeln!(summary, "chunk_size={chunk_size}").unwrap();
     writeln!(summary, "elapsed_seconds={elapsed:.9}").unwrap();
     writeln!(summary, "qps={qps:.6}").unwrap();
     summary.flush().unwrap();
