@@ -1,0 +1,184 @@
+name: CatapultDB Yahoo Zipf locality sweep
+on:
+  push:
+    branches: [experiment/catapult-official]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-catapult-zipf
+  cancel-in-progress: true
+
+jobs:
+  zipf:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: bash
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prepare pinned environment and Yahoo replay streams
+        run: |
+          set -euxo pipefail
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install diskannpy==0.7.0 h5py==3.10.0
+
+          mkdir -p artifacts/catapult-zipf
+          data="$RUNNER_TEMP/catapult-zipf-data-${GITHUB_RUN_ID}"
+          index="$RUNNER_TEMP/catapult-zipf-index-${GITHUB_RUN_ID}"
+          replay="$RUNNER_TEMP/catapult-zipf-replay-${GITHUB_RUN_ID}"
+          mkdir -p "$data" "$index" "$replay"
+          echo "DATA_DIR=$data" >> "$GITHUB_ENV"
+          echo "INDEX_DIR=$index" >> "$GITHUB_ENV"
+          echo "REPLAY_DIR=$replay" >> "$GITHUB_ENV"
+
+          .venv/bin/python scripts/fetch_ann_dataset.py yahoo-minilm-384-normalized \
+            --report artifacts/catapult-zipf/dataset-source.json
+          .venv/bin/python scripts/prepare_catapult_official_yahoo.py \
+            --data "$HOME/.cache/geoivf/datasets/yahoo-minilm-384-normalized.hdf5" \
+            --out "$data"
+          .venv/bin/python scripts/prepare_catapult_zipf_replay.py \
+            --queries "$data/queries.npy" \
+            --gt "$data/gt_ids.npy" \
+            --out "$replay" \
+            --length 30000 --seed 20261003 \
+            2>&1 | tee artifacts/catapult-zipf/replay-generation.log
+
+          cp "$replay/zipf-replay.json" artifacts/catapult-zipf/
+          cp "$replay"/meta-z*.json artifacts/catapult-zipf/
+          .venv/bin/pip freeze > artifacts/catapult-zipf/python-packages.txt
+          git rev-parse HEAD > artifacts/catapult-zipf/geoivf-commit.txt
+          { uname -a; lscpu; free -h; df -h; } > artifacts/catapult-zipf/host.txt
+
+      - name: Build shared official DiskANN Vamana graph
+        run: |
+          set -euxo pipefail
+          .venv/bin/python scripts/run_diskannpy_yahoo.py \
+            --base "$DATA_DIR/base.fbin" \
+            --queries "$DATA_DIR/queries.npy" \
+            --gt "$DATA_DIR/gt_ids.npy" \
+            --index-dir "$INDEX_DIR" \
+            --out artifacts/catapult-zipf \
+            2>&1 | tee artifacts/catapult-zipf/diskannpy-build-and-baseline.log
+
+          .venv/bin/python - <<'PY'
+          import json, struct, os
+          from pathlib import Path
+          root = Path(os.environ["INDEX_DIR"])
+          graph, payload = root/"ann", root/"ann.data"
+          with graph.open("rb") as f:
+              raw = f.read(24)
+          size, max_degree, medoid, frozen = struct.unpack("<QIIQ", raw)
+          audit = {
+              "graph_bytes": graph.stat().st_size,
+              "payload_bytes": payload.stat().st_size,
+              "header_size": size,
+              "max_degree": max_degree,
+              "medoid": medoid,
+              "num_frozen": frozen,
+          }
+          Path("artifacts/catapult-zipf/shared-graph-audit.json").write_text(json.dumps(audit, indent=2)+"\n")
+          print(json.dumps(audit, indent=2))
+          PY
+          sha256sum "$INDEX_DIR/ann" "$INDEX_DIR/ann.data" > artifacts/catapult-zipf/shared-graph-sha256.txt
+
+      - name: Clone untouched official CatapultDB
+        run: |
+          set -euxo pipefail
+          rev=7d473050e0a69079d8fc17158f2967486e54380b
+          git clone https://gitlab.epfl.ch/randl/catapult.git third_party/catapult
+          git -C third_party/catapult checkout --detach "$rev"
+          test "$(git -C third_party/catapult rev-parse HEAD)" = "$rev"
+          echo "$rev" > artifacts/catapult-zipf/catapult-official-commit.txt
+
+          CARGO_HOME="$RUNNER_TEMP/catapult-cargo-${GITHUB_RUN_ID}"
+          RUSTUP_HOME="$RUNNER_TEMP/catapult-rustup-${GITHUB_RUN_ID}"
+          mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
+          curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/catapult-rustup-install-${GITHUB_RUN_ID}.sh"
+          CARGO_HOME="$CARGO_HOME" RUSTUP_HOME="$RUSTUP_HOME" \
+            sh "$RUNNER_TEMP/catapult-rustup-install-${GITHUB_RUN_ID}.sh" \
+            -y --profile minimal --no-modify-path --default-toolchain nightly
+          echo "CARGO_HOME=$CARGO_HOME" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$RUSTUP_HOME" >> "$GITHUB_ENV"
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Build official CatapultDB and warmup-measurement wrapper
+        run: |
+          set -euxo pipefail
+          cargo test --release --locked --manifest-path third_party/catapult/Cargo.toml \
+            2>&1 | tee artifacts/catapult-zipf/catapult-tests.log
+          cargo build --release --locked --manifest-path third_party/catapult/Cargo.toml \
+            2>&1 | tee artifacts/catapult-zipf/catapult-build.log
+          cargo build --release --manifest-path catapult_eval/Cargo.toml \
+            2>&1 | tee artifacts/catapult-zipf/catapult-eval-build.log
+
+      - name: Run official CatapultDB locality sweep
+        run: |
+          set -euxo pipefail
+          graph="$INDEX_DIR/ann"
+          payload="$INDEX_DIR/ann.data"
+          official="$PWD/third_party/catapult/target/release/catapult"
+          evalbin="$PWD/catapult_eval/target/release/catapult-official-eval"
+
+          cpu=$(.venv/bin/python - <<'PY'
+          import os
+          print(sorted(os.sched_getaffinity(0))[0])
+          PY
+          )
+          echo "$cpu" > artifacts/catapult-zipf/cpu.txt
+
+          for alpha in 0p0 0p75 1p0 1p25; do
+            queries="$REPLAY_DIR/queries-z$alpha.npy"
+            for beam in 20 60 100; do
+              for arm in off on; do
+                extra=()
+                if [ "$arm" = on ]; then extra+=(--catapults); fi
+                for rep in 0 1 2; do
+                  taskset -c "$cpu" "$official" \
+                    --queries "$queries" --graph "$graph" --payload "$payload" \
+                    "${extra[@]}" --threads 1 --num-neighbors 10 --beam-width "$beam" \
+                    2>&1 | tee "artifacts/catapult-zipf/zipf-z$alpha-$arm-b$beam-r$rep.log"
+                done
+
+                taskset -c "$cpu" "$evalbin" \
+                  "$graph" "$payload" "$queries" \
+                  "$PWD/artifacts/catapult-zipf/zipf-z$alpha-$arm-b$beam" \
+                  10 "$beam" "$arm" \
+                  2>&1 | tee "artifacts/catapult-zipf/zipf-z$alpha-$arm-b$beam-eval.log"
+              done
+            done
+          done
+
+      - name: Summarize locality curve and warmup
+        run: |
+          set -euxo pipefail
+          .venv/bin/python scripts/summarize_catapult_yahoo_zipf.py \
+            --dir artifacts/catapult-zipf \
+            --replay-dir "$REPLAY_DIR" \
+            2>&1 | tee artifacts/catapult-zipf/summary.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: catapult-yahoo-zipf-${{ github.run_id }}
+          path: artifacts/catapult-zipf/
+          retention-days: 30
+
+      - name: Clean scratch
+        if: always()
+        run: |
+          rm -rf "$DATA_DIR" "$INDEX_DIR" "$REPLAY_DIR"
+          rm -rf "$RUNNER_TEMP/catapult-cargo-${GITHUB_RUN_ID}" "$RUNNER_TEMP/catapult-rustup-${GITHUB_RUN_ID}"
