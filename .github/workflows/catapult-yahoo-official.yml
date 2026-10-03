@@ -1,7 +1,5 @@
 name: Official CatapultDB Yahoo baseline
 on:
-  push:
-    branches: [experiment/catapult-official]
   workflow_dispatch:
 permissions:
   contents: read
