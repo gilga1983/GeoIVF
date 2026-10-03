@@ -44,34 +44,25 @@ def official_qps(log: Path) -> float:
     return float(m[0])
 
 
-def parse_diskann(log: Path):
+def parse_diskannpy(path: Path):
+    obj = json.loads(path.read_text())
     out = {}
-    for line in log.read_text().splitlines():
-        parts = line.split()
-        if len(parts) < 6:
-            continue
-        try:
-            lval = int(parts[0])
-            if lval not in BEAMS:
-                continue
-            qps = float(parts[1])
-            cmps = float(parts[2])
-            mean_us = float(parts[3])
-            p999_us = float(parts[4])
-            recall = float(parts[5])
-        except ValueError:
-            continue
-        out[str(lval)] = {
-            "qps": qps,
-            "avg_distance_comparisons": cmps,
-            "mean_latency_us": mean_us,
-            "p999_latency_us": p999_us,
-            "recall_at_10_percent": recall,
+    for c in BEAMS:
+        row = obj["search"][str(c)]
+        out[str(c)] = {
+            "qps_mean": float(row["qps_mean"]),
+            "qps_std": float(row["qps_std"]),
+            "recall_at_10_percent": float(row["recall_at_10_percent"]),
+            "repetitions": row["repetitions"],
         }
-    missing = [x for x in BEAMS if str(x) not in out]
-    if missing:
-        raise ValueError(f"missing DiskANN rows {missing} in {log}")
-    return out
+    return {
+        "diskannpy_version": obj["diskannpy_version"],
+        "build_seconds": obj["build_seconds"],
+        "graph_bytes": obj["graph_bytes"],
+        "payload_bytes": obj["payload_bytes"],
+        "build": obj["build"],
+        "search": out,
+    }
 
 
 def main():
@@ -85,14 +76,14 @@ def main():
         "dataset": "yahoo-minilm-384-normalized",
         "queries": int(len(gt)),
         "k": 10,
-        "diskann_cpp_commit": "78256bbab4685e1774e78d331e081a153be26823",
+        "diskann_baseline": "official diskannpy 0.7.0 StaticMemoryIndex",
         "catapult_official_commit": "7d473050e0a69079d8fc17158f2967486e54380b",
         "catapult_head_policy": {
             "num_hash": 10,
             "catapult_capacity": 30,
             "engine_seed": 42,
         },
-        "diskann_medoid": parse_diskann(root / "diskann-search.log"),
+        "diskann_medoid": parse_diskannpy(root / "diskannpy-result.json"),
         "catapult_official": {},
     }
 
