@@ -34,7 +34,7 @@ jobs:
           set -euxo pipefail
           python -m venv .venv
           .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install numpy==1.25.2 h5py==3.10.0 diskannpy==0.7.0
+          .venv/bin/pip install diskannpy==0.7.0 h5py==3.10.0
           mkdir -p artifacts/catapult-yahoo
 
           data="$RUNNER_TEMP/catapult-yahoo-data-${GITHUB_RUN_ID}"
