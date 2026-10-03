@@ -38,11 +38,13 @@ jobs:
       - name: Install isolated Rust nightly
         run: |
           set -euxo pipefail
-          export CARGO_HOME="$RUNNER_TEMP/catapult-cargo-${GITHUB_RUN_ID}"
-          export RUSTUP_HOME="$RUNNER_TEMP/catapult-rustup-${GITHUB_RUN_ID}"
+          CARGO_HOME="$RUNNER_TEMP/catapult-cargo-${GITHUB_RUN_ID}"
+          RUSTUP_HOME="$RUNNER_TEMP/catapult-rustup-${GITHUB_RUN_ID}"
           mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
           curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/catapult-rustup-install-${GITHUB_RUN_ID}.sh"
-          sh "$RUNNER_TEMP/catapult-rustup-install-${GITHUB_RUN_ID}.sh" -y --profile minimal --no-modify-path --default-toolchain nightly
+          CARGO_HOME="$CARGO_HOME" RUSTUP_HOME="$RUSTUP_HOME"             sh "$RUNNER_TEMP/catapult-rustup-install-${GITHUB_RUN_ID}.sh"               -y --profile minimal --no-modify-path --default-toolchain nightly
+          echo "CARGO_HOME=$CARGO_HOME" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$RUSTUP_HOME" >> "$GITHUB_ENV"
           echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
 
       - name: Build and test untouched official artifact
