@@ -11,7 +11,33 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import h5py
 import numpy as np
 
-from scripts.qualify_portal_suite import fbin, gtbin, normalize_rows
+
+def fbin(path: Path, array):
+    a = np.asarray(array, dtype=np.float32, order="C")
+    with Path(path).open("wb") as f:
+        np.asarray(a.shape, dtype="<u4").tofile(f)
+        for s in range(0, len(a), 32768):
+            np.asarray(a[s:s+32768], dtype="<f4", order="C").tofile(f)
+
+
+def gtbin(path: Path, ids, x, q):
+    ids = np.asarray(ids, dtype="<u4", order="C")
+    with Path(path).open("wb") as f:
+        np.asarray(ids.shape, dtype="<u4").tofile(f)
+        ids.tofile(f)
+        for s in range(0, len(ids), 512):
+            block = ids[s:s+512]
+            qq = q[s:s+512].astype(np.float64)
+            d = np.sum((x[block].astype(np.float64) - qq[:, None, :])**2, axis=2).astype("<f4")
+            d.tofile(f)
+
+
+def normalize_rows(a):
+    a = np.asarray(a, dtype=np.float32, order="C")
+    norms = np.linalg.norm(a.astype(np.float64), axis=1)
+    if np.any(~np.isfinite(norms)) or np.any(norms <= 0):
+        raise ValueError("zero/nonfinite vector")
+    return np.asarray(a / norms[:, None], dtype=np.float32, order="C")
 
 
 def main() -> None:
