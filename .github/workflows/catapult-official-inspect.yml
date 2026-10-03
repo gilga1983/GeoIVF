@@ -11,7 +11,7 @@ concurrency:
 jobs:
   inspect:
     runs-on: [self-hosted, linux, x64, geoivf]
-    timeout-minutes: 60
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
@@ -32,28 +32,39 @@ jobs:
           cp -f third_party/catapult/README* artifacts/catapult-official/ 2>/dev/null || true
           cp -f third_party/catapult/Cargo.toml artifacts/catapult-official/ 2>/dev/null || true
           cp -f third_party/catapult/Cargo.lock artifacts/catapult-official/ 2>/dev/null || true
-          cp -f third_party/catapult/pyproject.toml artifacts/catapult-official/ 2>/dev/null || true
-          cp -f third_party/catapult/requirements*.txt artifacts/catapult-official/ 2>/dev/null || true
-          cp -f third_party/catapult/Makefile artifacts/catapult-official/ 2>/dev/null || true
-          cp -f third_party/catapult/Dockerfile* artifacts/catapult-official/ 2>/dev/null || true
+          cp -f third_party/catapult/rust-toolchain.toml artifacts/catapult-official/ 2>/dev/null || true
           git -C third_party/catapult archive --format=zip HEAD > artifacts/catapult-official/source.zip
 
-      - name: Record build metadata
+      - name: Install isolated Rust nightly
+        run: |
+          set -euxo pipefail
+          export CARGO_HOME="$RUNNER_TEMP/catapult-cargo-${GITHUB_RUN_ID}"
+          export RUSTUP_HOME="$RUNNER_TEMP/catapult-rustup-${GITHUB_RUN_ID}"
+          mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
+          curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/catapult-rustup-install-${GITHUB_RUN_ID}.sh"
+          sh "$RUNNER_TEMP/catapult-rustup-install-${GITHUB_RUN_ID}.sh" -y --profile minimal --no-modify-path --default-toolchain nightly
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Build and test untouched official artifact
         run: |
           set -euxo pipefail
           {
             uname -a
             lscpu
             python3 --version || true
-            cargo --version || true
-            rustc --version || true
-            cmake --version || true
-            g++ --version || true
+            cargo --version
+            rustc --version
           } > artifacts/catapult-official/environment.txt
+          (cd third_party/catapult && cargo metadata --no-deps --format-version 1)             > artifacts/catapult-official/cargo-metadata.json
+          (cd third_party/catapult && cargo test --release --locked)             2>&1 | tee artifacts/catapult-official/cargo-test.log
+          (cd third_party/catapult && cargo build --release --locked)             2>&1 | tee artifacts/catapult-official/cargo-build.log
 
-          if [ -f third_party/catapult/Cargo.toml ]; then
-            (cd third_party/catapult && cargo metadata --no-deps --format-version 1)               > artifacts/catapult-official/cargo-metadata.json
-          fi
+      - name: Smoke-test released CatapultDB binary
+        run: |
+          set -euxo pipefail
+          cd third_party/catapult
+          ./target/release/catapult             --queries test_index/4vecs/4vecs.npy             --graph test_index/4vecs/ann             --payload test_index/4vecs/ann_vectors.bin             --threads 1 --num-neighbors 1 --beam-width 2             2>&1 | tee ../../artifacts/catapult-official/smoke-diskann.log
+          ./target/release/catapult             --queries test_index/4vecs/4vecs.npy             --graph test_index/4vecs/ann             --payload test_index/4vecs/ann_vectors.bin             --catapults             --threads 1 --num-neighbors 1 --beam-width 2             2>&1 | tee ../../artifacts/catapult-official/smoke-catapult.log
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -61,3 +72,8 @@ jobs:
           name: catapult-official-inspect-${{ github.run_id }}
           path: artifacts/catapult-official/
           retention-days: 30
+
+      - name: Clean Rust scratch
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/catapult-cargo-${GITHUB_RUN_ID}" "$RUNNER_TEMP/catapult-rustup-${GITHUB_RUN_ID}"
