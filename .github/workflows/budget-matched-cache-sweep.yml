@@ -1,0 +1,124 @@
+name: Budget-matched adaptive cache sweep
+on:
+  push:
+    branches: [experiment/catapult-ssd-paper]
+    paths:
+      - '.github/workflows/budget-matched-cache-sweep.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: geoivf-budget-matched-cache-sweep
+  cancel-in-progress: true
+
+jobs:
+  sweep:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 480
+    defaults:
+      run:
+        shell: bash
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prepare Python and inputs
+        run: |
+          set -euxo pipefail
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install numpy==2.2.6
+          mkdir -p artifacts/budget-matched-cache-sweep
+
+          queries="$HOME/.cache/geoivf/medrag-zipf-qwen3b-v1/medrag-zipf-10k-medcpt.fbin"
+          gt="$HOME/.cache/geoivf/catapult-paper-pubmed1m/throughput-only.gt"
+          index="$HOME/.cache/geoivf/catapult-paper-pubmed1m-index-v1/diskann-index"
+          router="$HOME/.cache/geoivf/pubmed1m-ip-portal-v1/router.bin"
+
+          test -s "$queries"
+          test -s "$gt"
+          test -s "$router"
+
+          echo "QUERIES=$queries" >> "$GITHUB_ENV"
+          echo "GT=$gt" >> "$GITHUB_ENV"
+          echo "INDEX_PREFIX=$index" >> "$GITHUB_ENV"
+          echo "PORTAL_ROUTER=$router" >> "$GITHUB_ENV"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: waypoint-trace-k1-37201057882
+          path: trace-artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 37201057882
+
+      - name: Learn budget-matched frozen caches
+        run: |
+          set -euxo pipefail
+          trace="$PWD/trace-artifact/portal-k1-train5000-trace.jsonl"
+          test -s "$trace"
+
+          for budget in 2000 2500 2800; do
+            out="$HOME/.cache/geoivf/waypoint-k1-budget-${budget}"
+            rm -rf "$out"
+            mkdir -p "$out"
+            .venv/bin/python scripts/learn_waypoint_cache.py               --queries "$QUERIES"               --router "$PORTAL_ROUTER"               --trace "$trace"               --out-dir "$out"               --budget "$budget"               --nprobe 32               --supports "1"               2>&1 | tee "artifacts/budget-matched-cache-sweep/learn-${budget}.log"
+            cp "$out/waypoint-cache-manifest.json"               "artifacts/budget-matched-cache-sweep/manifest-${budget}.json"
+          done
+
+      - name: Patch and compile snapshot-capable DiskANN
+        run: |
+          set -euxo pipefail
+          rev=fcf90534174cf29c78c9f13b4cccf1fcabff85f5
+          git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-budget-sweep
+          git -C third_party/DiskANN-budget-sweep checkout --detach "$rev"
+          test "$(git -C third_party/DiskANN-budget-sweep rev-parse HEAD)" = "$rev"
+
+          CARGO_HOME="$RUNNER_TEMP/budget-cargo-${GITHUB_RUN_ID}"
+          RUSTUP_HOME="$RUNNER_TEMP/budget-rustup-${GITHUB_RUN_ID}"
+          mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
+          curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/rustup-${GITHUB_RUN_ID}.sh"
+          CARGO_HOME="$CARGO_HOME" RUSTUP_HOME="$RUSTUP_HOME"             sh "$RUNNER_TEMP/rustup-${GITHUB_RUN_ID}.sh"               -y --profile minimal --no-modify-path --default-toolchain 1.97.1
+          export CARGO_HOME RUSTUP_HOME
+          export PATH="$CARGO_HOME/bin:$PATH"
+          rustup component add rustfmt
+
+          .venv/bin/python scripts/patch_diskann_catapult_snapshot.py third_party/DiskANN-budget-sweep
+          (cd third_party/DiskANN-budget-sweep && cargo fmt --all)
+          git -C third_party/DiskANN-budget-sweep diff --check
+          (cd third_party/DiskANN-budget-sweep &&             cargo build --release --locked -p diskann-benchmark --features disk-index)             2>&1 | tee artifacts/budget-matched-cache-sweep/build.log
+
+          echo "DISKANN_BIN=$PWD/third_party/DiskANN-budget-sweep/target/release/diskann-benchmark"             >> "$GITHUB_ENV"
+
+      - name: Evaluate budget-matched caches
+        run: |
+          set -euxo pipefail
+          for budget in 2000 2500 2800; do
+            work="$RUNNER_TEMP/budget-heldout-${budget}-${GITHUB_RUN_ID}"
+            out="$PWD/artifacts/budget-matched-cache-sweep/eval-${budget}"
+            mkdir -p "$work" "$out"
+            .venv/bin/python scripts/qualify_frozen_catapult_heldout.py               --binary "$DISKANN_BIN"               --queries "$QUERIES"               --gt "$GT"               --index-prefix "$INDEX_PREFIX"               --portal-router "$PORTAL_ROUTER"               --cache-dir "$HOME/.cache/geoivf/waypoint-k1-budget-${budget}"               --work "$work"               --out "$out"               --train-rows 5000               --eval-rows 5000               2>&1 | tee "artifacts/budget-matched-cache-sweep/eval-${budget}.log"
+            rm -rf "$work"
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: budget-matched-cache-sweep-${{ github.run_id }}
+          path: artifacts/budget-matched-cache-sweep/
+          retention-days: 30
+
+      - name: Clean scratch
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/budget-cargo-${GITHUB_RUN_ID}"                  "$RUNNER_TEMP/budget-rustup-${GITHUB_RUN_ID}"
