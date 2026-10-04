@@ -25,6 +25,36 @@ from patch_diskann_start_points import PINNED, once, patch_provider
 
 def patch_provider_medoid(path: Path) -> None:
     s = path.read_text()
+
+    # The generic DiskANN scratch allocator normally adds the number of start
+    # points to the candidate-queue capacity. That behavior is appropriate for
+    # frozen graph points, but it would turn CatapultDB's 40-entry bucket into
+    # an unintended L+40 search. Algorithm 1 in the paper instead evaluates the
+    # starting points and trims the candidate set back to k. Keep the ordinary
+    # single-medoid scratch allowance while still scoring every custom start.
+    s = once(
+        s,
+        """        let start_vertex_id = self.provider.graph_header.metadata().medoid as u32;
+        self.pq_distances(&[start_vertex_id], |dist, id| f(id, dist))
+    }
+
+    fn expand_beam<Itr, P, F>(
+""",
+        """        let start_vertex_id = self.provider.graph_header.metadata().medoid as u32;
+        self.pq_distances(&[start_vertex_id], |dist, id| f(id, dist))
+    }
+
+    async fn num_starting_points(&self) -> ANNResult<usize> {
+        // Preserve the released single-medoid search budget even when the
+        // Catapult layer supplies many candidate entry IDs.
+        Ok(1)
+    }
+
+    fn expand_beam<Itr, P, F>(
+""",
+        "fixed start-point scratch accounting",
+    )
+
     marker = """    /// Perform the ordinary graph search from caller-supplied starting vertices.
 """
     helper = """    /// Return the saved Vamana medoid used by the unmodified search path.
