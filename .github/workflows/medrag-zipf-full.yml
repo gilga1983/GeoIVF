@@ -4,6 +4,10 @@ on:
     branches: [experiment/catapult-ssd-paper]
     paths:
       - '.github/workflows/medrag-zipf-full.yml'
+      - 'scripts/generate_medrag_zipf_paraphrases.py'
+      - 'scripts/analyze_medrag_zipf_paraphrases.py'
+      - 'scripts/embed_medrag_zipf_queries.py'
+      - 'scripts/prepare_medrag_zipf_identity.py'
   workflow_dispatch:
 permissions:
   contents: read
