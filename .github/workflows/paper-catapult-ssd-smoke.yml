@@ -1,5 +1,10 @@
 name: Paper Catapult SSD smoke
 on:
+  push:
+    branches: [experiment/catapult-ssd-paper]
+    paths:
+      - 'scripts/patch_diskann_paper_catapult.py'
+      - '.github/workflows/paper-catapult-ssd-smoke.yml'
   workflow_dispatch:
 permissions:
   contents: read
