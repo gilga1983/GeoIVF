@@ -229,7 +229,7 @@ def main():
             m = variants[method]
             s.update({
                 "state_bytes": int(m["state_bytes"]),
-                "candidate_ids": int(m.get("combined_unique_ids", m["landmark_ids"])),
+                "candidate_ids": int(m["combined_unique_ids"] if "combined_unique_ids" in m else m["landmark_ids"]),
             })
         summary[method] = s
 
