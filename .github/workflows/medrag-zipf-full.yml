@@ -107,7 +107,7 @@ jobs:
             --out "$queryfile" \
             --model "ncbi/MedCPT-Query-Encoder" \
             2>&1 | tee artifacts/medrag-zipf-full/embed.log
-          cp "$queryfile.manifest.json" artifacts/medrag-zipf-full/query-embedding-manifest.json
+          cp "$ZIPF_CACHE/medrag-zipf-10k-medcpt.manifest.json" artifacts/medrag-zipf-full/query-embedding-manifest.json
           sha256sum "$queryfile" > artifacts/medrag-zipf-full/query-fbin-sha256.txt
           git rev-parse HEAD > artifacts/medrag-zipf-full/geoivf-commit.txt
 
