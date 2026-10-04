@@ -97,6 +97,16 @@ use std::{
 
     s = once(
         s,
+        """use diskann::utils::VectorRepr;
+""",
+        """use diskann::utils::VectorRepr;
+use diskann_vector::{MathematicalValue, PureDistanceFunction, distance::InnerProduct};
+""",
+        "SIMD inner-product import",
+    )
+
+    s = once(
+        s,
         """    pub(super) mean_hops: f64,
     pub(super) cache_hit_percentage: f64,
     pub(super) recall: f32,
@@ -262,7 +272,8 @@ impl IpPortalRouter {
 
     #[inline]
     fn dot(a: &[f32], b: &[f32]) -> f32 {
-        a.iter().zip(b.iter()).map(|(x, y)| *x * *y).sum()
+        <InnerProduct as PureDistanceFunction<&[f32], &[f32], MathematicalValue<f32>>>::evaluate(a, b)
+            .into_inner()
     }
 
     fn route<T: VectorRepr>(&self, query: &[T], nprobe: usize) -> anyhow::Result<u32> {
