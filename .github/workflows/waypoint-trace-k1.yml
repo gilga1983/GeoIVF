@@ -4,6 +4,8 @@ on:
     branches: [experiment/catapult-ssd-paper]
     paths:
       - '.github/workflows/waypoint-trace-k1.yml'
+      - 'scripts/patch_diskann_waypoint_trace.py'
+      - 'scripts/collect_waypoint_traces.py'
   workflow_dispatch:
 permissions:
   contents: read
