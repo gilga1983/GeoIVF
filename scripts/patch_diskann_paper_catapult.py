@@ -90,6 +90,17 @@ use std::{
         "catapult result defaults",
     )
 
+    s = once(
+        s,
+        """        let recall = if let Some(var_gt) = &gt_context.gt_ids_variable_length {
+""",
+        """        let recall = if std::env::var_os("DISKANN_SKIP_RECALL").is_some() {
+            -1.0
+        } else if let Some(var_gt) = &gt_context.gt_ids_variable_length {
+""",
+        "throughput-only recall bypass",
+    )
+
     marker = """pub(super) fn search_disk_index<T, StorageType>(
 """
     helper = r'''#[derive(Debug, Clone, Copy)]
@@ -438,6 +449,39 @@ impl PaperCatapult {
                 format!("{:.3}", r.recall),
 """,
         "catapult display values",
+    )
+
+    s = once(
+        s,
+        """fn prepare_ground_truth_context(
+    has_vector_filters: bool,
+    groundtruth: &InputFile,
+    recall_at: u32,
+    storage: &impl StorageReadProvider,
+) -> anyhow::Result<GroundTruthContext> {
+    let path = groundtruth.to_string_lossy().into_owned();
+
+""",
+        """fn prepare_ground_truth_context(
+    has_vector_filters: bool,
+    groundtruth: &InputFile,
+    recall_at: u32,
+    storage: &impl StorageReadProvider,
+) -> anyhow::Result<GroundTruthContext> {
+    if std::env::var_os("DISKANN_SKIP_RECALL").is_some() {
+        return Ok(GroundTruthContext {
+            gt_ids: None,
+            gt_ids_variable_length: None,
+            gt_dists: None,
+            gt_dim: 0,
+            recall_at,
+        });
+    }
+
+    let path = groundtruth.to_string_lossy().into_owned();
+
+""",
+        "throughput-only groundtruth bypass",
     )
 
     path.write_text(s)
