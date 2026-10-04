@@ -83,9 +83,10 @@ def generate_batch(model, tokenizer, rows, used, device, max_new_tokens, tempera
                 max_new_tokens=max_new_tokens,
                 pad_token_id=tokenizer.eos_token_id,
             )
-        prompt_lens = enc["attention_mask"].sum(dim=1).tolist()
-        for idx, ((row, retry), tokens, plen) in enumerate(zip(current, generated, prompt_lens)):
-            candidate = clean(tokenizer.decode(tokens[int(plen):], skip_special_tokens=True))
+        input_width = int(enc["input_ids"].shape[1])
+        for row_retry, tokens in zip(current, generated):
+            row, retry = row_retry
+            candidate = clean(tokenizer.decode(tokens[input_width:], skip_special_tokens=True))
             key = candidate.casefold()
             base_key = row["base_question"].strip().casefold()
             acceptable = (
