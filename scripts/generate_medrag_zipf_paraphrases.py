@@ -28,13 +28,71 @@ def clean(text: str) -> str:
     return text
 
 
+OPENING_STYLES = [
+    "Use a direct interrogative opening.",
+    "Frame it as asking whether a classification or claim is accurate.",
+    "Use a 'Would it be accurate to say...' style construction where natural.",
+    "Use a 'Can ... be considered ...?' style construction where natural.",
+    "Use a 'Does ... fall into ...?' style construction where natural.",
+    "Use an 'Is it correct to regard ...?' style construction where natural.",
+    "Use a 'Should ... be classified as ...?' style construction where natural.",
+    "Use a 'Would clinicians/researchers consider ...?' style construction only if that does not change the information need.",
+    "Use a nominalized formulation such as asking about the classification/status/association.",
+    "Use a concise alternative wording with a different first clause.",
+    "Use a formal biomedical wording with a different grammatical subject.",
+    "Use a plain-language wording while preserving all biomedical terms that carry meaning.",
+    "Use an indirect interrogative structure, but keep it a standalone question.",
+]
+
+SYNTAX_STYLES = [
+    "Prefer active voice.",
+    "Prefer passive voice where natural.",
+    "Reorder modifiers and subordinate clauses.",
+    "Use a different grammatical subject from the original where possible.",
+    "Use a different predicate construction from the original.",
+    "Prefer a compact single-clause form.",
+    "Prefer a two-part question form if it remains semantically exact.",
+    "Replace generic verbs with semantically equivalent classification/association verbs.",
+    "Vary the placement of qualifiers, populations, and conditions without changing scope.",
+    "Use a formal scientific register.",
+    "Use a neutral clinical register.",
+]
+
+LEXICAL_STYLES = [
+    "Favor 'classified/categorized' wording where applicable.",
+    "Favor 'considered/regarded' wording where applicable.",
+    "Favor 'belongs to/falls within' wording where applicable.",
+    "Favor 'association/relationship' wording where applicable.",
+    "Favor 'evidence/indication' wording only if the original question is already about evidence.",
+    "Favor 'effect/impact' wording only if the original question is already causal.",
+    "Favor 'comparison/difference' wording only if the original question is comparative.",
+    "Favor concise synonyms and avoid unnecessary filler.",
+    "Keep technical drug/disease names unchanged while varying surrounding language.",
+    "Preserve every negation, quantifier, and population restriction exactly in meaning.",
+    "Use different connective words and clause order from the original.",
+    "Avoid starting with the same first three words as the original.",
+    "Avoid reusing the same opening phrase likely used in previous variants.",
+]
+
+
 def prompt(question: str, source_index: int, occurrence: int, retry: int) -> str:
-    diversity = [
-        "Change both wording and sentence structure while preserving the exact clinical meaning.",
-        "Use a noticeably different syntactic construction and vocabulary while preserving every medical constraint.",
-        "Rewrite from a different grammatical angle, preserving all entities, comparisons, negations, and clinical intent.",
-        "Make the phrasing substantially different but semantically equivalent; do not add or remove medical facts.",
-    ][min(retry, 3)]
+    # The paper's hottest source is paraphrased hundreds of times. Deterministic
+    # style coordinates give the small local model a much stronger diversity
+    # signal than a generic "try again" instruction.
+    key = occurrence * 97 + source_index * 31 + retry * 53
+    opening = OPENING_STYLES[key % len(OPENING_STYLES)]
+    syntax = SYNTAX_STYLES[(key // len(OPENING_STYLES)) % len(SYNTAX_STYLES)]
+    lexical = LEXICAL_STYLES[
+        (key // (len(OPENING_STYLES) * len(SYNTAX_STYLES))) % len(LEXICAL_STYLES)
+    ]
+    retry_note = (
+        ""
+        if retry == 0
+        else (
+            "A previous attempt collided with another benchmark query. "
+            "Make the new version visibly different in its opening and sentence structure. "
+        )
+    )
     return (
         "You are reconstructing a semantic-query benchmark. Rewrite the medical research question below.\n"
         "Requirements:\n"
@@ -42,9 +100,14 @@ def prompt(question: str, source_index: int, occurrence: int, retry: int) -> str
         "- do not answer the question;\n"
         "- output exactly one natural standalone question and nothing else;\n"
         "- do not mention that this is a rewrite;\n"
+        "- do not add new medical facts, populations, time qualifiers, evidence claims, or assumptions;\n"
+        "- preserve all entities, comparisons, negations, quantities, populations, and clinical constraints;\n"
         "- avoid copying long phrases when natural alternatives exist;\n"
-        f"- {diversity}\n"
-        f"- this is variation {occurrence + 1} for source {source_index}; make it distinct from likely earlier variations.\n\n"
+        f"- {opening}\n"
+        f"- {syntax}\n"
+        f"- {lexical}\n"
+        f"- {retry_note}"
+        f"This is variation {occurrence + 1} for source {source_index}; it must be distinct from all other variants.\n\n"
         f"Original question: {question}"
     )
 
@@ -74,12 +137,15 @@ def generate_batch(model, tokenizer, rows, used, device, max_new_tokens, tempera
         enc = tokenizer(
             texts, return_tensors="pt", padding=True, truncation=True, max_length=1024
         ).to(device)
+        retry_level = max(retry for _, retry in current)
+        effective_temperature = min(1.25, temperature + 0.04 * retry_level)
+        effective_top_p = min(0.985, top_p + 0.01 * retry_level)
         with torch.inference_mode():
             generated = model.generate(
                 **enc,
                 do_sample=True,
-                temperature=temperature,
-                top_p=top_p,
+                temperature=effective_temperature,
+                top_p=effective_top_p,
                 max_new_tokens=max_new_tokens,
                 pad_token_id=tokenizer.eos_token_id,
             )
@@ -105,7 +171,7 @@ def generate_batch(model, tokenizer, rows, used, device, max_new_tokens, tempera
                     "prompt_version": PROMPT_VERSION,
                     "generation_seed": base_seed,
                 }
-            elif retry < 5:
+            elif retry < 20:
                 pending.append((row, retry + 1))
             else:
                 raise RuntimeError(
