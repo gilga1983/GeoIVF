@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """Build nested ID-only portal pools from the existing 512-region router.
 
-The expensive 512-region FP32 router is used only offline. We keep its 512
-coarse cells as a diversity scaffold, sample database members per cell, and
-build up to 32 diverse local portal representatives with spherical k-means.
+The expensive FP32 router is used only offline as a diversity scaffold. Every
+coarse cell contributes its released portal first. Extra portals are actual
+members of that cell selected by local spherical k-means and ordered by
+farthest-first diversity. A global portal-count budget then adds candidates
+round-robin across cells, redistributing unused quota from tiny cells.
 
-Deployment stores only uint32 database IDs. At query time DiskANN's already
-resident PQ codes score every ID in the selected pool.
-
-We also emit portal+waypoint pools by globally deduplicating the existing
-2500-entry learned waypoint table. This deliberately tests whether runtime
-region conditioning is needed at all.
+Deployment stores only uint32 database IDs. DiskANN scores those IDs with its
+already-resident PQ representation. We also emit portal+waypoint pools by
+globally deduplicating the existing learned waypoint IDs, testing whether
+runtime region conditioning is needed at all.
 """
 from __future__ import annotations
 
@@ -52,11 +52,10 @@ def load_router(path: Path):
     off += nfloat * 4
     portal_ids = np.frombuffer(raw, dtype="<u4", count=nlist, offset=off).copy()
     off += nlist * 4
-    portal_vecs = np.frombuffer(raw, dtype="<f4", count=nfloat, offset=off).reshape(nlist, dim).copy()
-    off += nfloat * 4
+    off += nfloat * 4  # released full-precision portal vectors, unused here
     if off != len(raw):
         raise ValueError("router trailing bytes")
-    return int(nlist), int(dim), centers, portal_ids, portal_vecs
+    return int(nlist), int(dim), centers, portal_ids
 
 
 def load_waypoint_ids(path: Path):
@@ -102,8 +101,8 @@ def reservoir_by_cell(x, centers, per_cell: int, seed: int, chunk: int):
     quantizer = faiss.IndexFlatIP(centers.shape[1])
     quantizer.add(np.asarray(centers, dtype=np.float32, order="C"))
 
-    # Max-heaps represented as Python heaps of (-priority, id). Smaller priority wins.
     heaps = [[] for _ in range(nlist)]
+    counts = np.zeros(nlist, dtype=np.int64)
     rng = np.random.default_rng(seed)
 
     for start in range(0, rows, chunk):
@@ -111,8 +110,8 @@ def reservoir_by_cell(x, centers, per_cell: int, seed: int, chunk: int):
         _, labels = quantizer.search(block, 1)
         labels = labels[:, 0].astype(np.int32, copy=False)
         priorities = rng.random(len(block), dtype=np.float64)
+        counts += np.bincount(labels.astype(np.int64), minlength=nlist)
 
-        # Group rows by cell to avoid a Python loop over all database vectors.
         order = np.argsort(labels, kind="stable")
         ls = labels[order]
         cuts = np.flatnonzero(np.r_[True, ls[1:] != ls[:-1], True])
@@ -131,72 +130,99 @@ def reservoir_by_cell(x, centers, per_cell: int, seed: int, chunk: int):
         print(f"reservoir-assigned={min(start + len(block), rows)}/{rows}", flush=True)
 
     out = []
-    for cell, h in enumerate(heaps):
+    for h in heaps:
         ids = [vid for _, vid in sorted(h, reverse=True)]
-        if len(ids) < 32:
-            raise ValueError(f"coarse cell {cell} has only {len(ids)} sampled members")
+        if not ids:
+            raise ValueError("empty coarse cell")
         out.append(np.asarray(ids, dtype=np.uint32))
-    return out
+    return out, counts
 
 
 def local_portals(x, portal_id: int, sample_ids: np.ndarray, max_portals: int, seed: int, cell: int):
-    """Current portal first, then local-kmeans representatives in diverse order."""
+    """Released portal first, then as many diverse local representatives as exist."""
     sample_ids = np.asarray(sample_ids, dtype=np.uint32)
     sample = np.asarray(x[sample_ids.astype(np.int64)], dtype=np.float32, order="C")
     k = min(max_portals, len(sample))
 
-    km = faiss.Kmeans(
-        sample.shape[1], k, niter=12, seed=seed + cell, verbose=False, spherical=True
-    )
-    km.train(sample)
-    centroids = np.asarray(km.centroids, dtype=np.float32, order="C")
-    idx = faiss.IndexFlatIP(sample.shape[1])
-    idx.add(sample)
-    _, nearest = idx.search(centroids, 1)
-    reps = [int(sample_ids[i]) for i in nearest[:, 0]]
+    reps = []
+    if k == 1:
+        reps = [int(sample_ids[0])]
+    else:
+        km = faiss.Kmeans(
+            sample.shape[1], k, niter=10, seed=seed + cell, verbose=False, spherical=True
+        )
+        km.train(sample)
+        centroids = np.asarray(km.centroids, dtype=np.float32, order="C")
+        idx = faiss.IndexFlatIP(sample.shape[1])
+        idx.add(sample)
+        _, nearest = idx.search(centroids, 1)
+        reps = [int(sample_ids[i]) for i in nearest[:, 0]]
 
-    # Candidate pool: current released portal, then local representatives.
     candidates = []
     seen = set()
-    for v in [int(portal_id), *reps]:
+    for v in [int(portal_id), *reps, *map(int, sample_ids)]:
         if v not in seen:
             seen.add(v)
             candidates.append(v)
+        if len(candidates) >= min(max_portals, len(sample_ids) + 1):
+            break
 
-    # Degenerate k-means representatives are filled from the random cell sample.
-    if len(candidates) < max_portals:
-        for raw in sample_ids:
-            v = int(raw)
-            if v not in seen:
-                seen.add(v)
-                candidates.append(v)
-                if len(candidates) >= max_portals:
-                    break
-    if len(candidates) < max_portals:
-        raise ValueError(f"cell {cell}: insufficient unique portal candidates")
+    if not candidates:
+        raise ValueError(f"cell {cell}: no portal candidates")
+    if len(candidates) == 1:
+        return candidates
 
-    candidates = candidates[: max(max_portals, 1)]
     vecs = np.asarray(x[np.asarray(candidates, dtype=np.int64)], dtype=np.float32)
     norms = np.linalg.norm(vecs.astype(np.float64), axis=1)
     norms = np.maximum(norms, 1e-12)
     unit = (vecs / norms[:, None]).astype(np.float32)
 
-    # Nested diversity order, seeded by the current released portal.
     selected = [0]
     remaining = np.ones(len(candidates), dtype=bool)
     remaining[0] = False
     max_sim = unit @ unit[0]
-    while len(selected) < max_portals:
-        # Pick the point least similar to every already-selected portal.
+    while np.any(remaining):
         scores = np.where(remaining, max_sim, np.inf)
         nxt = int(np.argmin(scores))
-        if not remaining[nxt]:
-            raise AssertionError("farthest-first exhausted candidates")
         selected.append(nxt)
         remaining[nxt] = False
         max_sim = np.maximum(max_sim, unit @ unit[nxt])
 
     return [candidates[i] for i in selected]
+
+
+def global_nested_pool(ordered, target: int):
+    if target < len(ordered):
+        raise ValueError("target smaller than one portal per region")
+    flat = []
+    seen = set()
+
+    # One released portal per coarse region is mandatory.
+    for cell in range(len(ordered)):
+        v = int(ordered[cell][0])
+        if v in seen:
+            raise ValueError(f"released portal collision for cell {cell}")
+        seen.add(v)
+        flat.append(v)
+
+    rank = 1
+    max_rank = max(len(v) for v in ordered)
+    while len(flat) < target and rank < max_rank:
+        for cell in range(len(ordered)):
+            if rank >= len(ordered[cell]):
+                continue
+            v = int(ordered[cell][rank])
+            if v in seen:
+                continue
+            seen.add(v)
+            flat.append(v)
+            if len(flat) >= target:
+                break
+        rank += 1
+
+    if len(flat) != target:
+        raise ValueError(f"only {len(flat)} unique portals available for target {target}")
+    return flat
 
 
 def main():
@@ -205,9 +231,9 @@ def main():
     ap.add_argument("--router", type=Path, required=True)
     ap.add_argument("--waypoint-cache", type=Path, required=True)
     ap.add_argument("--out-dir", type=Path, required=True)
-    ap.add_argument("--per-cell-reservoir", type=int, default=384)
-    ap.add_argument("--max-portals-per-region", type=int, default=32)
-    ap.add_argument("--counts-per-region", default="1,2,4,8,16,32")
+    ap.add_argument("--per-cell-reservoir", type=int, default=256)
+    ap.add_argument("--max-portals-per-region", type=int, default=64)
+    ap.add_argument("--counts", default="512,1024,2048,4096,8192,16384")
     ap.add_argument("--seed", type=int, default=12345)
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--chunk", type=int, default=32768)
@@ -215,7 +241,7 @@ def main():
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     rows, dim, x = read_fbin(args.base)
-    nlist, rdim, centers, portal_ids, _ = load_router(args.router)
+    nlist, rdim, centers, portal_ids = load_router(args.router)
     if dim != rdim:
         raise ValueError("base/router dimension mismatch")
     if nlist != 512:
@@ -224,14 +250,14 @@ def main():
     if wnlist != nlist:
         raise ValueError("router/waypoint region mismatch")
 
-    counts_per_region = [int(v) for v in args.counts_per_region.split(",") if v.strip()]
-    if max(counts_per_region) > args.max_portals_per_region:
-        raise ValueError("requested portal count exceeds max")
+    target_counts = [int(v) for v in args.counts.split(",") if v.strip()]
+    if min(target_counts) < nlist or target_counts != sorted(target_counts):
+        raise ValueError("portal counts must be sorted and >= region count")
     if args.per_cell_reservoir < args.max_portals_per_region:
-        raise ValueError("reservoir too small")
+        raise ValueError("reservoir must be at least max local portals")
 
     faiss.omp_set_num_threads(args.threads)
-    samples = reservoir_by_cell(
+    samples, cell_counts = reservoir_by_cell(
         x, centers, args.per_cell_reservoir, args.seed, args.chunk
     )
 
@@ -250,20 +276,9 @@ def main():
             print(f"local-portals={cell + 1}/{nlist}", flush=True)
 
     variants = {}
-    for per_region in counts_per_region:
-        flat = []
-        seen = set()
-        for cell in range(nlist):
-            for v in ordered[cell][:per_region]:
-                if v not in seen:
-                    seen.add(v)
-                    flat.append(v)
-        if len(flat) != nlist * per_region:
-            raise ValueError(
-                f"portal collision at {per_region}/region: {len(flat)} != {nlist * per_region}"
-            )
-
-        portal_name = f"portals-r{per_region}-n{len(flat)}"
+    for target in target_counts:
+        flat = global_nested_pool(ordered, target)
+        portal_name = f"portals-n{target}"
         portal_path = args.out_dir / f"{portal_name}.bin"
         pids = write_start_ids(portal_path, flat)
 
@@ -279,14 +294,12 @@ def main():
         cids = write_start_ids(combined_path, combined)
 
         variants[portal_name] = {
-            "per_region": per_region,
             "portal_ids": int(len(pids)),
             "state_bytes": portal_path.stat().st_size,
             "state_mib": portal_path.stat().st_size / (1 << 20),
             "file": portal_path.name,
         }
         variants[combined_name] = {
-            "per_region": per_region,
             "portal_ids": int(len(pids)),
             "waypoint_pairs_source": waypoint_pairs,
             "waypoint_unique_ids": int(len(waypoint_unique)),
@@ -296,6 +309,7 @@ def main():
             "file": combined_path.name,
         }
 
+    local_lengths = np.asarray([len(v) for v in ordered], dtype=np.int64)
     manifest = {
         "dataset_rows": rows,
         "dimension": dim,
@@ -303,10 +317,20 @@ def main():
             "router_nlist": nlist,
             "router_used_at_runtime": False,
             "selection": (
-                "per coarse cell: deterministic random reservoir, spherical local k-means, "
-                "actual database representatives, nested farthest-first order seeded by the "
-                "released single portal"
+                "released portal first per coarse cell; deterministic cell reservoir; "
+                "local spherical k-means representatives; nested farthest-first diversity; "
+                "global portal budgets redistribute unused quota from tiny cells"
             ),
+            "database_cell_size": {
+                "min": int(cell_counts.min()),
+                "median": float(np.median(cell_counts)),
+                "max": int(cell_counts.max()),
+            },
+            "available_local_portals": {
+                "min": int(local_lengths.min()),
+                "median": float(np.median(local_lengths)),
+                "max": int(local_lengths.max()),
+            },
         },
         "runtime_representation": "only uint32 database IDs; query scoring reuses DiskANN PQ",
         "waypoint_source": {
