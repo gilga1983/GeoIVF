@@ -19,9 +19,15 @@ from qualify_waypoint_cache_heldout import (
 )
 
 DEFAULT_METHODS = (
+    "heavy-local-freq-x4",
+    "heavy-local-freq-x6",
+    "heavy-local-freq-x8",
     "heavy-local-freq-x10",
     "heavy-local-freq-x20",
     "heavy-local-freq-x40",
+    "heavy-local-skip-x4",
+    "heavy-local-skip-x6",
+    "heavy-local-skip-x8",
     "heavy-local-skip-x10",
     "heavy-local-skip-x20",
     "heavy-local-skip-x40",
