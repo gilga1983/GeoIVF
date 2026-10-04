@@ -1,9 +1,5 @@
 name: MedRAG Zipf reconstruction prep
 on:
-  push:
-    branches: [experiment/catapult-ssd-paper]
-    paths:
-      - '.github/workflows/medrag-zipf-prep.yml'
   workflow_dispatch:
 permissions:
   contents: read
