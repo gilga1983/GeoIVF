@@ -1,0 +1,68 @@
+name: Paper Catapult SSD smoke
+on:
+  push:
+    branches: [experiment/catapult-ssd-paper]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-paper-catapult-ssd-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare Python
+        run: |
+          set -euxo pipefail
+          python3 -m venv .venv
+          .venv/bin/python -m py_compile scripts/patch_diskann_paper_catapult.py
+
+      - name: Patch and compile pinned DiskANN
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts/paper-catapult-ssd
+          rev=fcf90534174cf29c78c9f13b4cccf1fcabff85f5
+          git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-paper
+          git -C third_party/DiskANN-paper checkout --detach "$rev"
+          test "$(git -C third_party/DiskANN-paper rev-parse HEAD)" = "$rev"
+          echo "$rev" > artifacts/paper-catapult-ssd/upstream-commit.txt
+
+          CARGO_HOME="$RUNNER_TEMP/paper-catapult-cargo-${GITHUB_RUN_ID}"
+          RUSTUP_HOME="$RUNNER_TEMP/paper-catapult-rustup-${GITHUB_RUN_ID}"
+          mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
+          curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/rustup-${GITHUB_RUN_ID}.sh"
+          CARGO_HOME="$CARGO_HOME" RUSTUP_HOME="$RUSTUP_HOME" \
+            sh "$RUNNER_TEMP/rustup-${GITHUB_RUN_ID}.sh" \
+              -y --profile minimal --no-modify-path --default-toolchain 1.97.1
+          export CARGO_HOME RUSTUP_HOME
+          export PATH="$CARGO_HOME/bin:$PATH"
+
+          .venv/bin/python scripts/patch_diskann_paper_catapult.py third_party/DiskANN-paper
+          (cd third_party/DiskANN-paper && cargo fmt --all)
+          git -C third_party/DiskANN-paper diff --check
+          git -C third_party/DiskANN-paper diff > artifacts/paper-catapult-ssd/paper-catapult.patch
+
+          (cd third_party/DiskANN-paper && cargo build --release --locked -p diskann-benchmark --features disk-index) \
+            2>&1 | tee artifacts/paper-catapult-ssd/build.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: paper-catapult-ssd-smoke-${{ github.run_id }}
+          path: artifacts/paper-catapult-ssd/
+          retention-days: 30
+
+      - name: Clean scratch
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/paper-catapult-cargo-${GITHUB_RUN_ID}" "$RUNNER_TEMP/paper-catapult-rustup-${GITHUB_RUN_ID}"
