@@ -1,0 +1,70 @@
+name: Probe MedCPT PubMed chunks
+on:
+  push:
+    branches: [experiment/pubmed-probe]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Probe NCBI chunk headers
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts/pubmed-probe
+          base="https://ftp.ncbi.nlm.nih.gov/pub/lu/MedCPT/pubmed_embeddings"
+          for i in 0 1 35 36; do
+            url="$base/embeds_chunk_$i.npy"
+            {
+              echo "===== chunk $i ====="
+              curl -fsSIL --retry 3 "$url" || true
+            } > "artifacts/pubmed-probe/chunk-$i-head.txt"
+            curl -fsSL --retry 3 --range 0-511 "$url" -o "artifacts/pubmed-probe/chunk-$i-prefix.bin" || true
+          done
+          python3 - <<'PY' | tee artifacts/pubmed-probe/parsed.json
+          import ast, json, struct
+          from pathlib import Path
+
+          out = {}
+          for i in (0, 1, 35, 36):
+              p = Path(f"artifacts/pubmed-probe/chunk-{i}-prefix.bin")
+              info = {"exists": p.exists(), "bytes_downloaded": p.stat().st_size if p.exists() else 0}
+              if p.exists() and p.stat().st_size >= 10:
+                  raw = p.read_bytes()
+                  try:
+                      if raw[:6] != b"\x93NUMPY":
+                          raise ValueError("missing npy magic")
+                      major, minor = raw[6], raw[7]
+                      if major == 1:
+                          hlen = struct.unpack("<H", raw[8:10])[0]
+                          start = 10
+                      elif major in (2, 3):
+                          hlen = struct.unpack("<I", raw[8:12])[0]
+                          start = 12
+                      else:
+                          raise ValueError(f"unsupported npy version {major}.{minor}")
+                      header = raw[start:start+hlen].decode("latin1").strip()
+                      meta = ast.literal_eval(header)
+                      info.update({
+                          "npy_version": [major, minor],
+                          "dtype": meta.get("descr"),
+                          "fortran_order": meta.get("fortran_order"),
+                          "shape": list(meta.get("shape", ())),
+                      })
+                  except Exception as e:
+                      info["parse_error"] = repr(e)
+              out[str(i)] = info
+          print(json.dumps(out, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pubmed-probe-${{ github.run_id }}
+          path: artifacts/pubmed-probe/
+          retention-days: 30
