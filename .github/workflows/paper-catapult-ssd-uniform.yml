@@ -1,5 +1,9 @@
 name: Paper Catapult SSD Uniform 1M
 on:
+  push:
+    branches: [experiment/catapult-ssd-paper]
+    paths:
+      - '.github/workflows/paper-catapult-ssd-uniform.yml'
   workflow_dispatch:
 permissions:
   contents: read
