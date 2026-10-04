@@ -1,0 +1,68 @@
+name: MedRAG Zipf reconstruction prep
+on:
+  push:
+    branches: [experiment/catapult-ssd-paper]
+    paths:
+      - '.github/workflows/medrag-zipf-prep.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-medrag-zipf-prep
+  cancel-in-progress: true
+
+jobs:
+  prep:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Hardware and model-runtime preflight
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts/medrag-zipf-prep
+          {
+            uname -a
+            lscpu
+            free -h
+            df -h
+            echo "=== NVIDIA ==="
+            command -v nvidia-smi || true
+            nvidia-smi || true
+            echo "=== Python ==="
+            python3 --version
+          } > artifacts/medrag-zipf-prep/host.txt 2>&1
+          cat artifacts/medrag-zipf-prep/host.txt
+
+      - name: Reconstruct exact published Zipf identity recipe
+        run: |
+          set -euxo pipefail
+          python3 -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install numpy==2.2.6
+
+          src="$RUNNER_TEMP/mirage-pubmedqa-test-set-${GITHUB_RUN_ID}.json"
+          url="https://raw.githubusercontent.com/gzxiong/MIRAGE/392943af99cd94cafd50a0de2e7fca24bbf65494/rawdata/pubmedqa/data/test_set.json"
+          curl -fsSL --retry 5 "$url" -o "$src"
+
+          out="artifacts/medrag-zipf-prep/identity"
+          .venv/bin/python scripts/prepare_medrag_zipf_identity.py \
+            --pubmedqa "$src" --out "$out" \
+            2>&1 | tee artifacts/medrag-zipf-prep/identity.log
+
+          sha256sum "$src" > artifacts/medrag-zipf-prep/mirage-source-sha256.txt
+          git rev-parse HEAD > artifacts/medrag-zipf-prep/geoivf-commit.txt
+          rm -f "$src"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: medrag-zipf-prep-${{ github.run_id }}
+          path: artifacts/medrag-zipf-prep/
+          retention-days: 30
