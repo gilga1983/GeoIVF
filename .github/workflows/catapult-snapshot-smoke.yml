@@ -1,0 +1,48 @@
+name: Catapult snapshot compile smoke
+on:
+  push:
+    branches: [experiment/catapult-ssd-paper]
+    paths:
+      - '.github/workflows/catapult-snapshot-smoke.yml'
+      - 'scripts/patch_diskann_catapult_snapshot.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Patch and compile snapshot-capable DiskANN
+        run: |
+          set -euxo pipefail
+          python -m venv .venv
+          rev=fcf90534174cf29c78c9f13b4cccf1fcabff85f5
+          git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-cat-snapshot
+          git -C third_party/DiskANN-cat-snapshot checkout --detach "$rev"
+
+          CARGO_HOME="$RUNNER_TEMP/cat-snap-cargo-${GITHUB_RUN_ID}"
+          RUSTUP_HOME="$RUNNER_TEMP/cat-snap-rustup-${GITHUB_RUN_ID}"
+          mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
+          curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/rustup-${GITHUB_RUN_ID}.sh"
+          CARGO_HOME="$CARGO_HOME" RUSTUP_HOME="$RUSTUP_HOME"             sh "$RUNNER_TEMP/rustup-${GITHUB_RUN_ID}.sh"               -y --profile minimal --no-modify-path --default-toolchain 1.97.1
+          export CARGO_HOME RUSTUP_HOME
+          export PATH="$CARGO_HOME/bin:$PATH"
+          rustup component add rustfmt
+
+          .venv/bin/python scripts/patch_diskann_catapult_snapshot.py third_party/DiskANN-cat-snapshot
+          (cd third_party/DiskANN-cat-snapshot && cargo fmt --all)
+          git -C third_party/DiskANN-cat-snapshot diff --check
+          (cd third_party/DiskANN-cat-snapshot && cargo build --release --locked -p diskann-benchmark --features disk-index)
