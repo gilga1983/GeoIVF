@@ -41,8 +41,8 @@ def patch_cargo(path: Path) -> None:
     s = path.read_text()
     s = once(
         s,
-        "rand.workspace = true\\nrayon.workspace = true\\n",
-        "rand.workspace = true\\nrand_distr.workspace = true\\nrayon.workspace = true\\n",
+        "rand.workspace = true\nrayon.workspace = true\n",
+        "rand.workspace = true\nrand_distr.workspace = true\nrayon.workspace = true\n",
         "rand_distr dependency",
     )
     path.write_text(s)
