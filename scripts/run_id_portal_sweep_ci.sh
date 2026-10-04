@@ -26,7 +26,7 @@ git rev-parse HEAD > artifacts/id-portal-sweep/geoivf-commit.txt
 if [ ! -s "$POOL_DIR/id-portal-pools.manifest.json" ]; then
   rm -rf "$POOL_DIR"
   mkdir -p "$POOL_DIR"
-  .venv/bin/python scripts/prepare_id_portal_pools.py     --base "$BASE"     --router "$ROUTER"     --waypoint-cache "$WAYPOINT"     --out-dir "$POOL_DIR"     --per-cell-reservoir 256     --max-portals-per-region 32     --counts-per-region "1,2,4,8,16,32"     --seed 12345     --threads 4     --chunk 32768     2>&1 | tee artifacts/id-portal-sweep/pool-build.log
+  .venv/bin/python scripts/prepare_id_portal_pools.py     --base "$BASE"     --router "$ROUTER"     --waypoint-cache "$WAYPOINT"     --out-dir "$POOL_DIR"     --per-cell-reservoir 256     --max-portals-per-region 64     --counts "512,1024,2048,4096,8192,16384"     --seed 12345     --threads 4     --chunk 32768     2>&1 | tee artifacts/id-portal-sweep/pool-build.log
 fi
 cp "$POOL_DIR/id-portal-pools.manifest.json" artifacts/id-portal-sweep/pool-manifest.json
 
