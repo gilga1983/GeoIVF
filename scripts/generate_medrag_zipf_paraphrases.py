@@ -214,6 +214,24 @@ def main():
             used.add(row["paraphrase"].strip().casefold())
     todo = [row for row in rows if int(row["stream_pos"]) not in existing]
 
+    if not todo:
+        manifest = {
+            "artifact": "reconstructed MedRAG-Zipf paraphrases",
+            "status": "proxy reconstruction; not authors' unreleased GPT-4o text",
+            "model": args.model,
+            "revision": args.revision,
+            "prompt_version": PROMPT_VERSION,
+            "generation_seed": args.seed,
+            "temperature": args.temperature,
+            "top_p": args.top_p,
+            "max_new_tokens": args.max_new_tokens,
+            "rows": len(rows),
+            "unique_casefolded": len({r["paraphrase"].casefold() for r in existing.values()}),
+        }
+        args.out.with_suffix(".manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+        print(json.dumps(manifest, indent=2))
+        return
+
     tokenizer = AutoTokenizer.from_pretrained(
         args.model, revision=args.revision, trust_remote_code=False
     )
