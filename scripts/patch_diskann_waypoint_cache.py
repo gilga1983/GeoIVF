@@ -211,6 +211,13 @@ struct PaperCatapult {
         }
         None => None,
     };
+    let waypoint_max_ids_per_query = std::env::var("DISKANN_WAYPOINT_MAX_IDS_PER_QUERY")
+        .ok()
+        .map(|v| v.parse::<usize>())
+        .transpose()?;
+    if matches!(waypoint_max_ids_per_query, Some(0)) {
+        anyhow::bail!("DISKANN_WAYPOINT_MAX_IDS_PER_QUERY must be positive");
+    }
 
     let mut search_results_per_l = Vec::with_capacity(search_params.search_list.len());
 """
@@ -270,7 +277,9 @@ struct PaperCatapult {
                 if let Some((cell, portal_id)) = portal_route {
                     local_starts.push(portal_id);
                     if let Some(cache) = waypoint_cache.as_ref() {
-                        for &id in cache.for_cell(cell) {
+                        let ids = cache.for_cell(cell);
+                        let take = waypoint_max_ids_per_query.unwrap_or(ids.len()).min(ids.len());
+                        for &id in ids.iter().take(take) {
                             if !local_starts.contains(&id) {
                                 local_starts.push(id);
                             }
