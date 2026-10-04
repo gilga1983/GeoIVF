@@ -16,6 +16,7 @@ import fcntl
 import json
 import math
 import os
+import time
 from pathlib import Path
 
 import numpy as np
@@ -44,6 +45,8 @@ def main():
     ap.add_argument("--work", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--k-values", default="1,2,4,8,16")
+    ap.add_argument("--cycles", type=int, default=5)
+    ap.add_argument("--cooldown-seconds", type=float, default=0.75)
     args = ap.parse_args()
 
     for attr in ("binary", "queries", "gt", "index_prefix", "portal_router", "work", "out"):
@@ -52,6 +55,10 @@ def main():
     args.out.mkdir(parents=True, exist_ok=True)
 
     k_values = tuple(int(x) for x in args.k_values.split(",") if x.strip())
+    if args.cycles < 1:
+        raise ValueError("cycles must be positive")
+    if args.cooldown_seconds < 0:
+        raise ValueError("cooldown-seconds must be nonnegative")
     rows_total, dim = fbin_shape(args.queries)
     if rows_total != 10000 or dim != 768:
         raise ValueError(f"expected 10000x768 queries, got {rows_total}x{dim}")
@@ -75,35 +82,40 @@ def main():
 
             for k in k_values:
                 for seed in CATAPULT_SEEDS:
-                    # Direction 0: A then B.
-                    for direction, order in (
-                        ("A-B", (METHOD_A, METHOD_B)),
-                        ("B-A", (METHOD_B, METHOD_A)),
-                    ):
-                        for position, method in enumerate(order):
-                            tag = f"k{k}-seed{seed}-{direction}-p{position}-{method}"
-                            print(f"RUN {tag}", flush=True)
-                            row = run_disk(
-                                args.binary,
-                                args.work,
-                                args.out,
-                                tag,
-                                args.index_prefix,
-                                args.queries,
-                                args.gt,
-                                k,
-                                method,
-                                seed,
-                            )
-                            rows.append({
-                                "k": k,
-                                "seed": seed,
-                                "direction": direction,
-                                "position": position,
-                                "method": method,
-                                **row,
-                            })
-                            save(args.out / "rows.partial.json", rows)
+                    for cycle in range(args.cycles):
+                        directions = (
+                            (("A-B", (METHOD_A, METHOD_B)), ("B-A", (METHOD_B, METHOD_A)))
+                            if cycle % 2 == 0
+                            else (("B-A", (METHOD_B, METHOD_A)), ("A-B", (METHOD_A, METHOD_B)))
+                        )
+                        for direction, order in directions:
+                            for position, method in enumerate(order):
+                                tag = f"k{k}-seed{seed}-c{cycle}-{direction}-p{position}-{method}"
+                                print(f"RUN {tag}", flush=True)
+                                row = run_disk(
+                                    args.binary,
+                                    args.work,
+                                    args.out,
+                                    tag,
+                                    args.index_prefix,
+                                    args.queries,
+                                    args.gt,
+                                    k,
+                                    method,
+                                    seed,
+                                )
+                                rows.append({
+                                    "k": k,
+                                    "seed": seed,
+                                    "cycle": cycle,
+                                    "direction": direction,
+                                    "position": position,
+                                    "method": method,
+                                    **row,
+                                })
+                                save(args.out / "rows.partial.json", rows)
+                                if args.cooldown_seconds:
+                                    time.sleep(args.cooldown_seconds)
     finally:
         os.sched_setaffinity(0, set(allowed))
 
@@ -114,30 +126,41 @@ def main():
         seed_rows = []
         for seed in CATAPULT_SEEDS:
             rr = [r for r in rows if r["k"] == k and r["seed"] == seed]
-            by = {(r["direction"], r["method"]): r for r in rr}
-            if len(by) != 4:
-                raise ValueError(f"missing paired rows for k={k}, seed={seed}")
+            ratio_ab = []
+            ratio_ba = []
+            a_ios_all = []
+            b_ios_all = []
+            for cycle in range(args.cycles):
+                cc = [r for r in rr if r["cycle"] == cycle]
+                by = {(r["direction"], r["method"]): r for r in cc}
+                if len(by) != 4:
+                    raise ValueError(f"missing paired rows for k={k}, seed={seed}, cycle={cycle}")
+                a_first = by[("A-B", METHOD_A)]
+                b_second = by[("A-B", METHOD_B)]
+                b_first = by[("B-A", METHOD_B)]
+                a_second = by[("B-A", METHOD_A)]
+                ratio_ab.append(float(b_second["qps"]) / float(a_first["qps"]))
+                ratio_ba.append(float(b_first["qps"]) / float(a_second["qps"]))
+                a_ios_all.extend([float(a_first["mean_ios"]), float(a_second["mean_ios"])])
+                b_ios_all.extend([float(b_first["mean_ios"]), float(b_second["mean_ios"])])
 
-            a_first = by[("A-B", METHOD_A)]
-            b_second = by[("A-B", METHOD_B)]
-            b_first = by[("B-A", METHOD_B)]
-            a_second = by[("B-A", METHOD_A)]
-
-            ratio_ab = float(b_second["qps"]) / float(a_first["qps"])
-            ratio_ba = float(b_first["qps"]) / float(a_second["qps"])
-            paired_ratio = math.sqrt(ratio_ab * ratio_ba)
-
-            a_ios = np.mean([float(a_first["mean_ios"]), float(a_second["mean_ios"])])
-            b_ios = np.mean([float(b_first["mean_ios"]), float(b_second["mean_ios"])])
+            med_ab = float(np.median(ratio_ab))
+            med_ba = float(np.median(ratio_ba))
+            paired_ratio = math.sqrt(med_ab * med_ba)
+            a_ios = float(np.mean(a_ios_all))
+            b_ios = float(np.mean(b_ios_all))
             io_reduction = 1.0 - b_ios / a_ios
 
             seed_rows.append({
                 "seed": seed,
-                "A_then_B_qps_ratio_B_over_A": ratio_ab,
-                "B_then_A_qps_ratio_B_over_A": ratio_ba,
+                "cycles": args.cycles,
+                "A_then_B_qps_ratios_B_over_A": ratio_ab,
+                "B_then_A_qps_ratios_B_over_A": ratio_ba,
+                "A_then_B_qps_ratio_median": med_ab,
+                "B_then_A_qps_ratio_median": med_ba,
                 "order_balanced_qps_ratio_B_over_A": paired_ratio,
-                "catapult_mean_ios": float(a_ios),
-                "combined_mean_ios": float(b_ios),
+                "catapult_mean_ios": a_ios,
+                "combined_mean_ios": b_ios,
                 "combined_io_reduction_vs_catapult": float(io_reduction),
             })
 
@@ -172,6 +195,8 @@ def main():
             "threads": THREADS,
             "ssd_io_beam_width": IO_BEAM,
             "speed_device_lock": str(lock_path),
+            "cycles_per_seed": args.cycles,
+            "cooldown_seconds": args.cooldown_seconds,
         },
         "summary": summary,
     }
