@@ -1,7 +1,5 @@
 name: CatapultDB Yahoo Zipf locality sweep
 on:
-  push:
-    branches: [experiment/catapult-official]
   workflow_dispatch:
 permissions:
   contents: read
