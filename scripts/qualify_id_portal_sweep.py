@@ -204,12 +204,11 @@ def main() -> None:
             raise FileNotFoundError(path)
         variants[name] = {"path": path, **meta}
 
-    # Stable order: portal-only then portal+learned at increasing quantity.
+    # Stable order: portal-only then portal+learned at increasing global quantity.
     methods = ["ours-fp32-router"]
-    for per_region in (1, 2, 4, 8, 16, 32):
-        n = 512 * per_region
-        methods.append(f"portals-r{per_region}-n{n}")
-        methods.append(f"portals-r{per_region}-n{n}-plus-waypoints")
+    for n in (512, 1024, 2048, 4096, 8192, 16384):
+        methods.append(f"portals-n{n}")
+        methods.append(f"portals-n{n}-plus-waypoints")
     if set(methods[1:]) != set(variants):
         raise ValueError("pool manifest variants do not match expected sweep")
 
