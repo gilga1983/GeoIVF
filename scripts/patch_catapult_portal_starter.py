@@ -180,7 +180,7 @@ pub struct EngineStarter {
             let nprobe: usize = raw_nprobe
                 .parse()
                 .expect("CATAPULT_PORTAL_NPROBE must be an integer");
-            PortalRouter::load(Path::new(&path), stored_vectors_dim, graph_size, nprobe)
+            PortalRouter::load(Path::new(&path), plane_dim, graph_size, nprobe)
         });
 
         Self {
