@@ -51,19 +51,19 @@ jobs:
           mkdir -p "$cache"
           router="$cache/router.bin"
 
-          if [ ! -s "$router" ] || [ ! -s "$router.manifest.json" ]; then
-            rm -f "$router" "$router.manifest.json"
+          if [ ! -s "$router" ] || [ ! -s "$cache/router.manifest.json" ]; then
+            rm -f "$router" "$cache/router.manifest.json"
             .venv/bin/python scripts/prepare_pubmed_ip_portal_router.py \
               --base "$base" --out "$router" \
               --nlist 1024 --train-size 100000 --seed 12345 --threads 4 \
               2>&1 | tee artifacts/pubmed-ip-portal/build.log
           fi
 
-          cp "$router.manifest.json" artifacts/pubmed-ip-portal/router.manifest.json
+          cp "$cache/router.manifest.json" artifacts/pubmed-ip-portal/router.manifest.json
           sha256sum "$router" > artifacts/pubmed-ip-portal/router-sha256.txt
           cp "$router" artifacts/pubmed-ip-portal/router.bin
 
-          .venv/bin/python - "$router.manifest.json" <<'PY'
+          .venv/bin/python - "$cache/router.manifest.json" <<'PY'
           import json,sys
           m=json.load(open(sys.argv[1]))
           assert m["metric"]=="inner_product"
