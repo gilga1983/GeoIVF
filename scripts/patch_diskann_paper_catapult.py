@@ -37,17 +37,6 @@ def patch_provider_medoid(path: Path) -> None:
     path.write_text(s)
 
 
-def patch_cargo(path: Path) -> None:
-    s = path.read_text()
-    s = once(
-        s,
-        "rand.workspace = true\nrayon.workspace = true\n",
-        "rand.workspace = true\nrand_distr.workspace = true\nrayon.workspace = true\n",
-        "rand_distr dependency",
-    )
-    path.write_text(s)
-
-
 def patch_benchmark(path: Path) -> None:
     s = path.read_text()
 
@@ -56,8 +45,7 @@ def patch_benchmark(path: Path) -> None:
         """use rayon::prelude::*;
 use std::{collections::HashSet, fmt, sync::atomic::AtomicBool, time::Instant};
 """,
-        """use rand::{rngs::StdRng, SeedableRng};
-use rand_distr::{Distribution, StandardNormal};
+        """use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::prelude::*;
 use std::{
     collections::{HashSet, VecDeque},
@@ -158,9 +146,17 @@ impl PaperCatapult {
     fn new(dim: usize, medoid: u32, cfg: PaperCatapultConfig) -> Self {
         let mut rng = StdRng::seed_from_u64(cfg.seed);
         let mut hyperplanes = Vec::with_capacity(cfg.hashes * dim);
-        for _ in 0..cfg.hashes * dim {
-            let x: f32 = StandardNormal.sample(&mut rng);
-            hyperplanes.push(x);
+        while hyperplanes.len() < cfg.hashes * dim {
+            // Box-Muller transform from the already-pinned rand crate.
+            // Random-hyperplane LSH needs isotropic normal directions.
+            let u1 = rng.random::<f32>().max(f32::MIN_POSITIVE);
+            let u2 = rng.random::<f32>();
+            let radius = (-2.0 * u1.ln()).sqrt();
+            let theta = 2.0 * std::f32::consts::PI * u2;
+            hyperplanes.push(radius * theta.cos());
+            if hyperplanes.len() < cfg.hashes * dim {
+                hyperplanes.push(radius * theta.sin());
+            }
         }
         let bucket_count = 1usize << cfg.hashes;
         let buckets = (0..bucket_count)
@@ -455,14 +451,12 @@ def main() -> None:
 
     provider = root / "diskann-disk/src/search/provider/disk_provider.rs"
     benchmark = root / "diskann-benchmark/src/disk_index/search.rs"
-    cargo = root / "diskann-benchmark/Cargo.toml"
-    if not provider.is_file() or not benchmark.is_file() or not cargo.is_file():
+    if not provider.is_file() or not benchmark.is_file():
         raise SystemExit("unexpected DiskANN checkout layout")
 
     patch_provider(provider)
     patch_provider_medoid(provider)
     patch_benchmark(benchmark)
-    patch_cargo(cargo)
     print(f"patched DiskANN {PINNED} with paper-faithful CatapultDB policy")
 
 
