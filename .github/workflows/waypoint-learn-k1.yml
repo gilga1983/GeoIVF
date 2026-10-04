@@ -1,0 +1,88 @@
+name: Learn waypoint cache k1
+on:
+  push:
+    branches: [experiment/catapult-ssd-paper]
+    paths:
+      - '.github/workflows/waypoint-learn-k1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  learn:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prepare Python
+        run: |
+          set -euxo pipefail
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install numpy==2.2.6
+          mkdir -p artifacts/waypoint-learn-k1
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: waypoint-trace-k1-37201057882
+          path: trace-artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 37201057882
+
+      - name: Learn global endpoint and waypoint caches
+        run: |
+          set -euxo pipefail
+          queries="$HOME/.cache/geoivf/medrag-zipf-qwen3b-v1/medrag-zipf-10k-medcpt.fbin"
+          router="$HOME/.cache/geoivf/pubmed1m-ip-portal-v1/router.bin"
+          trace="$PWD/trace-artifact/portal-k1-train5000-trace.jsonl"
+          cache="$HOME/.cache/geoivf/waypoint-k1-v1"
+          rm -rf "$cache"
+          mkdir -p "$cache"
+
+          test -s "$queries"
+          test -s "$router"
+          test -s "$trace"
+
+          .venv/bin/python scripts/learn_waypoint_cache.py \
+            --queries "$queries" \
+            --router "$router" \
+            --trace "$trace" \
+            --out-dir "$cache" \
+            --budget 10240 \
+            --nprobe 32 \
+            --supports "1,2,4" \
+            2>&1 | tee artifacts/waypoint-learn-k1/learn.log
+
+          cp "$cache"/* artifacts/waypoint-learn-k1/
+          git rev-parse HEAD > artifacts/waypoint-learn-k1/geoivf-commit.txt
+
+          .venv/bin/python - "$cache/waypoint-cache-manifest.json" <<'PY'
+          import json,sys
+          m=json.load(open(sys.argv[1]))
+          assert m["training_queries"]==5000
+          assert m["budget_ids"]==10240
+          assert "waypoint-s2" in m["variants"]
+          print(json.dumps(m,indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: waypoint-learn-k1-${{ github.run_id }}
+          path: artifacts/waypoint-learn-k1/
+          retention-days: 30
