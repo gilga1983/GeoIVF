@@ -126,6 +126,7 @@ def run(
     seed: int | None = None,
     portal: bool = False,
     waypoint_cache: Path | None = None,
+    waypoint_max_ids: int | None = None,
     snapshot_load: Path | None = None,
     snapshot_dump: Path | None = None,
     freeze_catapult: bool = False,
@@ -144,6 +145,7 @@ def run(
         "DISKANN_IP_PORTAL_ROUTER_FILE",
         "DISKANN_IP_PORTAL_NPROBE",
         "DISKANN_WAYPOINT_CACHE_FILE",
+        "DISKANN_WAYPOINT_MAX_IDS_PER_QUERY",
         "DISKANN_CATAPULT_SNAPSHOT_LOAD",
         "DISKANN_CATAPULT_SNAPSHOT_DUMP",
         "DISKANN_CATAPULT_FREEZE",
@@ -157,6 +159,10 @@ def run(
         if not portal:
             raise ValueError("waypoint cache requires portal routing")
         env["DISKANN_WAYPOINT_CACHE_FILE"] = str(waypoint_cache)
+    if waypoint_max_ids is not None:
+        if waypoint_cache is None or waypoint_max_ids <= 0:
+            raise ValueError("waypoint_max_ids requires a cache and must be positive")
+        env["DISKANN_WAYPOINT_MAX_IDS_PER_QUERY"] = str(waypoint_max_ids)
     if seed is not None:
         env["DISKANN_PAPER_CATAPULT"] = "1"
         env["DISKANN_CATAPULT_HASHES"] = "8"
@@ -269,7 +275,13 @@ def main():
             })
             print(f"SNAPSHOT {kind} seed={seed} entries={entries}", flush=True)
 
-    methods = ["portal", "global-endpoint-s1", "waypoint-s1"]
+    methods = [
+        "portal",
+        "global-endpoint-s1",
+        "global-endpoint-s1-cap40",
+        "waypoint-s1",
+        "waypoint-s1-cap40",
+    ]
     methods += [f"catapult-s{seed}" for seed in SEEDS]
     methods += [f"portal-catapult-s{seed}" for seed in SEEDS]
 
@@ -301,8 +313,20 @@ def main():
                         kwargs = dict(portal=True)
                     elif method == "global-endpoint-s1":
                         kwargs = dict(portal=True, waypoint_cache=endpoint)
+                    elif method == "global-endpoint-s1-cap40":
+                        kwargs = dict(
+                            portal=True,
+                            waypoint_cache=endpoint,
+                            waypoint_max_ids=40,
+                        )
                     elif method == "waypoint-s1":
                         kwargs = dict(portal=True, waypoint_cache=waypoint)
+                    elif method == "waypoint-s1-cap40":
+                        kwargs = dict(
+                            portal=True,
+                            waypoint_cache=waypoint,
+                            waypoint_max_ids=40,
+                        )
                     elif method.startswith("catapult-s"):
                         seed = int(method.rsplit("s", 1)[1])
                         kwargs = dict(
@@ -369,7 +393,12 @@ def main():
         }
 
     portal_ios = summary["portal"]["mean_ios"]
-    for method in ("global-endpoint-s1", "waypoint-s1"):
+    for method in (
+        "global-endpoint-s1",
+        "global-endpoint-s1-cap40",
+        "waypoint-s1",
+        "waypoint-s1-cap40",
+    ):
         summary[method]["io_reduction_vs_portal"] = (
             1.0 - summary[method]["mean_ios"] / portal_ios
         )
