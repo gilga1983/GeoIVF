@@ -14,6 +14,7 @@ recall; recall validation is a separate sampled experiment.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import shutil
@@ -263,36 +264,45 @@ def main():
     os.sched_setaffinity(0, set(allowed[:THREADS]))
 
     rows = []
+    lock_path = Path.home() / ".cache/geoivf/speed-device.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        for k in k_values:
-            for rep in range(args.reps):
-                seed = CATAPULT_SEEDS[rep]
-                # Interleave arms to reduce temporal host drift.
-                for method in ("medoid", "portal", "catapult", "portal-catapult"):
-                    tag = f"k{k}-{method}-r{rep}-seed{seed}"
-                    print(f"RUN {tag}", flush=True)
-                    row = run_disk(
-                        args.binary,
-                        args.work,
-                        args.out,
-                        tag,
-                        args.index_prefix,
-                        qfile,
-                        args.gt,
-                        k,
-                        method,
-                        seed,
-                    )
-                    rows.append(
-                        {
-                            "k": k,
-                            "method": method,
-                            "rep": rep,
-                            "seed": seed if "catapult" in method else -1,
-                            **row,
-                        }
-                    )
-                    save(args.out / "rows.partial.json", rows)
+        # Serialize SSD performance measurements with the rest of the GeoIVF
+        # qualification harness. Without this lock, sibling self-hosted runners
+        # can inject millisecond-scale device-latency spikes into one arm only.
+        with lock_path.open("w") as lock:
+            print(f"waiting for speed-device lock: {lock_path}", flush=True)
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            print("acquired speed-device lock", flush=True)
+            for k in k_values:
+                for rep in range(args.reps):
+                    seed = CATAPULT_SEEDS[rep]
+                    # Interleave arms to reduce temporal host drift.
+                    for method in ("medoid", "portal", "catapult", "portal-catapult"):
+                        tag = f"k{k}-{method}-r{rep}-seed{seed}"
+                        print(f"RUN {tag}", flush=True)
+                        row = run_disk(
+                            args.binary,
+                            args.work,
+                            args.out,
+                            tag,
+                            args.index_prefix,
+                            qfile,
+                            args.gt,
+                            k,
+                            method,
+                            seed,
+                        )
+                        rows.append(
+                            {
+                                "k": k,
+                                "method": method,
+                                "rep": rep,
+                                "seed": seed if "catapult" in method else -1,
+                                **row,
+                            }
+                        )
+                        save(args.out / "rows.partial.json", rows)
     finally:
         os.sched_setaffinity(0, set(allowed))
 
