@@ -1,4 +1,5 @@
 name: Navigation heavy hitters heldout
+# retrigger after top-X learner update
 on:
   push:
     branches: [experiment/catapult-ssd-paper]
