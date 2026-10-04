@@ -1,0 +1,147 @@
+name: Paper Catapult SSD Uniform 1M
+on:
+  push:
+    branches: [experiment/catapult-ssd-paper]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-paper-catapult-ssd-uniform
+  cancel-in-progress: true
+
+jobs:
+  uniform:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 360
+    defaults:
+      run:
+        shell: bash
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare environment and disk preflight
+        run: |
+          set -euxo pipefail
+          python3 -m venv .venv
+          .venv/bin/pip install numpy==2.2.6
+          mkdir -p artifacts/paper-catapult-uniform
+          git rev-parse HEAD > artifacts/paper-catapult-uniform/geoivf-commit.txt
+          { uname -a; lscpu; free -h; df -h; lsblk -o NAME,TYPE,SIZE,ROTA,MOUNTPOINTS; } > artifacts/paper-catapult-uniform/host.txt
+
+          avail=$(df --output=avail -B1 "$HOME" | tail -1 | tr -d ' ')
+          need=$((20 * 1024 * 1024 * 1024))
+          if [ "$avail" -lt "$need" ]; then
+            echo "Need at least 20 GiB free; have $avail bytes" >&2
+            exit 1
+          fi
+
+      - name: Prepare exact first-million PubMed workload
+        run: |
+          set -euxo pipefail
+          cache="$HOME/.cache/geoivf/catapult-paper-pubmed1m"
+          mkdir -p "$cache"
+          base="$cache/pubmed-medcpt-first1m.fbin"
+          queries="$cache/uniform-150k-seed0.fbin"
+
+          if [ ! -s "$base" ] || [ ! -s "$queries" ] || [ ! -s "$cache/manifest.json" ]; then
+            rm -f "$base" "$queries" "$cache/manifest.json" "$cache/throughput-only.gt"
+            urlbase="https://ftp.ncbi.nlm.nih.gov/pub/lu/MedCPT/pubmed_embeddings"
+            chunk0="$cache/embeds_chunk_0.npy"
+
+            if [ -s "$chunk0" ]; then
+              curl -fL --retry 5 --retry-delay 3 -C - "$urlbase/embeds_chunk_0.npy" -o "$chunk0"
+            else
+              curl -fL --retry 5 --retry-delay 3 "$urlbase/embeds_chunk_0.npy" -o "$chunk0"
+            fi
+
+            header="$cache/chunk1-header.bin"
+            curl -fsSL --retry 5 --range 0-511 "$urlbase/embeds_chunk_1.npy" -o "$header"
+            end=$(.venv/bin/python - "$header" <<'PY'
+          import ast, struct, sys
+          from pathlib import Path
+          raw=Path(sys.argv[1]).read_bytes()
+          assert raw[:6] == b"\x93NUMPY"
+          major=raw[6]
+          if major == 1:
+              hlen=struct.unpack("<H",raw[8:10])[0]; start=10; off=start+hlen
+          else:
+              hlen=struct.unpack("<I",raw[8:12])[0]; start=12; off=start+hlen
+          meta=ast.literal_eval(raw[start:off].decode("latin1").strip())
+          assert tuple(meta["shape"]) == (998731,768)
+          print(off + 22508*768*4 - 1)
+          PY
+            )
+            chunk1="$cache/embeds_chunk_1_prefix.npy"
+            curl -fsSL --retry 5 --range "0-$end" "$urlbase/embeds_chunk_1.npy" -o "$chunk1"
+
+            .venv/bin/python scripts/prepare_catapult_paper_pubmed1m.py               --chunk0 "$chunk0" --chunk1-prefix "$chunk1" --out-dir "$cache"               2>&1 | tee artifacts/paper-catapult-uniform/workload-prep.log
+
+            rm -f "$chunk0" "$chunk1" "$header"
+          fi
+
+          .venv/bin/python - "$cache/manifest.json" <<'PY'
+          import json,sys
+          m=json.load(open(sys.argv[1]))
+          assert m["dimension"]==768 and m["base_rows"]==1000000 and m["query_rows"]==150000
+          print(json.dumps(m,indent=2))
+          PY
+
+          cp "$cache/manifest.json" artifacts/paper-catapult-uniform/workload-manifest.json
+          echo "PAPER_DATA_CACHE=$cache" >> "$GITHUB_ENV"
+
+      - name: Patch and compile paper Catapult SSD DiskANN
+        run: |
+          set -euxo pipefail
+          rev=fcf90534174cf29c78c9f13b4cccf1fcabff85f5
+          git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-paper
+          git -C third_party/DiskANN-paper checkout --detach "$rev"
+          test "$(git -C third_party/DiskANN-paper rev-parse HEAD)" = "$rev"
+          echo "$rev" > artifacts/paper-catapult-uniform/upstream-commit.txt
+
+          CARGO_HOME="$RUNNER_TEMP/paper-uniform-cargo-${GITHUB_RUN_ID}"
+          RUSTUP_HOME="$RUNNER_TEMP/paper-uniform-rustup-${GITHUB_RUN_ID}"
+          mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
+          curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/rustup-${GITHUB_RUN_ID}.sh"
+          CARGO_HOME="$CARGO_HOME" RUSTUP_HOME="$RUSTUP_HOME"             sh "$RUNNER_TEMP/rustup-${GITHUB_RUN_ID}.sh" -y --profile minimal --no-modify-path --default-toolchain 1.97.1
+          echo "CARGO_HOME=$CARGO_HOME" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$RUSTUP_HOME" >> "$GITHUB_ENV"
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+          export CARGO_HOME RUSTUP_HOME PATH="$CARGO_HOME/bin:$PATH"
+          rustup component add rustfmt
+
+          .venv/bin/python scripts/patch_diskann_paper_catapult.py third_party/DiskANN-paper
+          (cd third_party/DiskANN-paper && cargo fmt --all)
+          git -C third_party/DiskANN-paper diff --check
+          git -C third_party/DiskANN-paper diff > artifacts/paper-catapult-uniform/paper-catapult.patch
+          (cd third_party/DiskANN-paper && cargo build --release --locked -p diskann-benchmark --features disk-index)             2>&1 | tee artifacts/paper-catapult-uniform/build.log
+
+      - name: Run paper Uniform SSD calibration
+        run: |
+          set -euxo pipefail
+          work="$RUNNER_TEMP/paper-catapult-uniform-${GITHUB_RUN_ID}"
+          mkdir -p "$work"
+          index_cache="$HOME/.cache/geoivf/catapult-paper-pubmed1m-index-v1"
+
+          .venv/bin/python scripts/qualify_paper_catapult_ssd_uniform.py             --binary "$PWD/third_party/DiskANN-paper/target/release/diskann-benchmark"             --base "$PAPER_DATA_CACHE/pubmed-medcpt-first1m.fbin"             --queries "$PAPER_DATA_CACHE/uniform-150k-seed0.fbin"             --gt "$PAPER_DATA_CACHE/throughput-only.gt"             --index-cache "$index_cache"             --work "$work"             --out "$PWD/artifacts/paper-catapult-uniform"             2>&1 | tee artifacts/paper-catapult-uniform/qualification.log
+
+          rm -rf "$work"
+          df -h .
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: paper-catapult-ssd-uniform-${{ github.run_id }}
+          path: artifacts/paper-catapult-uniform/
+          retention-days: 30
+
+      - name: Clean toolchain scratch
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/paper-uniform-cargo-${GITHUB_RUN_ID}"                  "$RUNNER_TEMP/paper-uniform-rustup-${GITHUB_RUN_ID}"
