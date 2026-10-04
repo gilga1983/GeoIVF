@@ -4,6 +4,8 @@ on:
     branches: [experiment/catapult-ssd-paper]
     paths:
       - '.github/workflows/medrag-zipf-four-arm.yml'
+      - 'scripts/patch_diskann_paper_catapult.py'
+      - 'scripts/qualify_medrag_zipf_four_arm.py'
   workflow_dispatch:
 permissions:
   contents: read
