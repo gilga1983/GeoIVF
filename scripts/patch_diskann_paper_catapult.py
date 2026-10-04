@@ -509,7 +509,9 @@ impl PaperCatapult {
                     mode,
                 ) {
 """
-    new_call = r'''                let portal_seed = match portal_router.as_ref() {
+    new_call = r'''                let query_timer = Instant::now();
+
+                let portal_seed = match portal_router.as_ref() {
                     Some(router) => match router.route::<T>(q, portal_nprobe) {
                         Ok(id) => Some(id),
                         Err(e) => {
@@ -581,6 +583,10 @@ impl PaperCatapult {
                             id_chunk[i] = result_item.vertex_id;
                             dist_chunk[i] = result_item.distance;
                         }
+
+                        // Report complete request time, including Catapult hashing/cache
+                        // lookup and optional static portal routing.
+                        stats.total_execution_time_us = query_timer.elapsed().as_micros();
 
                         if let (Some(c), Some((Some(bucket), _))) = (catapult.as_ref(), routed.as_ref()) {
                             if base_count > 0 {
