@@ -74,8 +74,14 @@ jobs:
           mkdir -p "$cache"
 
           test -s "$trace"
-          .venv/bin/python scripts/learn_navigation_heavy_hitters.py             --queries "$QUERIES"             --router "$PORTAL_ROUTER"             --trace "$trace"             --out-dir "$cache"             --nprobe 32             --topx "5,10,20,40"             --budgets "2000,2500,2800"             2>&1 | tee artifacts/navigation-heavy-hitters/learn.log
+          .venv/bin/python scripts/learn_navigation_heavy_hitters.py             --queries "$QUERIES"             --router "$PORTAL_ROUTER"             --trace "$trace"             --out-dir "$cache"             --nprobe 32             --topx "4,6,8,10,20,40"             --budgets "2000,2500,2800"             2>&1 | tee artifacts/navigation-heavy-hitters/learn.log
 
+          test -s "$cache/heavy-local-freq-x4.bin"
+          test -s "$cache/heavy-local-skip-x4.bin"
+          test -s "$cache/heavy-local-freq-x6.bin"
+          test -s "$cache/heavy-local-skip-x6.bin"
+          test -s "$cache/heavy-local-freq-x8.bin"
+          test -s "$cache/heavy-local-skip-x8.bin"
           cp "$cache/navigation-heavy-hitters-manifest.json"             artifacts/navigation-heavy-hitters/
           echo "HEAVY_CACHE=$cache" >> "$GITHUB_ENV"
 
