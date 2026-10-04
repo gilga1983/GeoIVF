@@ -4,6 +4,8 @@ on:
     branches: [experiment/catapult-ssd-paper]
     paths:
       - '.github/workflows/waypoint-heldout-k1.yml'
+      - 'scripts/patch_diskann_waypoint_cache.py'
+      - 'scripts/qualify_waypoint_cache_heldout.py'
   workflow_dispatch:
 permissions:
   contents: read
