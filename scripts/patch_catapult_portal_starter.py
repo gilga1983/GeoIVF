@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Patch the official CatapultDB artifact with an optional GeoIVF portal starter.
 
-The patch changes only EngineStarter's source of initial graph vertices. With no
-CATAPULT_PORTAL_ROUTER_FILE environment variable, behavior is byte-for-byte the
-same logic as upstream HEAD. Catapult insertion, eviction, graph expansion, and
+The patch changes only EngineStarter's returned initial graph vertices. With no
+CATAPULT_PORTAL_ROUTER_FILE environment variable, behavior follows the
+same logic as upstream HEAD. With a router, one portal is appended to the official LSH starts. Catapult insertion, eviction, graph expansion, and
 beam search remain in the authors' code unchanged.
 """
 from __future__ import annotations
@@ -197,15 +197,51 @@ pub struct EngineStarter {
         s,
         """    pub fn select_starting_points(&self, query: &[AlignedBlock], k: usize) -> Vec<usize> {
         let signature = self.hasher.hash_int(query);
+        if let Some(starters) = self.cached_starters.read().unwrap().get(&signature) {
+            starters.clone()
+        } else {
+            let seed = signature;
+            // seeding the rand with the signature. This prevents a scheduling shenanigan where having two
+            // threads trying to set this without seeding would make the starter points inconsistent across runs,
+            // technically a race condition (benign).
+            let mut rng = StdRng::seed_from_u64(seed);
+            let indices = sample(&mut rng, self.max_len, k).into_vec();
+            self.cached_starters
+                .write()
+                .unwrap()
+                .insert(signature, indices.clone());
+            indices
+        }
+    }
 """,
         """    pub fn select_starting_points(&self, query: &[AlignedBlock], k: usize) -> Vec<usize> {
-        if let Some(portal) = &self.portal {
-            return vec![portal.route(query)];
-        }
-
         let signature = self.hasher.hash_int(query);
+        let mut starters = if let Some(starters) = self.cached_starters.read().unwrap().get(&signature) {
+            starters.clone()
+        } else {
+            let seed = signature;
+            // seeding the rand with the signature. This prevents a scheduling shenanigan where having two
+            // threads trying to set this without seeding would make the starter points inconsistent across runs,
+            // technically a race condition (benign).
+            let mut rng = StdRng::seed_from_u64(seed);
+            let indices = sample(&mut rng, self.max_len, k).into_vec();
+            self.cached_starters
+                .write()
+                .unwrap()
+                .insert(signature, indices.clone());
+            indices
+        };
+
+        if let Some(portal) = &self.portal {
+            let portal_id = portal.route(query);
+            if !starters.contains(&portal_id) {
+                starters.push(portal_id);
+            }
+        }
+        starters
+    }
 """,
-        "portal route branch",
+        "append portal to official LSH starters",
     )
 
     path.write_text(s)
