@@ -1,0 +1,125 @@
+name: Navigation heavy hitters heldout
+on:
+  push:
+    branches: [experiment/catapult-ssd-paper]
+    paths:
+      - '.github/workflows/navigation-heavy-hitters.yml'
+      - 'scripts/learn_navigation_heavy_hitters.py'
+      - 'scripts/qualify_navigation_heavy_hitters.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: geoivf-navigation-heavy-hitters
+  cancel-in-progress: true
+
+jobs:
+  eval:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 360
+    defaults:
+      run:
+        shell: bash
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prepare Python and cached inputs
+        run: |
+          set -euxo pipefail
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install numpy==2.2.6
+          mkdir -p artifacts/navigation-heavy-hitters
+
+          queries="$HOME/.cache/geoivf/medrag-zipf-qwen3b-v1/medrag-zipf-10k-medcpt.fbin"
+          gt="$HOME/.cache/geoivf/catapult-paper-pubmed1m/throughput-only.gt"
+          index="$HOME/.cache/geoivf/catapult-paper-pubmed1m-index-v1/diskann-index"
+          router="$HOME/.cache/geoivf/pubmed1m-ip-portal-v1/router.bin"
+
+          test -s "$queries"
+          test -s "$gt"
+          test -s "$router"
+
+          echo "QUERIES=$queries" >> "$GITHUB_ENV"
+          echo "GT=$gt" >> "$GITHUB_ENV"
+          echo "INDEX_PREFIX=$index" >> "$GITHUB_ENV"
+          echo "PORTAL_ROUTER=$router" >> "$GITHUB_ENV"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: waypoint-trace-k1-37201057882
+          path: trace-artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 37201057882
+
+      - name: Learn navigation heavy hitters
+        run: |
+          set -euxo pipefail
+          trace="$PWD/trace-artifact/portal-k1-train5000-trace.jsonl"
+          cache="$HOME/.cache/geoivf/navigation-heavy-hitters-v1"
+          rm -rf "$cache"
+          mkdir -p "$cache"
+
+          test -s "$trace"
+          .venv/bin/python scripts/learn_navigation_heavy_hitters.py             --queries "$QUERIES"             --router "$PORTAL_ROUTER"             --trace "$trace"             --out-dir "$cache"             --nprobe 32             --topx "5,10,20,40"             --budgets "2000,2500,2800"             2>&1 | tee artifacts/navigation-heavy-hitters/learn.log
+
+          cp "$cache/navigation-heavy-hitters-manifest.json"             artifacts/navigation-heavy-hitters/
+          echo "HEAVY_CACHE=$cache" >> "$GITHUB_ENV"
+
+      - name: Patch and compile waypoint-capable DiskANN
+        run: |
+          set -euxo pipefail
+          rev=fcf90534174cf29c78c9f13b4cccf1fcabff85f5
+          git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-heavy
+          git -C third_party/DiskANN-heavy checkout --detach "$rev"
+          test "$(git -C third_party/DiskANN-heavy rev-parse HEAD)" = "$rev"
+
+          CARGO_HOME="$RUNNER_TEMP/heavy-cargo-${GITHUB_RUN_ID}"
+          RUSTUP_HOME="$RUNNER_TEMP/heavy-rustup-${GITHUB_RUN_ID}"
+          mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
+          curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/rustup-${GITHUB_RUN_ID}.sh"
+          CARGO_HOME="$CARGO_HOME" RUSTUP_HOME="$RUSTUP_HOME"             sh "$RUNNER_TEMP/rustup-${GITHUB_RUN_ID}.sh"               -y --profile minimal --no-modify-path --default-toolchain 1.97.1
+          export CARGO_HOME RUSTUP_HOME
+          export PATH="$CARGO_HOME/bin:$PATH"
+          rustup component add rustfmt
+
+          .venv/bin/python scripts/patch_diskann_waypoint_cache.py third_party/DiskANN-heavy
+          (cd third_party/DiskANN-heavy && cargo fmt --all)
+          git -C third_party/DiskANN-heavy diff --check
+          (cd third_party/DiskANN-heavy &&             cargo build --release --locked -p diskann-benchmark --features disk-index)             2>&1 | tee artifacts/navigation-heavy-hitters/build.log
+
+          echo "DISKANN_BIN=$PWD/third_party/DiskANN-heavy/target/release/diskann-benchmark"             >> "$GITHUB_ENV"
+
+      - name: Evaluate heldout heavy hitters
+        run: |
+          set -euxo pipefail
+          work="$RUNNER_TEMP/heavy-heldout-${GITHUB_RUN_ID}"
+          mkdir -p "$work" artifacts/navigation-heavy-hitters/results
+
+          .venv/bin/python scripts/qualify_navigation_heavy_hitters.py             --binary "$DISKANN_BIN"             --queries "$QUERIES"             --gt "$GT"             --index-prefix "$INDEX_PREFIX"             --portal-router "$PORTAL_ROUTER"             --cache-dir "$HEAVY_CACHE"             --work "$work"             --out "$PWD/artifacts/navigation-heavy-hitters/results"             --train-rows 5000             --reps 3             2>&1 | tee artifacts/navigation-heavy-hitters/eval.log
+
+          rm -rf "$work"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: navigation-heavy-hitters-${{ github.run_id }}
+          path: artifacts/navigation-heavy-hitters/
+          retention-days: 30
+
+      - name: Clean scratch
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/heavy-cargo-${GITHUB_RUN_ID}"                  "$RUNNER_TEMP/heavy-rustup-${GITHUB_RUN_ID}"
