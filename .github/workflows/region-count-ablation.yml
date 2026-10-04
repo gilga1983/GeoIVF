@@ -1,0 +1,188 @@
+name: Region count ablation
+on:
+  push:
+    branches: [experiment/catapult-ssd-paper]
+    paths:
+      - '.github/workflows/region-count-ablation.yml'
+      - 'scripts/learn_region_heavy_hitters.py'
+      - 'scripts/qualify_region_count_ablation.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-region-count-ablation
+  cancel-in-progress: true
+
+jobs:
+  ablation:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 480
+    defaults:
+      run:
+        shell: bash
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prepare environment
+        run: |
+          set -euxo pipefail
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install numpy==2.2.6 "faiss-cpu>=1.9,<2"
+
+          mkdir -p artifacts/region-count-ablation
+
+          base="$HOME/.cache/geoivf/catapult-paper-pubmed1m/pubmed-medcpt-first1m.fbin"
+          queries="$HOME/.cache/geoivf/medrag-zipf-qwen3b-v1/medrag-zipf-10k-medcpt.fbin"
+          gt="$HOME/.cache/geoivf/catapult-paper-pubmed1m/throughput-only.gt"
+          index="$HOME/.cache/geoivf/catapult-paper-pubmed1m-index-v1/diskann-index"
+          routers="$HOME/.cache/geoivf/region-ablation-routers-v1"
+          caches="$HOME/.cache/geoivf/region-ablation-caches-v1"
+          traces="$HOME/.cache/geoivf/region-ablation-traces-v1"
+
+          test -s "$base"
+          test -s "$queries"
+          test -s "$gt"
+          mkdir -p "$routers" "$caches" "$traces"
+
+          echo "BASE=$base" >> "$GITHUB_ENV"
+          echo "QUERIES=$queries" >> "$GITHUB_ENV"
+          echo "GT=$gt" >> "$GITHUB_ENV"
+          echo "INDEX_PREFIX=$index" >> "$GITHUB_ENV"
+          echo "ROUTER_ROOT=$routers" >> "$GITHUB_ENV"
+          echo "CACHE_ROOT=$caches" >> "$GITHUB_ENV"
+          echo "TRACE_ROOT=$traces" >> "$GITHUB_ENV"
+
+          git rev-parse HEAD > artifacts/region-count-ablation/geoivf-commit.txt
+
+      - name: Build geometric routers across region counts
+        run: |
+          set -euxo pipefail
+          for nlist in 1 64 128 256 512 1024 2048; do
+            dir="$ROUTER_ROOT/nlist-$nlist"
+            mkdir -p "$dir"
+            router="$dir/router.bin"
+            manifest="$dir/router.manifest.json"
+
+            if [ ! -s "$router" ] || [ ! -s "$manifest" ]; then
+              rm -f "$router" "$manifest"
+              .venv/bin/python scripts/prepare_pubmed_ip_portal_router.py                 --base "$BASE"                 --out "$router"                 --nlist "$nlist"                 --train-size 100000                 --seed 12345                 --threads 4                 2>&1 | tee "artifacts/region-count-ablation/router-$nlist.log"
+            fi
+
+            test -s "$router"
+            test -s "$manifest"
+            cp "$manifest" "artifacts/region-count-ablation/router-$nlist.manifest.json"
+            sha256sum "$router" >> artifacts/region-count-ablation/router-sha256.txt
+          done
+
+      - name: Compile traversal recorder
+        run: |
+          set -euxo pipefail
+          rev=fcf90534174cf29c78c9f13b4cccf1fcabff85f5
+          git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-region-trace
+          git -C third_party/DiskANN-region-trace checkout --detach "$rev"
+
+          CARGO_HOME="$RUNNER_TEMP/region-trace-cargo-${GITHUB_RUN_ID}"
+          RUSTUP_HOME="$RUNNER_TEMP/region-trace-rustup-${GITHUB_RUN_ID}"
+          mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
+          curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/rustup-trace-${GITHUB_RUN_ID}.sh"
+          CARGO_HOME="$CARGO_HOME" RUSTUP_HOME="$RUSTUP_HOME"             sh "$RUNNER_TEMP/rustup-trace-${GITHUB_RUN_ID}.sh"               -y --profile minimal --no-modify-path --default-toolchain 1.97.1
+          export CARGO_HOME RUSTUP_HOME
+          export PATH="$CARGO_HOME/bin:$PATH"
+          rustup component add rustfmt
+
+          .venv/bin/python scripts/patch_diskann_waypoint_trace.py third_party/DiskANN-region-trace
+          (cd third_party/DiskANN-region-trace && cargo fmt --all)
+          git -C third_party/DiskANN-region-trace diff --check
+          (cd third_party/DiskANN-region-trace &&             cargo build --release --locked -p diskann-benchmark --features disk-index)             2>&1 | tee artifacts/region-count-ablation/trace-build.log
+
+          echo "TRACE_BIN=$PWD/third_party/DiskANN-region-trace/target/release/diskann-benchmark"             >> "$GITHUB_ENV"
+
+      - name: Collect independent training traces per partition
+        run: |
+          set -euxo pipefail
+          for nlist in 1 64 128 256 512 1024 2048; do
+            router="$ROUTER_ROOT/nlist-$nlist/router.bin"
+            out="$TRACE_ROOT/nlist-$nlist"
+            work="$RUNNER_TEMP/region-trace-$nlist-${GITHUB_RUN_ID}"
+            rm -rf "$out" "$work"
+            mkdir -p "$out" "$work"
+
+            .venv/bin/python scripts/collect_waypoint_traces.py               --binary "$TRACE_BIN"               --queries "$QUERIES"               --gt "$GT"               --index-prefix "$INDEX_PREFIX"               --portal-router "$router"               --work "$work"               --out "$out"               --train-rows 5000               2>&1 | tee "artifacts/region-count-ablation/trace-$nlist.log"
+
+            test -s "$out/portal-k1-train5000-trace.jsonl"
+            cp "$out/trace-summary.json"               "artifacts/region-count-ablation/trace-$nlist.summary.json"
+            rm -rf "$work"
+          done
+
+      - name: Learn fixed-budget heavy hitters per partition
+        run: |
+          set -euxo pipefail
+          for nlist in 1 64 128 256 512 1024 2048; do
+            router="$ROUTER_ROOT/nlist-$nlist/router.bin"
+            trace="$TRACE_ROOT/nlist-$nlist/portal-k1-train5000-trace.jsonl"
+            out="$CACHE_ROOT/nlist-$nlist"
+            rm -rf "$out"
+            mkdir -p "$out"
+
+            .venv/bin/python scripts/learn_region_heavy_hitters.py               --queries "$QUERIES"               --router "$router"               --trace "$trace"               --out "$out/heavy-skip-b2500.bin"               --budget 2500               --nprobe 32               2>&1 | tee "artifacts/region-count-ablation/learn-$nlist.log"
+
+            test -s "$out/heavy-skip-b2500.bin"
+            cp "$out/heavy-skip-b2500.manifest.json"               "artifacts/region-count-ablation/cache-$nlist.manifest.json"
+          done
+
+      - name: Compile waypoint evaluator
+        run: |
+          set -euxo pipefail
+          rev=fcf90534174cf29c78c9f13b4cccf1fcabff85f5
+          git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-region-eval
+          git -C third_party/DiskANN-region-eval checkout --detach "$rev"
+
+          CARGO_HOME="$RUNNER_TEMP/region-eval-cargo-${GITHUB_RUN_ID}"
+          RUSTUP_HOME="$RUNNER_TEMP/region-eval-rustup-${GITHUB_RUN_ID}"
+          mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
+          curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/rustup-eval-${GITHUB_RUN_ID}.sh"
+          CARGO_HOME="$CARGO_HOME" RUSTUP_HOME="$RUSTUP_HOME"             sh "$RUNNER_TEMP/rustup-eval-${GITHUB_RUN_ID}.sh"               -y --profile minimal --no-modify-path --default-toolchain 1.97.1
+          export CARGO_HOME RUSTUP_HOME
+          export PATH="$CARGO_HOME/bin:$PATH"
+          rustup component add rustfmt
+
+          .venv/bin/python scripts/patch_diskann_waypoint_cache.py third_party/DiskANN-region-eval
+          (cd third_party/DiskANN-region-eval && cargo fmt --all)
+          git -C third_party/DiskANN-region-eval diff --check
+          (cd third_party/DiskANN-region-eval &&             cargo build --release --locked -p diskann-benchmark --features disk-index)             2>&1 | tee artifacts/region-count-ablation/eval-build.log
+
+          echo "EVAL_BIN=$PWD/third_party/DiskANN-region-eval/target/release/diskann-benchmark"             >> "$GITHUB_ENV"
+
+      - name: Evaluate heldout region-count curve
+        run: |
+          set -euxo pipefail
+          work="$RUNNER_TEMP/region-ablation-eval-${GITHUB_RUN_ID}"
+          mkdir -p "$work" artifacts/region-count-ablation/results
+
+          .venv/bin/python scripts/qualify_region_count_ablation.py             --binary "$EVAL_BIN"             --queries "$QUERIES"             --gt "$GT"             --index-prefix "$INDEX_PREFIX"             --router-root "$ROUTER_ROOT"             --cache-root "$CACHE_ROOT"             --work "$work"             --out "$PWD/artifacts/region-count-ablation/results"             --regions "1,64,128,256,512,1024,2048"             --train-rows 5000             --reps 3             2>&1 | tee artifacts/region-count-ablation/eval.log
+
+          rm -rf "$work"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: region-count-ablation-${{ github.run_id }}
+          path: artifacts/region-count-ablation/
+          retention-days: 30
+
+      - name: Clean scratch
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/region-trace-cargo-${GITHUB_RUN_ID}"                  "$RUNNER_TEMP/region-trace-rustup-${GITHUB_RUN_ID}"                  "$RUNNER_TEMP/region-eval-cargo-${GITHUB_RUN_ID}"                  "$RUNNER_TEMP/region-eval-rustup-${GITHUB_RUN_ID}"
