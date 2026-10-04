@@ -144,6 +144,7 @@ jobs:
 
           cmake -S third_party/starling -B third_party/starling/build \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             2>&1 | tee artifacts/memgraph-baseline/starling-cmake.log
           cmake --build third_party/starling/build \
             --target build_memory_index search_memory_index -j4 \
