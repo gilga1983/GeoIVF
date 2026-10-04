@@ -1,7 +1,5 @@
 name: Paper Catapult SSD smoke
 on:
-  push:
-    branches: [experiment/catapult-ssd-paper]
   workflow_dispatch:
 permissions:
   contents: read
