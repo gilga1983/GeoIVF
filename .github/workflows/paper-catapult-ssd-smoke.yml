@@ -46,6 +46,7 @@ jobs:
               -y --profile minimal --no-modify-path --default-toolchain 1.97.1
           export CARGO_HOME RUSTUP_HOME
           export PATH="$CARGO_HOME/bin:$PATH"
+          rustup component add rustfmt
 
           .venv/bin/python scripts/patch_diskann_paper_catapult.py third_party/DiskANN-paper
           (cd third_party/DiskANN-paper && cargo fmt --all)
