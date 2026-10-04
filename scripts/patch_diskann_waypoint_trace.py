@@ -174,25 +174,22 @@ def patch_benchmark_trace(path: Path) -> None:
         "allocate trace vectors",
     )
 
-    # Current paper-Catapult benchmark has this zip shape.
     s = once(
         s,
         """            .zip(statistics_vec.par_iter_mut())
-            .zip(result_counts.par_iter_mut())
-            .zip(seed_rows.par_iter());
+            .zip(result_counts.par_iter_mut());
 
         zipped.for_each_in_pool(
             pool.as_ref(),
-            |((((((q, vf), id_chunk), dist_chunk), stats), rc), seeds)| {
+            |(((((q, vf), id_chunk), dist_chunk), stats), rc)| {
 """,
         """            .zip(statistics_vec.par_iter_mut())
             .zip(trace_vec.par_iter_mut())
-            .zip(result_counts.par_iter_mut())
-            .zip(seed_rows.par_iter());
+            .zip(result_counts.par_iter_mut());
 
         zipped.for_each_in_pool(
             pool.as_ref(),
-            |(((((((q, vf), id_chunk), dist_chunk), stats), trace_out), rc), seeds)| {
+            |((((((q, vf), id_chunk), dist_chunk), stats), trace_out), rc)| {
 """,
         "zip per-query trace output",
     )
@@ -205,7 +202,7 @@ def patch_benchmark_trace(path: Path) -> None:
 """,
         """                    Ok(mut search_result) => {
                         *trace_out = std::mem::take(&mut search_result.stats.trace_ids);
-                        *stats = search_result.stats.query_statistics;
+                        *stats = search_result.stats.query_statistics.clone();
                         let base_count = (search_result.stats.result_count as usize)
 """,
         "capture trace output",
