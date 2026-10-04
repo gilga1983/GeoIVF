@@ -69,12 +69,13 @@ def patch_provider_trace(path: Path) -> None:
     )
 
     old_graph = """            SearchMode::Graph { filter } => {
-                let strategy = self.search_strategy(
+                let strategy = self.search_strategy_with_start_points(
                     &io_tracker,
                     filter
                         .as_deref()
                         .map_or(PostprocessStrategy::AcceptAll, PostprocessStrategy::Apply),
                     cache_indexed_vectors,
+                    start_points,
                 );
                 let knn_search = Knn::new(l, beam_width)
                     .map_err(|e| diskann_error!(ErrorKind::IndexError, e))?;
@@ -88,12 +89,13 @@ def patch_provider_trace(path: Path) -> None:
             }
 """
     new_graph = """            SearchMode::Graph { filter } => {
-                let strategy = self.search_strategy(
+                let strategy = self.search_strategy_with_start_points(
                     &io_tracker,
                     filter
                         .as_deref()
                         .map_or(PostprocessStrategy::AcceptAll, PostprocessStrategy::Apply),
                     cache_indexed_vectors,
+                    start_points,
                 );
                 let knn_search = Knn::new(l, beam_width)
                     .map_err(|e| diskann_error!(ErrorKind::IndexError, e))?;
