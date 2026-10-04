@@ -25,6 +25,70 @@ from patch_diskann_paper_catapult import (
 from patch_diskann_start_points import once, patch_provider
 
 
+def patch_provider_waypoint(path: Path) -> None:
+    s = path.read_text()
+
+    old = """    fn pq_distances<F>(&mut self, ids: &[u32], mut f: F) -> ANNResult<()>
+    where
+        F: FnMut(f32, u32),
+    {
+        let pq_scratch = &mut self.scratch.pq_scratch;
+        compute_pq_distance(
+            ids,
+            self.provider.pq_data.get_num_chunks(),
+            &pq_scratch.aligned_pqtable_dist_scratch,
+            self.provider.pq_data.pq_compressed_data().as_slice(),
+            &mut pq_scratch.aligned_pq_coord_scratch,
+            &mut pq_scratch.aligned_dist_scratch,
+        )?;
+
+        for (i, id) in ids.iter().enumerate() {
+            let distance = self.scratch.pq_scratch.aligned_dist_scratch[i];
+            f(distance, *id);
+        }
+
+        Ok(())
+    }
+"""
+    new = """    fn pq_distances<F>(&mut self, ids: &[u32], mut f: F) -> ANNResult<()>
+    where
+        F: FnMut(f32, u32),
+    {
+        // Learned waypoint regions may contain more start IDs than the fixed PQ
+        // scratch can score in one call. Score them in scratch-sized chunks;
+        // this changes only batching, not the candidate set or search budget.
+        let max_vectors = self.scratch.pq_scratch.max_vectors();
+        if max_vectors == 0 {
+            return Err(diskann_error!(
+                ErrorKind::IndexError,
+                "pq scratch must support at least one vector",
+            ));
+        }
+
+        for chunk in ids.chunks(max_vectors) {
+            let pq_scratch = &mut self.scratch.pq_scratch;
+            compute_pq_distance(
+                chunk,
+                self.provider.pq_data.get_num_chunks(),
+                &pq_scratch.aligned_pqtable_dist_scratch,
+                self.provider.pq_data.pq_compressed_data().as_slice(),
+                &mut pq_scratch.aligned_pq_coord_scratch,
+                &mut pq_scratch.aligned_dist_scratch,
+            )?;
+
+            for (i, id) in chunk.iter().enumerate() {
+                let distance = self.scratch.pq_scratch.aligned_dist_scratch[i];
+                f(distance, *id);
+            }
+        }
+
+        Ok(())
+    }
+"""
+    s = once(s, old, new, "chunk arbitrary waypoint starts in PQ scorer")
+    path.write_text(s)
+
+
 def patch_waypoint_benchmark(path: Path) -> None:
     s = path.read_text()
 
@@ -262,6 +326,7 @@ def main() -> None:
 
     patch_provider(provider)
     patch_provider_medoid(provider)
+    patch_provider_waypoint(provider)
     patch_catapult_benchmark(benchmark)
     patch_waypoint_benchmark(benchmark)
     print(f"patched DiskANN {PINNED} with learned waypoint-cache starts")
