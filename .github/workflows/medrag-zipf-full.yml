@@ -86,7 +86,7 @@ jobs:
             2>&1 | tee artifacts/medrag-zipf-full/generation.log
 
           test "$(wc -l < "$out")" -eq 10000
-          cp "$out.manifest.json" artifacts/medrag-zipf-full/paraphrases.manifest.json
+          cp "$ZIPF_CACHE/paraphrases.manifest.json" artifacts/medrag-zipf-full/paraphrases.manifest.json
 
       - name: Validate full MedCPT query geometry
         run: |
