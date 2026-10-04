@@ -12,6 +12,11 @@ Paper policy:
 Enable with DISKANN_PAPER_CATAPULT=1. Optional environment:
 DISKANN_CATAPULT_HASHES (default 8), DISKANN_CATAPULT_CAPACITY (40),
 DISKANN_CATAPULT_SEED (0).
+
+Optional static PubMed/MedCPT portal routing:
+DISKANN_IP_PORTAL_ROUTER_FILE and DISKANN_IP_PORTAL_NPROBE (default 32).
+When both portal and Catapult are enabled, the portal replaces the medoid as
+the base start and Catapult contributes its learned bucket destinations.
 """
 from __future__ import annotations
 
@@ -171,6 +176,143 @@ impl PaperCatapultConfig {
     }
 }
 
+#[derive(Debug)]
+struct IpPortalRouter {
+    nlist: usize,
+    dim: usize,
+    centers: Vec<f32>,
+    portal_ids: Vec<u32>,
+    portal_vectors: Vec<f32>,
+}
+
+impl IpPortalRouter {
+    fn load(path: &std::path::Path, expected_dim: usize) -> anyhow::Result<Self> {
+        let raw = std::fs::read(path)?;
+        const MAGIC: &[u8; 8] = b"GIPIP001";
+        if raw.len() < 16 || &raw[0..8] != MAGIC {
+            anyhow::bail!("invalid inner-product portal-router header");
+        }
+        let nlist = u32::from_le_bytes(raw[8..12].try_into()?) as usize;
+        let dim = u32::from_le_bytes(raw[12..16].try_into()?) as usize;
+        if nlist == 0 || dim == 0 || dim != expected_dim {
+            anyhow::bail!(
+                "portal-router shape mismatch: {}x{}, query dim {}",
+                nlist,
+                dim,
+                expected_dim
+            );
+        }
+
+        let vector_floats = nlist
+            .checked_mul(dim)
+            .ok_or_else(|| anyhow::anyhow!("portal-router shape overflow"))?;
+        let vector_bytes = vector_floats
+            .checked_mul(4)
+            .ok_or_else(|| anyhow::anyhow!("portal-router byte-size overflow"))?;
+        let id_bytes = nlist
+            .checked_mul(4)
+            .ok_or_else(|| anyhow::anyhow!("portal-router byte-size overflow"))?;
+        let expected = 16usize
+            .checked_add(vector_bytes)
+            .and_then(|n| n.checked_add(id_bytes))
+            .and_then(|n| n.checked_add(vector_bytes))
+            .ok_or_else(|| anyhow::anyhow!("portal-router byte-size overflow"))?;
+        if raw.len() != expected {
+            anyhow::bail!(
+                "portal-router byte length mismatch: got {}, expected {}",
+                raw.len(),
+                expected
+            );
+        }
+
+        let mut offset = 16usize;
+        let read_f32_vec =
+            |raw: &[u8], offset: &mut usize, count: usize| -> anyhow::Result<Vec<f32>> {
+                let mut out = Vec::with_capacity(count);
+                for _ in 0..count {
+                    let x = f32::from_le_bytes(raw[*offset..*offset + 4].try_into()?);
+                    *offset += 4;
+                    if !x.is_finite() {
+                        anyhow::bail!("portal-router contains a nonfinite coordinate");
+                    }
+                    out.push(x);
+                }
+                Ok(out)
+            };
+
+        let centers = read_f32_vec(&raw, &mut offset, vector_floats)?;
+        let mut portal_ids = Vec::with_capacity(nlist);
+        for _ in 0..nlist {
+            portal_ids.push(u32::from_le_bytes(raw[offset..offset + 4].try_into()?));
+            offset += 4;
+        }
+        let portal_vectors = read_f32_vec(&raw, &mut offset, vector_floats)?;
+        if offset != raw.len() {
+            anyhow::bail!("portal-router parse did not consume all bytes");
+        }
+
+        Ok(Self {
+            nlist,
+            dim,
+            centers,
+            portal_ids,
+            portal_vectors,
+        })
+    }
+
+    #[inline]
+    fn dot(a: &[f32], b: &[f32]) -> f32 {
+        a.iter().zip(b.iter()).map(|(x, y)| *x * *y).sum()
+    }
+
+    fn route<T: VectorRepr>(&self, query: &[T], nprobe: usize) -> anyhow::Result<u32> {
+        let q = T::as_f32(query)
+            .map_err(|e| anyhow::anyhow!("query conversion for portal routing failed: {:?}", e))?;
+        let q: &[f32] = &q;
+        if q.len() != self.dim {
+            anyhow::bail!(
+                "portal-router query dimension mismatch: got {}, expected {}",
+                q.len(),
+                self.dim
+            );
+        }
+        let k = nprobe.min(self.nlist);
+        if k == 0 || k > 32 {
+            anyhow::bail!("portal-router nprobe must be in 1..=32");
+        }
+
+        // Keep the k highest-inner-product coarse cells.
+        let mut best_storage = [(f32::NEG_INFINITY, usize::MAX); 32];
+        let best = &mut best_storage[..k];
+        for cell in 0..self.nlist {
+            let base = cell * self.dim;
+            let score = Self::dot(q, &self.centers[base..base + self.dim]);
+            if score <= best[k - 1].0 {
+                continue;
+            }
+            let mut pos = k - 1;
+            while pos > 0 && score > best[pos - 1].0 {
+                best[pos] = best[pos - 1];
+                pos -= 1;
+            }
+            best[pos] = (score, cell);
+        }
+
+        // Among portals from shortlisted cells, choose maximum query inner product.
+        let mut winner = best[0].1;
+        let mut winner_score = f32::NEG_INFINITY;
+        for &(_, cell) in best.iter() {
+            let base = cell * self.dim;
+            let score = Self::dot(q, &self.portal_vectors[base..base + self.dim]);
+            if score > winner_score {
+                winner_score = score;
+                winner = cell;
+            }
+        }
+        Ok(self.portal_ids[winner])
+    }
+}
+
 struct PaperCatapult {
     dim: usize,
     hashes: usize,
@@ -244,7 +386,11 @@ impl PaperCatapult {
         Ok(code)
     }
 
-    fn starting_points<T: VectorRepr>(&self, query: &[T]) -> anyhow::Result<(usize, Vec<u32>)> {
+    fn starting_points<T: VectorRepr>(
+        &self,
+        query: &[T],
+        base_start: u32,
+    ) -> anyhow::Result<(usize, Vec<u32>)> {
         let bucket = self.bucket(query)?;
         let guard = self.buckets[bucket]
             .read()
@@ -258,9 +404,9 @@ impl PaperCatapult {
             .fetch_add(guard.len() as u64, Ordering::Relaxed);
 
         let mut starts = Vec::with_capacity(guard.len() + 1);
-        starts.push(self.medoid);
+        starts.push(base_start);
         for &id in guard.iter() {
-            if id != self.medoid && !starts.contains(&id) {
+            if id != base_start && !starts.contains(&id) {
                 starts.push(id);
             }
         }
@@ -311,6 +457,24 @@ impl PaperCatapult {
 """,
         """    let pool = create_thread_pool(search_params.num_threads)?;
     let catapult_config = PaperCatapultConfig::from_env()?;
+
+    let portal_router = match std::env::var_os("DISKANN_IP_PORTAL_ROUTER_FILE") {
+        Some(path) => Some(IpPortalRouter::load(
+            std::path::Path::new(&path),
+            queries.ncols(),
+        )?),
+        None => None,
+    };
+    let portal_nprobe = match portal_router.as_ref() {
+        Some(_) => std::env::var("DISKANN_IP_PORTAL_NPROBE")
+            .unwrap_or_else(|_| "32".to_string())
+            .parse::<usize>()?,
+        None => 0,
+    };
+    if portal_router.is_some() && !(1..=32).contains(&portal_nprobe) {
+        anyhow::bail!("DISKANN_IP_PORTAL_NPROBE must be in 1..=32");
+    }
+
     let mut search_results_per_l = Vec::with_capacity(search_params.search_list.len());
 """,
         "catapult config load",
@@ -345,11 +509,11 @@ impl PaperCatapult {
                     mode,
                 ) {
 """
-    new_call = r'''                let routed = match catapult.as_ref() {
-                    Some(c) => match c.starting_points::<T>(q) {
-                        Ok(v) => Some(v),
+    new_call = r'''                let portal_seed = match portal_router.as_ref() {
+                    Some(router) => match router.route::<T>(q, portal_nprobe) {
+                        Ok(id) => Some(id),
                         Err(e) => {
-                            eprintln!("Catapult routing failed for query: {:?}", e);
+                            eprintln!("Portal routing failed for query: {:?}", e);
                             *rc = 0;
                             id_chunk.fill(0);
                             dist_chunk.fill(0.0);
@@ -358,6 +522,26 @@ impl PaperCatapult {
                         }
                     },
                     None => None,
+                };
+
+                // Four clean arms emerge from the two optional mechanisms:
+                // medoid; medoid+Catapult; portal; portal+Catapult.
+                let routed: Option<(Option<usize>, Vec<u32>)> = match catapult.as_ref() {
+                    Some(c) => {
+                        let base_start = portal_seed.unwrap_or(c.medoid);
+                        match c.starting_points::<T>(q, base_start) {
+                            Ok((bucket, starts)) => Some((Some(bucket), starts)),
+                            Err(e) => {
+                                eprintln!("Catapult routing failed for query: {:?}", e);
+                                *rc = 0;
+                                id_chunk.fill(0);
+                                dist_chunk.fill(0.0);
+                                has_any_search_failed.store(true, Ordering::Release);
+                                return;
+                            }
+                        }
+                    }
+                    None => portal_seed.map(|id| (None, vec![id])),
                 };
 
                 let result = match routed.as_ref() {
@@ -398,7 +582,7 @@ impl PaperCatapult {
                             dist_chunk[i] = result_item.distance;
                         }
 
-                        if let (Some(c), Some((bucket, _))) = (catapult.as_ref(), routed.as_ref()) {
+                        if let (Some(c), Some((Some(bucket), _))) = (catapult.as_ref(), routed.as_ref()) {
                             if base_count > 0 {
                                 if let Err(e) = c.insert(*bucket, id_chunk[0]) {
                                     eprintln!("Catapult update failed: {:?}", e);
