@@ -4,6 +4,7 @@ on:
     branches: [experiment/catapult-ssd-paper]
     paths:
       - '.github/workflows/medrag-zipf-catapult-paired.yml'
+      - 'scripts/qualify_medrag_zipf_catapult_paired.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -100,6 +101,8 @@ jobs:
             --work "$work" \
             --out "$PWD/artifacts/medrag-zipf-catapult-paired/results" \
             --k-values "1,2,4,8,16" \
+            --cycles 5 \
+            --cooldown-seconds 0.75 \
             2>&1 | tee artifacts/medrag-zipf-catapult-paired/paired.log
 
           rm -rf "$work"
