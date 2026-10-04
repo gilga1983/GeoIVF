@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/frozen-catapult-heldout.yml'
       - 'scripts/patch_diskann_catapult_snapshot.py'
+      - 'scripts/patch_diskann_waypoint_cache.py'
       - 'scripts/qualify_frozen_catapult_heldout.py'
   workflow_dispatch:
 permissions:
