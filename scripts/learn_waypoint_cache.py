@@ -16,7 +16,7 @@ import argparse
 import heapq
 import json
 import struct
-from collections import defaultdict
+from collections import defaultdict, deque
 from pathlib import Path
 
 import numpy as np
@@ -214,6 +214,88 @@ def learn(records, cells, budget: int, min_support: int):
     return selected_by_cell, summary
 
 
+
+def uniform_endpoint_lru(records, cells, per_cell: int):
+    qs = [deque() for _ in range(NLIST)]
+    for qi, rec in enumerate(records):
+        rid = int(rec["result_id"])
+        if rid == 0xFFFFFFFF:
+            continue
+        cell = int(cells[qi])
+        q = qs[cell]
+        try:
+            q.remove(rid)
+        except ValueError:
+            pass
+        q.append(rid)
+        while len(q) > per_cell:
+            q.popleft()
+    selected = [list(q) for q in qs]
+    counts = np.asarray([len(x) for x in selected], dtype=np.int64)
+    return selected, {
+        "policy": f"per-cell LRU of final endpoints, capacity={per_cell}",
+        "selected_entries": int(counts.sum()),
+        "selected_nonempty_cells": int(np.count_nonzero(counts)),
+        "allocation": {
+            "min": int(counts.min()),
+            "median": float(np.median(counts)),
+            "mean": float(counts.mean()),
+            "p95": float(np.quantile(counts, 0.95)),
+            "max": int(counts.max()),
+        },
+    }
+
+
+def learn_endpoints(records, cells, budget: int, min_support: int):
+    occ = defaultdict(list)
+    support = defaultdict(int)
+    for qi, rec in enumerate(records):
+        rid = int(rec["result_id"])
+        if rid == 0xFFFFFFFF:
+            continue
+        cell = int(cells[qi])
+        benefit = max(1, len(rec["ids"]) - 1)
+        key = (cell, rid)
+        occ[key].append((qi, benefit))
+        support[key] += 1
+
+    eligible = {k: v for k, v in occ.items() if support[k] >= min_support}
+    ranked = sorted(
+        eligible,
+        key=lambda k: (
+            -sum(b for _, b in eligible[k]),
+            -support[k],
+            k[0],
+            k[1],
+        ),
+    )[:budget]
+    selected = [[] for _ in range(NLIST)]
+    for cell, vid in ranked:
+        selected[cell].append(vid)
+    counts = np.asarray([len(x) for x in selected], dtype=np.int64)
+    demand = np.bincount(cells.astype(np.int64), minlength=NLIST)
+    top = np.argsort(-counts)[:20]
+    return selected, {
+        "policy": "global final-endpoint allocation by observed prefix-I/O-weighted demand",
+        "budget": budget,
+        "min_support": min_support,
+        "eligible_candidates": len(eligible),
+        "selected_entries": len(ranked),
+        "selected_nonempty_cells": int(np.count_nonzero(counts)),
+        "allocation": {
+            "min": int(counts.min()),
+            "median": float(np.median(counts)),
+            "mean": float(counts.mean()),
+            "p95": float(np.quantile(counts, 0.95)),
+            "max": int(counts.max()),
+            "top_cells": [
+                {"cell": int(x), "entries": int(counts[x]), "training_queries": int(demand[x])}
+                for x in top if counts[x] > 0
+            ],
+        },
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--queries", type=Path, required=True)
@@ -261,7 +343,27 @@ def main():
         "variants": {},
     }
 
+    uniform_cap = args.budget // NLIST
+    uniform_selected, uniform_summary = uniform_endpoint_lru(records, cells, uniform_cap)
+    uniform_path = args.out_dir / f"uniform-endpoint-lru{uniform_cap}.bin"
+    _, uniform_ids = write_cache(uniform_path, uniform_selected)
+    uniform_summary["cache_file"] = uniform_path.name
+    uniform_summary["cache_bytes"] = uniform_path.stat().st_size
+    uniform_summary["cache_ids"] = int(len(uniform_ids))
+    manifest["variants"][f"uniform-endpoint-lru{uniform_cap}"] = uniform_summary
+
     for support in supports:
+        endpoint_selected, endpoint_summary = learn_endpoints(
+            records, cells, args.budget, support
+        )
+        endpoint_name = f"global-endpoint-s{support}"
+        endpoint_path = args.out_dir / f"{endpoint_name}.bin"
+        _, endpoint_ids = write_cache(endpoint_path, endpoint_selected)
+        endpoint_summary["cache_file"] = endpoint_path.name
+        endpoint_summary["cache_bytes"] = endpoint_path.stat().st_size
+        endpoint_summary["cache_ids"] = int(len(endpoint_ids))
+        manifest["variants"][endpoint_name] = endpoint_summary
+
         selected_by_cell, summary = learn(records, cells, args.budget, support)
         name = f"waypoint-s{support}"
         path = args.out_dir / f"{name}.bin"
