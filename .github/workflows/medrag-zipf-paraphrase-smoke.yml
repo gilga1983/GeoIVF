@@ -1,0 +1,107 @@
+name: MedRAG Zipf paraphrase smoke
+on:
+  push:
+    branches: [experiment/catapult-ssd-paper]
+    paths:
+      - '.github/workflows/medrag-zipf-paraphrase-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-medrag-zipf-paraphrase-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    env:
+      HF_HOME: /home/gilga/.cache/huggingface
+      TOKENIZERS_PARALLELISM: 'false'
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prepare CUDA generation environment
+        run: |
+          set -euxo pipefail
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cu128
+          .venv/bin/pip install transformers==4.49.0 accelerate==1.4.0 safetensors==0.5.3 numpy==2.2.6
+          mkdir -p artifacts/medrag-zipf-paraphrase-smoke
+
+          .venv/bin/python - <<'PY' | tee artifacts/medrag-zipf-paraphrase-smoke/cuda.txt
+          import torch
+          print("torch", torch.__version__)
+          print("cuda_available", torch.cuda.is_available())
+          print("cuda_version", torch.version.cuda)
+          if not torch.cuda.is_available():
+              raise SystemExit("CUDA unavailable")
+          print("gpu", torch.cuda.get_device_name(0))
+          print("capability", torch.cuda.get_device_capability(0))
+          print("memory_gib", torch.cuda.get_device_properties(0).total_memory/(1<<30))
+          PY
+
+      - name: Reconstruct identity stream
+        run: |
+          set -euxo pipefail
+          src="$RUNNER_TEMP/mirage-pubmedqa-${GITHUB_RUN_ID}.json"
+          curl -fsSL --retry 5 \
+            "https://raw.githubusercontent.com/gzxiong/MIRAGE/392943af99cd94cafd50a0de2e7fca24bbf65494/rawdata/pubmedqa/data/test_set.json" \
+            -o "$src"
+          identity="$RUNNER_TEMP/medrag-zipf-identity-${GITHUB_RUN_ID}"
+          mkdir -p "$identity"
+          .venv/bin/python scripts/prepare_medrag_zipf_identity.py \
+            --pubmedqa "$src" --out "$identity"
+          echo "IDENTITY_DIR=$identity" >> "$GITHUB_ENV"
+          cp "$identity/identity-manifest.json" artifacts/medrag-zipf-paraphrase-smoke/
+          rm -f "$src"
+
+      - name: Generate 512 reconstructed paraphrases
+        run: |
+          set -euxo pipefail
+          out="artifacts/medrag-zipf-paraphrase-smoke/paraphrases.jsonl"
+          nvidia-smi
+          .venv/bin/python scripts/generate_medrag_zipf_paraphrases.py \
+            --stream "$IDENTITY_DIR/stream.jsonl" \
+            --out "$out" \
+            --model "Qwen/Qwen2.5-3B-Instruct" \
+            --revision main \
+            --max-rows 512 \
+            --batch-size 12 \
+            --seed 424242 \
+            2>&1 | tee artifacts/medrag-zipf-paraphrase-smoke/generation.log
+          nvidia-smi
+
+      - name: Measure MedCPT semantic geometry
+        run: |
+          set -euxo pipefail
+          .venv/bin/python scripts/analyze_medrag_zipf_paraphrases.py \
+            --paraphrases artifacts/medrag-zipf-paraphrase-smoke/paraphrases.jsonl \
+            --base "$IDENTITY_DIR/base_questions.jsonl" \
+            --out artifacts/medrag-zipf-paraphrase-smoke/quality.json \
+            --model "ncbi/MedCPT-Query-Encoder" \
+            2>&1 | tee artifacts/medrag-zipf-paraphrase-smoke/quality.log
+          git rev-parse HEAD > artifacts/medrag-zipf-paraphrase-smoke/geoivf-commit.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: medrag-zipf-paraphrase-smoke-${{ github.run_id }}
+          path: artifacts/medrag-zipf-paraphrase-smoke/
+          retention-days: 30
+
+      - name: Clean scratch
+        if: always()
+        run: |
+          rm -rf "$IDENTITY_DIR"
