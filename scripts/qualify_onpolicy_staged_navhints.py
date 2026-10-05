@@ -30,7 +30,8 @@ def main():
         "ivf-stage-offpolicy", "ivf-stage-onpolicy", "work", "out",
     ):
         ap.add_argument("--" + name, type=Path, required=True)
-    ap.add_argument("--stage-hops", type=int, required=True)\n    ap.add_argument("--reps", type=int, default=3)
+    ap.add_argument("--stage-hops", type=int, required=True)
+    ap.add_argument("--reps", type=int, default=3)
     args = ap.parse_args()
 
     for name in (
