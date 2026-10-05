@@ -13,6 +13,7 @@ PQ representation already resident in DiskANN.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import struct
 from pathlib import Path
@@ -49,6 +50,14 @@ def load_fbin_memmap(path: Path):
     return mm, rows, dim
 
 
+def sha256_file(path: Path, chunk_bytes: int = 1 << 20) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        while chunk := f.read(chunk_bytes):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def normalize_rows(x: np.ndarray) -> np.ndarray:
     norms = np.linalg.norm(x, axis=1, keepdims=True)
     if np.any(norms <= 0):
@@ -65,9 +74,19 @@ def assign_batched(x: np.ndarray, centers: np.ndarray, batch: int) -> np.ndarray
     return out
 
 
-def lloyd_spherical(x: np.ndarray, k: int, iterations: int, batch: int, seed: int):
+def lloyd_spherical(
+    x: np.ndarray,
+    k: int,
+    iterations: int,
+    batch: int,
+    seed: int,
+) -> tuple[np.ndarray, np.ndarray]:
     if not 1 <= k <= len(x):
         raise ValueError("invalid number of IVF lists")
+    if iterations <= 0:
+        raise ValueError("iterations must be positive")
+    if batch <= 0:
+        raise ValueError("batch size must be positive")
     rng = np.random.default_rng(seed)
     init = rng.choice(len(x), size=k, replace=False)
     centers = x[init].copy()
@@ -75,7 +94,6 @@ def lloyd_spherical(x: np.ndarray, k: int, iterations: int, batch: int, seed: in
     for _ in range(iterations):
         assign = assign_batched(x, centers, batch)
         new_centers = np.empty_like(centers)
-        counts = np.bincount(assign, minlength=k)
         for c in range(k):
             members = x[assign == c]
             if len(members) == 0:
@@ -152,7 +170,19 @@ def main():
     args.out = args.out.resolve()
     args.out.parent.mkdir(parents=True, exist_ok=True)
 
+    if args.nlist <= 0:
+        raise ValueError("--nlist must be positive")
+    if args.iterations <= 0:
+        raise ValueError("--iterations must be positive")
+    if args.batch <= 0:
+        raise ValueError("--batch must be positive")
+
     hint_ids = load_start_ids(args.hints)
+    if args.nlist > len(hint_ids):
+        raise ValueError(
+            f"--nlist={args.nlist} exceeds {len(hint_ids)} learned hints"
+        )
+
     base, nbase, dim = load_fbin_memmap(args.base)
     if int(hint_ids.max()) >= nbase:
         raise ValueError("hint ID outside base dataset")
@@ -178,7 +208,10 @@ def main():
     sizes = np.diff(offsets.astype(np.int64))
     manifest = {
         "format": "GHIVF001",
+        "builder": "ID-only spherical k-means with real database medoids",
         "metric_used_for_partition": "cosine/spherical offline; runtime uses DiskANN resident PQ metric",
+        "source_hints_file": args.hints.name,
+        "source_hints_sha256": sha256_file(args.hints),
         "base_rows": nbase,
         "dimension": dim,
         "landmark_ids": int(len(hint_ids)),
