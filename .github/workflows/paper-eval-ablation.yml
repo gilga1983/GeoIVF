@@ -1,7 +1,7 @@
 name: NavHints paper ablations
 on:
   push:
-    branches: [experiment/paper-eval-ablation]
+    branches: [experiment/paper-training-low]
     paths:
       - '.github/workflows/paper-eval-ablation.yml'
       - 'scripts/run_paper_ablation_ci.sh'
