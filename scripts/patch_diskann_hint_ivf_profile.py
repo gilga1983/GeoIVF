@@ -98,8 +98,12 @@ def patch_provider_profile(path: Path) -> None:
 
     old = """                coarse[pos] = (distance, cell, id);
             })?;
+            IOTracker::add_time(
+                &self.io_tracker.routing_coarse_time_us,
+                coarse_timer.elapsed().as_micros() as u64,
+            );
 
-            // The reference path fully sorts all fine candidates and takes the
+            // Preserve the same canonical fine winner, but gather selected
 """
     new = """                coarse[pos] = (distance, cell, id);
             })?;
