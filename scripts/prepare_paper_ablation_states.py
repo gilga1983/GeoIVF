@@ -107,7 +107,7 @@ def main():
     # Training-size sweep. Fixed capacities are reported only when saturated.
     # This prevents training amount from silently changing memory capacity.
     histories = (250, 500, 1000, 2500, 5000)
-    budgets = (4096, 16000)
+    budgets = (3000, 4096, 16000)
     train_eligibility = {}
     for h in histories:
         hw = args.work / f"train-h{h}"
