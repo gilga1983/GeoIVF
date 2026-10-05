@@ -4,6 +4,7 @@ set -euxo pipefail
 DISKANN_REV=fcf90534174cf29c78c9f13b4cccf1fcabff85f5
 ART="$PWD/artifacts/onpolicy-staged-navhints"
 ROOT="$HOME/.cache/geoivf/onpolicy-staged-navhints-v1"
+STAGE=3
 
 python -m venv .venv
 .venv/bin/pip install --upgrade pip
@@ -74,7 +75,7 @@ phase "learn fixed start and off-policy vocabularies"
   --trace "$MEDOID_TRACE" \
   --out-dir "$OFF_LAND" \
   --budget 8000 \
-  --stages "0,8" \
+  --stages "0,$STAGE" \
   2>&1 | tee "$ART/learn-offpolicy.log"
 cp "$OFF_LAND/staged-landmarks.manifest.json" "$ART/offpolicy-landmarks.manifest.json"
 
@@ -97,13 +98,13 @@ build_ivf() {
 
 CANON_IVF="$ROOT/canonical-b16000-c512.bin"
 START_IVF="$ROOT/stage0-b8000-c256.bin"
-OFF_STAGE_IVF="$ROOT/offpolicy-stage8-b8000-c256.bin"
-ON_STAGE_IVF="$ROOT/onpolicy-stage8-b8000-c256.bin"
+OFF_STAGE_IVF="$ROOT/offpolicy-stage${STAGE}-b8000-c256.bin"
+ON_STAGE_IVF="$ROOT/onpolicy-stage${STAGE}-b8000-c256.bin"
 
 phase "build fixed directories"
 build_ivf "$CANON_LAND/landmarks-b16000.bin" "$CANON_IVF" 512 "build-16k.log"
 build_ivf "$OFF_LAND/stage0-b8000.bin" "$START_IVF" 256 "build-start8k.log"
-build_ivf "$OFF_LAND/stage8-b8000.bin" "$OFF_STAGE_IVF" 256 "build-offpolicy-stage8.log"
+build_ivf "$OFF_LAND/stage${STAGE}-b8000.bin" "$OFF_STAGE_IVF" 256 "build-offpolicy-stage${STAGE}.log"
 
 phase "install pinned Rust toolchain"
 export CARGO_HOME="$RUNNER_TEMP/onpolicy-cargo-$GITHUB_RUN_ID"
