@@ -21,15 +21,6 @@ for f in "$BASE" "$QUERIES" "$GT" "$TRACE" "$PORTALS"; do
   test -s "$f"
 done
 
-# The public 10M suite can use ~32 GiB while building its DiskANN index.
-# All self-hosted runners share the same laptop, so do not overlap our FAISS
-# QSEV build with that memory-heavy phase. The suite parent process stays
-# alive across both public datasets, making this a simple machine-local gate.
-while ps -eo args= | grep -Eq '[r]un_public_dataset_suite_ci\.sh|[r]un_public_dataset_one\.sh|[b]uild_public_diskann_index\.py'; do
-  echo "public 10M suite still active; deferring competitor state build"
-  sleep 60
-done
-
 git rev-parse HEAD > "$ART/geoivf-commit.txt"
 { uname -a; lscpu; free -h; df -h; lsblk -o NAME,TYPE,SIZE,ROTA,MOUNTPOINTS; } > "$ART/host.txt"
 
