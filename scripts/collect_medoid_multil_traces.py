@@ -151,7 +151,7 @@ def main():
 
     summary = {"queries": args.train_rows, "teacher_ls": ls, "traces": {}}
     for lval in ls:
-        path = trace_path(trace_base, lval)
+        path = trace_base if len(ls) == 1 else trace_path(trace_base, lval)
         if not path.is_file():
             raise FileNotFoundError(path)
         records = [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
