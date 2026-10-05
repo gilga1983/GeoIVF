@@ -131,14 +131,10 @@ def patch_benchmark_trace(path: Path) -> None:
 
     s = once(
         s,
-        """use std::{
-    collections::{HashSet, VecDeque},
-    fmt,
+        """use rayon::prelude::*;
 """,
-        """use std::{
-    collections::{HashSet, VecDeque},
-    fmt,
-    io::Write,
+        """use rayon::prelude::*;
+use std::io::Write;
 """,
         "trace Write import",
     )
