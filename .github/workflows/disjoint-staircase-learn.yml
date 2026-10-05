@@ -1,0 +1,31 @@
+name: NavHints disjoint staircase learner
+on:
+  push:
+    branches: [experiment/staged-navhints]
+    paths:
+      - '.github/workflows/disjoint-staircase-learn.yml'
+      - 'scripts/learn_disjoint_multistage_landmarks.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  learn:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Learn staircase
+        shell: bash
+        run: |
+          set -euxo pipefail
+          trace="$HOME/.cache/geoivf/onpolicy-staged-navhints-v1/onpolicy-trace/navhints8k-teacher-L4.jsonl"
+          stage0="$HOME/.cache/geoivf/onpolicy-staged-navhints-v1/offpolicy-landmarks/stage0-b8000.bin"
+          mkdir -p artifacts/disjoint-staircase
+          python scripts/learn_disjoint_multistage_landmarks.py             --trace "$trace" --stage0 "$stage0"             --stages "3,5,7,8" --budgets "4096,2048,1024,1024"             --out-dir artifacts/disjoint-staircase
+      - uses: actions/upload-artifact@v4
+        with:
+          name: disjoint-staircase-${{ github.run_id }}
+          path: artifacts/disjoint-staircase/
+          retention-days: 30
