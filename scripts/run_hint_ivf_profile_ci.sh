@@ -24,7 +24,7 @@ mkdir -p "$LANDMARK_DIR"
 git rev-parse HEAD > artifacts/hint-ivf-profile/geoivf-commit.txt
 { uname -a; lscpu; free -h; df -h; } > artifacts/hint-ivf-profile/host.txt
 
-.venv/bin/python -m py_compile   scripts/learn_global_navigation_landmarks.py   scripts/build_hint_ivf.py   scripts/patch_diskann_hint_ivf_profile.py   scripts/qualify_hint_ivf_profile.py
+.venv/bin/python -m py_compile   scripts/learn_global_navigation_landmarks.py   scripts/build_hint_ivf.py   scripts/patch_diskann_hint_ivf_packed_profile.py   scripts/qualify_hint_ivf_profile.py
 
 .venv/bin/python scripts/learn_global_navigation_landmarks.py   --trace "$TRACE"   --portals "$PORTALS"   --out-dir "$LANDMARK_DIR"   --budgets "16000"   2>&1 | tee artifacts/hint-ivf-profile/learn.log
 
@@ -41,7 +41,7 @@ rustup component add rustfmt
 
 git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-hint-profile
 git -C third_party/DiskANN-hint-profile checkout --detach "$DISKANN_REV"
-.venv/bin/python scripts/patch_diskann_hint_ivf_profile.py third_party/DiskANN-hint-profile
+.venv/bin/python scripts/patch_diskann_hint_ivf_packed_profile.py third_party/DiskANN-hint-profile
 (
   cd third_party/DiskANN-hint-profile
   cargo fmt --all
