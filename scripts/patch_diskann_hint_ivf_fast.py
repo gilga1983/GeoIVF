@@ -410,6 +410,14 @@ def patch_benchmark_hint_ivf_fast(path: Path) -> None:
         if hint_ivf_nprobe == 0 || hint_ivf_nprobe > index.medoid_ids.len() || hint_ivf_nprobe > 64 {
             anyhow::bail!("DISKANN_HINT_IVF_NPROBE outside valid range");
         }
+        if search_params.vector_filters_file.is_some()
+            || search_params.post_processor.is_some()
+            || search_params.search_mode.is_flat_search
+        {
+            anyhow::bail!(
+                "optimized Hint-IVF currently supports only unfiltered graph search"
+            );
+        }
     }
 
     // Load the vector filters
