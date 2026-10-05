@@ -75,7 +75,7 @@ Clean five-run adjacent A/B against integrated sort:
 
 The selector knee must therefore be rediscovered after optimization.
 
-## Rung 3: pooled-batch selector (running)
+## Rung 3: pooled-batch selector
 
 Hypothesis:
 - no-sort removes allocation/sorting, but makes nprobe small PQ calls;
@@ -89,7 +89,19 @@ Implementation:
 - no fine sort, canonical minimum only;
 - no per-query heap allocation after scratch warm-up.
 
-A/B: pooled-batch vs rung-2 no-sort. Pending.
+Clean five-run adjacent A/B against rung-2 no-sort:
+- no-sort median QPS: 13,691.40
+- pooled-batch median QPS: 13,751.61 (+0.44%)
+- no-sort latency: 289.185 us
+- pooled-batch latency: 287.639 us (-0.53%)
+- no-sort CPU: 20.176 us
+- pooled-batch CPU: 19.566 us (-3.02%)
+- recall: exactly equal at 14.18%
+- I/O/query: exactly equal at 2.4194
+- hops: exactly equal at 2.4194
+- comparisons: exactly equal at 963.1766
+
+Keep pooled-batch: small but positive and no semantic downside.
 
 ## Prepared follow-ups
 
