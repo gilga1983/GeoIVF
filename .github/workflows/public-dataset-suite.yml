@@ -1,5 +1,9 @@
 name: NavHints public dataset suite
 on:
+  push:
+    branches: [experiment/public-dataset-eval]
+    paths:
+      - '.github/workflows/public-dataset-suite.yml'
   workflow_dispatch:
 
 permissions:
