@@ -1,5 +1,5 @@
 name: On-policy staged NavHints
-# retry-after-trace-import-fix
+# retry-after-trace-zip-fix
 on:
   push:
     branches: [experiment/staged-navhints]
