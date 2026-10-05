@@ -20,7 +20,7 @@ from patch_diskann_start_points import PINNED, once, patch_provider
 from patch_diskann_paper_catapult import patch_provider_medoid
 from patch_diskann_waypoint_cache import patch_provider_waypoint
 from patch_diskann_global_starts import patch_benchmark_global
-from patch_diskann_hint_ivf_fast import (
+from patch_diskann_hint_ivf_hybrid import (
     patch_provider_hint_ivf_fast,
     patch_benchmark_hint_ivf_fast,
 )
