@@ -35,7 +35,7 @@ def test_skip_ranking_uses_first_occurrence_only():
     # Repeated vertex 10 in q0 contributes only its first position (=1).
     assert by_id[10] == (2, 2)
     assert by_id[20] == (3, 2)
-    assert by_id[30] == (5, 2)
+    assert by_id[30] == (6, 2)
     assert by_id[40] == (2, 1)
     # Teacher starts are excluded.
     assert 99 not in by_id
