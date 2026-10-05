@@ -27,15 +27,15 @@ def main():
     ap = argparse.ArgumentParser()
     for name in (
         "binary", "queries", "gt", "index-prefix", "ivf-16k", "ivf-start8k",
-        "ivf-stage8k-offpolicy", "ivf-stage8k-onpolicy", "work", "out",
+        "ivf-stage-offpolicy", "ivf-stage-onpolicy", "work", "out",
     ):
         ap.add_argument("--" + name, type=Path, required=True)
-    ap.add_argument("--reps", type=int, default=3)
+    ap.add_argument("--stage-hops", type=int, required=True)\n    ap.add_argument("--reps", type=int, default=3)
     args = ap.parse_args()
 
     for name in (
         "binary", "queries", "gt", "index_prefix", "ivf_16k", "ivf_start8k",
-        "ivf_stage8k_offpolicy", "ivf_stage8k_onpolicy", "work", "out",
+        "ivf_stage_offpolicy", "ivf_stage_onpolicy", "work", "out",
     ):
         setattr(args, name, getattr(args, name).resolve())
     args.work.mkdir(parents=True, exist_ok=True)
@@ -74,17 +74,17 @@ def main():
                         kw = dict(
                             start_ivf=args.ivf_start8k,
                             start_probe=4,
-                            stage_ivf=args.ivf_stage8k_offpolicy,
+                            stage_ivf=args.ivf_stage_offpolicy,
                             stage_probe=4,
-                            stage_hops=8,
+                            stage_hops=args.stage_hops,
                         )
                     else:
                         kw = dict(
                             start_ivf=args.ivf_start8k,
                             start_probe=4,
-                            stage_ivf=args.ivf_stage8k_onpolicy,
+                            stage_ivf=args.ivf_stage_onpolicy,
                             stage_probe=4,
-                            stage_hops=8,
+                            stage_hops=args.stage_hops,
                         )
                     rr = run_one(
                         args.binary,
@@ -109,8 +109,8 @@ def main():
     memory = {
         "start16k": payload(args.ivf_16k),
         "start8k": payload(args.ivf_start8k),
-        "staged-offpolicy": payload(args.ivf_start8k) + payload(args.ivf_stage8k_offpolicy),
-        "staged-onpolicy": payload(args.ivf_start8k) + payload(args.ivf_stage8k_onpolicy),
+        "staged-offpolicy": payload(args.ivf_start8k) + payload(args.ivf_stage_offpolicy),
+        "staged-onpolicy": payload(args.ivf_start8k) + payload(args.ivf_stage_onpolicy),
     }
 
     fixed = {}
@@ -158,15 +158,15 @@ def main():
         "workload": "MedRAG-Zipf heldout 5000, exact PubMed1M IP top-16 ground truth",
         "training": {
             "start_policy": "8K stage-0 vocabulary learned from ordinary medoid-start teacher L=4 traces",
-            "offpolicy_stage8": "residual stage-8 score from ordinary medoid-start teacher L=4 traces",
-            "onpolicy_stage8": "residual stage-8 score from 8K-NavHints-start teacher L=4 traces",
-            "score": "S_8(v)=sum max(first_expansion_position-8,0)",
+            "offpolicy_stage": f"residual stage-{args.stage_hops} score from ordinary medoid-start teacher L=4 traces",
+            "onpolicy_stage": f"residual stage-{args.stage_hops} score from 8K-NavHints-start teacher L=4 traces",
+            "score": f"S_{args.stage_hops}(v)=sum max(first_expansion_position-{args.stage_hops},0)",
         },
         "arms": {
             "start16k": "16K hints at query start, 512 cells/probe 8",
             "start8k": "8K hints at query start, 256 cells/probe 4",
-            "staged-offpolicy": "8K start + off-policy 8K at hop 8",
-            "staged-onpolicy": "8K start + on-policy 8K at hop 8",
+            "staged-offpolicy": f"8K start + off-policy 8K at hop {args.stage_hops}",
+            "staged-onpolicy": f"8K start + on-policy 8K at hop {args.stage_hops}",
         },
         "memory_payload_bytes": memory,
         "evaluation": {
@@ -174,7 +174,7 @@ def main():
             "Ls": list(LS),
             "beam": BEAM,
             "threads": THREADS,
-            "repetitions": args.reps,
+            "repetitions": args.reps,\n            "stage_hops": args.stage_hops,
         },
         "summary": summary,
         "same_L_comparison": same_l,
