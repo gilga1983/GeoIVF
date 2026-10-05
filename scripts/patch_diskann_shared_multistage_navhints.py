@@ -123,7 +123,7 @@ def patch_search_hooks(root: Path) -> None:
     index.write_text(s)
 
 
-def patch_provider(path: Path) -> None:
+def patch_provider_shared(path: Path) -> None:
     s = path.read_text()
 
     s = replace_n(
@@ -692,7 +692,7 @@ def main():
     patch_benchmark_hint_ivf_fast(benchmark)
 
     patch_search_hooks(root)
-    patch_provider(provider)
+    patch_provider_shared(provider)
     patch_benchmark(benchmark)
     print(f"patched DiskANN {PINNED} with shared multistage NavHints")
 
