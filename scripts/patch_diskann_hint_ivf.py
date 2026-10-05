@@ -41,7 +41,8 @@ def patch_provider_hint_ivf(path: Path) -> None:
         hint_ids: &[u32],
         nprobe: usize,
         max_starts: usize,
-    ) -> ANNResult<Vec<u32>> {
+    ) -> ANNResult<(Vec<u32>, u32, u128, u128)> {
+        let selector_timer = Instant::now();
         if medoid_ids.is_empty()
             || offsets.len() != medoid_ids.len() + 1
             || offsets.first().copied() != Some(0)
@@ -87,6 +88,8 @@ def patch_provider_hint_ivf(path: Path) -> None:
         );
         let mut accessor =
             DiskAccessor::new(self.index.provider(), query, &strategy)?;
+        let selector_preprocess_us =
+            IOTracker::time(&io_tracker.preprocess_time_us) as u128;
 
         let mut coarse = Vec::<(f32, usize, u32)>::with_capacity(medoid_ids.len());
         let mut coarse_pos = 0usize;
@@ -128,7 +131,18 @@ def patch_provider_hint_ivf(path: Path) -> None:
                 "hint-IVF selected no start points",
             ));
         }
-        Ok(starts)
+        let selector_comparisons = medoid_ids
+            .len()
+            .checked_add(children.len())
+            .ok_or_else(|| diskann_error!(ErrorKind::IndexError, "hint-IVF comparison overflow"))?
+            as u32;
+        let selector_total_us = selector_timer.elapsed().as_micros();
+        Ok((
+            starts,
+            selector_comparisons,
+            selector_total_us,
+            selector_preprocess_us,
+        ))
     }
 
 '''
@@ -203,7 +217,10 @@ def patch_benchmark_hint_ivf(path: Path) -> None:
 
                 match result {
 """
-    new_call = """                let hint_seeds = match hint_ivf.as_ref() {
+    new_call = """                let mut hint_route_comparisons = 0u32;
+                let mut hint_route_total_us = 0u128;
+                let mut hint_route_preprocess_us = 0u128;
+                let hint_seeds = match hint_ivf.as_ref() {
                     Some(index) => match searcher.select_hint_ivf_starts(
                         q,
                         &index.medoid_ids,
@@ -212,7 +229,12 @@ def patch_benchmark_hint_ivf(path: Path) -> None:
                         hint_ivf_nprobe,
                         hint_ivf_max_starts,
                     ) {
-                        Ok(ids) => ids,
+                        Ok((ids, comparisons, total_us, preprocess_us)) => {
+                            hint_route_comparisons = comparisons;
+                            hint_route_total_us = total_us;
+                            hint_route_preprocess_us = preprocess_us;
+                            ids
+                        }
                         Err(e) => {
                             eprintln!("Hint-IVF routing failed for query: {:?}", e);
                             *rc = 0;
