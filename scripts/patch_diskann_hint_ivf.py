@@ -279,6 +279,32 @@ def patch_benchmark_hint_ivf(path: Path) -> None:
 """
     s = once(s, old_call, new_call, "hint-IVF-aware search call")
 
+    old_stats = """                match result {
+                    Ok(search_result) => {
+                        *stats = search_result.stats.query_statistics;
+"""
+    new_stats = """                match result {
+                    Ok(mut search_result) => {
+                        if hint_route_total_us > 0 {
+                            let route_cpu_us =
+                                hint_route_total_us.saturating_sub(hint_route_preprocess_us);
+                            let query_stats = &mut search_result.stats.query_statistics;
+                            query_stats.total_comparisons = query_stats
+                                .total_comparisons
+                                .saturating_add(hint_route_comparisons);
+                            query_stats.total_execution_time_us = query_stats
+                                .total_execution_time_us
+                                .saturating_add(hint_route_total_us);
+                            query_stats.query_pq_preprocess_time_us = query_stats
+                                .query_pq_preprocess_time_us
+                                .saturating_add(hint_route_preprocess_us);
+                            query_stats.cpu_time_us =
+                                query_stats.cpu_time_us.saturating_add(route_cpu_us);
+                        }
+                        *stats = search_result.stats.query_statistics;
+"""
+    s = once(s, old_stats, new_stats, "hint-IVF accounting")
+
     marker = """fn load_global_start_ids(path: &std::path::Path) -> anyhow::Result<Vec<u32>> {
 """
     helper = r'''struct HintIvfIndex {
