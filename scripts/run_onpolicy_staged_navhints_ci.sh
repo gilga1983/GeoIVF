@@ -146,20 +146,20 @@ cp "$ON_TRACE_DIR/onpolicy-trace-summary.json" "$ART/"
 sha256sum "$ON_TRACE_DIR/navhints8k-teacher-L4.jsonl" > "$ART/onpolicy-trace.sha256"
 rm -rf "$TRACE_WORK"
 
-phase "learn on-policy hop-8 vocabulary"
+phase "learn on-policy hop-${STAGE} vocabulary"
 rm -rf "$ON_LAND"
 mkdir -p "$ON_LAND"
 .venv/bin/python scripts/learn_staged_navigation_landmarks.py \
   --trace "$ON_TRACE_DIR/navhints8k-teacher-L4.jsonl" \
   --out-dir "$ON_LAND" \
   --budget 8000 \
-  --stages "8" \
+  --stages "$STAGE" \
   2>&1 | tee "$ART/learn-onpolicy.log"
 cp "$ON_LAND/staged-landmarks.manifest.json" "$ART/onpolicy-landmarks.manifest.json"
-build_ivf "$ON_LAND/stage8-b8000.bin" "$ON_STAGE_IVF" 256 "build-onpolicy-stage8.log"
+build_ivf "$ON_LAND/stage${STAGE}-b8000.bin" "$ON_STAGE_IVF" 256 "build-onpolicy-stage${STAGE}.log"
 
 phase "compare off-policy and on-policy vocabularies"
-.venv/bin/python - <<'PY' > "$ART/stage8-overlap.json"
+STAGE="$STAGE" .venv/bin/python - <<'PY' > "$ART/stage${STAGE}-overlap.json"
 import json, struct
 from pathlib import Path
 import numpy as np
@@ -172,16 +172,17 @@ def read(path):
     return set(np.frombuffer(raw,dtype="<u4",count=n,offset=16).astype(int).tolist())
 
 root=Path.home()/".cache/geoivf/onpolicy-staged-navhints-v1"
-off=read(root/"offpolicy-landmarks/stage8-b8000.bin")
-on=read(root/"onpolicy-landmarks/stage8-b8000.bin")
+stage=int(__import__("os").environ["STAGE"])
+off=read(root/f"offpolicy-landmarks/stage{stage}-b8000.bin")
+on=read(root/f"onpolicy-landmarks/stage{stage}-b8000.bin")
 start=read(root/"offpolicy-landmarks/stage0-b8000.bin")
 def cmp(a,b):
     inter=len(a&b); union=len(a|b)
     return {"intersection":inter,"fraction_of_8k":inter/8000,"jaccard":inter/union}
 print(json.dumps({
-    "onpolicy_vs_offpolicy_stage8":cmp(on,off),
-    "onpolicy_stage8_vs_start8k":cmp(on,start),
-    "offpolicy_stage8_vs_start8k":cmp(off,start),
+    f"onpolicy_vs_offpolicy_stage{stage}":cmp(on,off),
+    f"onpolicy_stage{stage}_vs_start8k":cmp(on,start),
+    f"offpolicy_stage{stage}_vs_start8k":cmp(off,start),
 },indent=2))
 PY
 
@@ -209,8 +210,9 @@ mkdir -p "$EVAL_WORK" "$OUT"
   --index-prefix "$INDEX_PREFIX" \
   --ivf-16k "$CANON_IVF" \
   --ivf-start8k "$START_IVF" \
-  --ivf-stage8k-offpolicy "$OFF_STAGE_IVF" \
-  --ivf-stage8k-onpolicy "$ON_STAGE_IVF" \
+  --ivf-stage-offpolicy "$OFF_STAGE_IVF" \
+  --ivf-stage-onpolicy "$ON_STAGE_IVF" \
+  --stage-hops "$STAGE" \
   --work "$EVAL_WORK" \
   --out "$OUT" \
   --reps 3 \
