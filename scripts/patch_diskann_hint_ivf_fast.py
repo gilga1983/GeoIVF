@@ -160,42 +160,75 @@ struct HintIvfSearch<'a> {
                 ));
             }
 
-            // Preserve the reference selector's exact ordering semantics.
-            // The large wins in this path come from sharing the PQ query LUT
-            // with graph traversal and moving validation out of the hot path.
-            let mut coarse =
-                Vec::<(f32, usize, u32)>::with_capacity(ivf.medoid_ids.len());
+            // Select the exact same top-nprobe coarse cells as a full
+            // canonical sort by (distance, cell), but keep only nprobe entries.
+            const MAX_NPROBE: usize = 64;
+            let mut coarse_storage =
+                [(f32::INFINITY, usize::MAX, u32::MAX); MAX_NPROBE];
+            let coarse = &mut coarse_storage[..ivf.nprobe];
             let mut coarse_pos = 0usize;
             self.pq_distances(ivf.medoid_ids, |distance, id| {
-                coarse.push((distance, coarse_pos, id));
+                let cell = coarse_pos;
                 coarse_pos += 1;
+                let worst = coarse[ivf.nprobe - 1];
+                let better_than_worst = distance
+                    .total_cmp(&worst.0)
+                    .then_with(|| cell.cmp(&worst.1))
+                    .is_lt();
+                if !better_than_worst {
+                    return;
+                }
+                let mut pos = ivf.nprobe - 1;
+                while pos > 0
+                    && distance
+                        .total_cmp(&coarse[pos - 1].0)
+                        .then_with(|| cell.cmp(&coarse[pos - 1].1))
+                        .is_lt()
+                {
+                    coarse[pos] = coarse[pos - 1];
+                    pos -= 1;
+                }
+                coarse[pos] = (distance, cell, id);
             })?;
-            coarse.sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
-            coarse.truncate(ivf.nprobe);
 
-            let mut fine = Vec::<(f32, u32)>::new();
-            let mut children = Vec::<u32>::new();
-            for &(distance, cell, medoid_id) in &coarse {
-                fine.push((distance, medoid_id));
+            // The reference path fully sorts all fine candidates and takes the
+            // canonical minimum by (distance, vertex ID). Track only that
+            // minimum and score each bucket in place, avoiding both the
+            // concatenated child array and the fine candidate vector.
+            let mut winner: Option<(f32, u32)> = None;
+            let mut routing_cmps = ivf.medoid_ids.len();
+            for &(distance, cell, medoid_id) in coarse.iter() {
+                let medoid_better = winner.is_none_or(|current| {
+                    distance
+                        .total_cmp(&current.0)
+                        .then_with(|| medoid_id.cmp(&current.1))
+                        .is_lt()
+                });
+                if medoid_better {
+                    winner = Some((distance, medoid_id));
+                }
+
                 let lo = ivf.offsets[cell] as usize;
                 let hi = ivf.offsets[cell + 1] as usize;
-                children.extend_from_slice(&ivf.hint_ids[lo..hi]);
-            }
-            self.pq_distances(&children, |distance, id| {
-                fine.push((distance, id));
-            })?;
-            fine.sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
-            let winner = fine.first().copied().ok_or_else(|| {
-                diskann_error!(ErrorKind::IndexError, "Hint-IVF selected no start")
-            })?;
-
-            let routing_cmps = ivf
-                .medoid_ids
-                .len()
-                .checked_add(children.len())
-                .ok_or_else(|| {
+                let bucket = &ivf.hint_ids[lo..hi];
+                routing_cmps = routing_cmps.checked_add(bucket.len()).ok_or_else(|| {
                     diskann_error!(ErrorKind::IndexError, "Hint-IVF comparison overflow")
                 })?;
+                self.pq_distances(bucket, |distance, id| {
+                    let better = winner.is_none_or(|current| {
+                        distance
+                            .total_cmp(&current.0)
+                            .then_with(|| id.cmp(&current.1))
+                            .is_lt()
+                    });
+                    if better {
+                        winner = Some((distance, id));
+                    }
+                })?;
+            }
+            let winner = winner.ok_or_else(|| {
+                diskann_error!(ErrorKind::IndexError, "Hint-IVF selected no start")
+            })?;
             // The graph search counts the emitted start once. Record the other
             // routing PQ scores without double-counting the winner.
             self.io_tracker
