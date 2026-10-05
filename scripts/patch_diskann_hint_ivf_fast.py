@@ -160,48 +160,44 @@ struct HintIvfSearch<'a> {
                 ));
             }
 
-            // Keep the best nprobe coarse cells in a tiny fixed stack buffer.
-            // Distances use the already-prepared PQ table in this accessor.
-            let mut best_storage = [(f32::INFINITY, usize::MAX, u32::MAX); MAX_NPROBE];
-            let best_cells = &mut best_storage[..ivf.nprobe];
-            let mut cell = 0usize;
+            // Preserve the reference selector's exact ordering semantics.
+            // The large wins in this path come from sharing the PQ query LUT
+            // with graph traversal and moving validation out of the hot path.
+            let mut coarse =
+                Vec::<(f32, usize, u32)>::with_capacity(ivf.medoid_ids.len());
+            let mut coarse_pos = 0usize;
             self.pq_distances(ivf.medoid_ids, |distance, id| {
-                if distance < best_cells[ivf.nprobe - 1].0 {
-                    let mut pos = ivf.nprobe - 1;
-                    while pos > 0 && distance < best_cells[pos - 1].0 {
-                        best_cells[pos] = best_cells[pos - 1];
-                        pos -= 1;
-                    }
-                    best_cells[pos] = (distance, cell, id);
-                }
-                cell += 1;
+                coarse.push((distance, coarse_pos, id));
+                coarse_pos += 1;
+            })?;
+            coarse.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+            coarse.truncate(ivf.nprobe);
+
+            let mut fine = Vec::<(f32, u32)>::new();
+            let mut children = Vec::<u32>::new();
+            for &(distance, cell, medoid_id) in &coarse {
+                fine.push((distance, medoid_id));
+                let lo = ivf.offsets[cell] as usize;
+                let hi = ivf.offsets[cell + 1] as usize;
+                children.extend_from_slice(&ivf.hint_ids[lo..hi]);
+            }
+            self.pq_distances(&children, |distance, id| {
+                fine.push((distance, id));
+            })?;
+            fine.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+            let winner = fine.first().copied().ok_or_else(|| {
+                diskann_error!(ErrorKind::IndexError, "Hint-IVF selected no start")
             })?;
 
-            // One start is intentional: DiskANN's released L budget remains
-            // unchanged. Representatives are themselves valid learned hints.
-            let mut winner = (best_cells[0].0, best_cells[0].2);
-            let mut routing_cmps = ivf.medoid_ids.len();
-
-            for &(medoid_distance, coarse_cell, medoid_id) in best_cells.iter() {
-                if medoid_distance < winner.0 {
-                    winner = (medoid_distance, medoid_id);
-                }
-                let lo = ivf.offsets[coarse_cell] as usize;
-                let hi = ivf.offsets[coarse_cell + 1] as usize;
-                let bucket = &ivf.hint_ids[lo..hi];
-                routing_cmps = routing_cmps.checked_add(bucket.len()).ok_or_else(|| {
+            let routing_cmps = ivf
+                .medoid_ids
+                .len()
+                .checked_add(children.len())
+                .ok_or_else(|| {
                     diskann_error!(ErrorKind::IndexError, "Hint-IVF comparison overflow")
                 })?;
-                self.pq_distances(bucket, |distance, id| {
-                    if distance < winner.0 {
-                        winner = (distance, id);
-                    }
-                })?;
-            }
-
             // The graph search counts the emitted start once. Record the other
-            // routing PQ scores separately so QueryStatistics can report true
-            // end-to-end distance work without double-counting the winner.
+            // routing PQ scores without double-counting the winner.
             self.io_tracker
                 .routing_comparisons
                 .fetch_add(routing_cmps.saturating_sub(1), std::sync::atomic::Ordering::Relaxed);
