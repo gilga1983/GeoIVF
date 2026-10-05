@@ -91,7 +91,7 @@ def patch_search_hooks(root: Path) -> None:
                     accessor
                         .staged_hint_distances(scratch.hops, |id, distance| {
                             let queue_accepts = scratch.best.size() < scratch.best.capacity()
-                                || scratch.best.get(scratch.best.size() - 1).distance() >= distance;
+                                || *scratch.best.get(scratch.best.size() - 1).distance() >= distance;
                             if queue_accepts && scratch.visited.insert(id) {
                                 scratch.best.insert(Neighbor::new(id, distance));
                                 scratch.cmps += 1;
