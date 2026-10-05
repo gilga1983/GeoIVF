@@ -116,35 +116,42 @@ sh "$RUNNER_TEMP/onpolicy-rustup-$GITHUB_RUN_ID.sh" \
 export PATH="$CARGO_HOME/bin:$PATH"
 rustup component add rustfmt
 
-phase "build optimized NavHints trace binary"
-rm -rf third_party/DiskANN-onpolicy-trace
-git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-onpolicy-trace
-git -C third_party/DiskANN-onpolicy-trace checkout --detach "$DISKANN_REV"
-.venv/bin/python scripts/patch_diskann_navhints_trace.py third_party/DiskANN-onpolicy-trace
-(cd third_party/DiskANN-onpolicy-trace && cargo fmt --all)
-git -C third_party/DiskANN-onpolicy-trace diff --check
-git -C third_party/DiskANN-onpolicy-trace diff > "$ART/onpolicy-trace.patch"
-(cd third_party/DiskANN-onpolicy-trace && cargo build --release --locked -p diskann-benchmark --features disk-index) \
-  2>&1 | tee "$ART/trace-build.log"
-TRACE_BIN="$PWD/third_party/DiskANN-onpolicy-trace/target/release/diskann-benchmark"
+TRACE_FILE="$ON_TRACE_DIR/navhints8k-teacher-L4.jsonl"
+if [ -s "$TRACE_FILE" ] && [ -s "$ON_TRACE_DIR/onpolicy-trace-summary.json" ]; then
+  phase "reuse cached 8K-start on-policy L4 traces"
+  cp "$ON_TRACE_DIR/onpolicy-trace-summary.json" "$ART/"
+  sha256sum "$TRACE_FILE" > "$ART/onpolicy-trace.sha256"
+else
+  phase "build optimized NavHints trace binary"
+  rm -rf third_party/DiskANN-onpolicy-trace
+  git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-onpolicy-trace
+  git -C third_party/DiskANN-onpolicy-trace checkout --detach "$DISKANN_REV"
+  .venv/bin/python scripts/patch_diskann_navhints_trace.py third_party/DiskANN-onpolicy-trace
+  (cd third_party/DiskANN-onpolicy-trace && cargo fmt --all)
+  git -C third_party/DiskANN-onpolicy-trace diff --check
+  git -C third_party/DiskANN-onpolicy-trace diff > "$ART/onpolicy-trace.patch"
+  (cd third_party/DiskANN-onpolicy-trace && cargo build --release --locked -p diskann-benchmark --features disk-index) \
+    2>&1 | tee "$ART/trace-build.log"
+  TRACE_BIN="$PWD/third_party/DiskANN-onpolicy-trace/target/release/diskann-benchmark"
 
-phase "collect 8K-start on-policy L4 traces"
-TRACE_WORK="$RUNNER_TEMP/onpolicy-trace-eval-$GITHUB_RUN_ID"
-rm -rf "$TRACE_WORK" "$ON_TRACE_DIR"
-mkdir -p "$TRACE_WORK" "$ON_TRACE_DIR"
-.venv/bin/python scripts/collect_navhints_onpolicy_traces.py \
-  --binary "$TRACE_BIN" \
-  --queries "$QUERIES" \
-  --gt "$GT" \
-  --index-prefix "$INDEX_PREFIX" \
-  --start-ivf "$START_IVF" \
-  --work "$TRACE_WORK" \
-  --out "$ON_TRACE_DIR" \
-  --train-rows 5000 \
-  2>&1 | tee "$ART/onpolicy-trace.log"
-cp "$ON_TRACE_DIR/onpolicy-trace-summary.json" "$ART/"
-sha256sum "$ON_TRACE_DIR/navhints8k-teacher-L4.jsonl" > "$ART/onpolicy-trace.sha256"
-rm -rf "$TRACE_WORK"
+  phase "collect 8K-start on-policy L4 traces"
+  TRACE_WORK="$RUNNER_TEMP/onpolicy-trace-eval-$GITHUB_RUN_ID"
+  rm -rf "$TRACE_WORK" "$ON_TRACE_DIR"
+  mkdir -p "$TRACE_WORK" "$ON_TRACE_DIR"
+  .venv/bin/python scripts/collect_navhints_onpolicy_traces.py \
+    --binary "$TRACE_BIN" \
+    --queries "$QUERIES" \
+    --gt "$GT" \
+    --index-prefix "$INDEX_PREFIX" \
+    --start-ivf "$START_IVF" \
+    --work "$TRACE_WORK" \
+    --out "$ON_TRACE_DIR" \
+    --train-rows 5000 \
+    2>&1 | tee "$ART/onpolicy-trace.log"
+  cp "$ON_TRACE_DIR/onpolicy-trace-summary.json" "$ART/"
+  sha256sum "$TRACE_FILE" > "$ART/onpolicy-trace.sha256"
+  rm -rf "$TRACE_WORK"
+fi
 
 phase "learn on-policy hop-${STAGE} vocabulary"
 rm -rf "$ON_LAND"
