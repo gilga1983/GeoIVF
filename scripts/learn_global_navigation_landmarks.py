@@ -20,6 +20,7 @@ import argparse
 import collections
 import json
 import struct
+from itertools import chain
 from pathlib import Path
 from typing import Iterable
 
@@ -118,7 +119,7 @@ def rank_hints(records: list[dict]) -> list[tuple[int, int, int]]:
 def unique_union(first: Iterable[int], second: Iterable[int]) -> list[int]:
     result: list[int] = []
     seen: set[int] = set()
-    for raw in (*list(first), *list(second)):
+    for raw in chain(first, second):
         value = int(raw)
         if value not in seen:
             seen.add(value)
