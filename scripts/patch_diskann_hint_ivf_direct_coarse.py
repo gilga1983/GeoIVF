@@ -53,7 +53,7 @@ impl<Data, VP> HasId for DiskAccessor<'_, Data, VP>
         for &id in ids {
             let code = self.provider.pq_data.get_compressed_vector(id as usize)?;
             let distance =
-                diskann_providers::model::pq_dist_lookup_single(code, lookup, num_centers);
+                diskann_providers::model::pq::pq_dist_lookup_single(code, lookup, num_centers);
             f(distance, id);
         }
         Ok(())
