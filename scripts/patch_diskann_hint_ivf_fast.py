@@ -111,7 +111,7 @@ struct HintIvfSearch<'a> {
         "disable Hint-IVF in generic strategy constructor",
     )
 
-    marker = """    /// Return the saved Vamana medoid used by the unmodified search path.
+    marker = """    /// Perform the ordinary graph search from caller-supplied starting vertices.
 """
     helper = """    fn search_strategy_with_hint_ivf<'a>(
         &'a self,
