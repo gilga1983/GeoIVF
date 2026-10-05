@@ -15,7 +15,7 @@ INDEX_PREFIX="$HOME/.cache/geoivf/catapult-paper-pubmed1m-index-v1/diskann-index
 PORTALS="$HOME/.cache/geoivf/id-portal-pools-v1/portals-n512.bin"
 ROOT="$HOME/.cache/geoivf/full-cache-history-v1"
 TRACE_ROOT="$ROOT/traces"
-TRACE="$TRACE_ROOT/medoid-teacher.L4.jsonl"
+TRACE="$TRACE_ROOT/medoid-teacher.jsonl"
 STATE_ROOT="$ROOT/states"
 
 for f in "$BASE" "$QUERIES" "$GT" "$PORTALS"; do test -s "$f"; done
