@@ -6,6 +6,7 @@ import argparse
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -34,7 +35,7 @@ def prepare_state(
     shutil.copy2(landmark_file, lm)
     ivf = state_dir / "ivf.bin"
     run([
-        "python3",
+        sys.executable,
         Path(__file__).with_name("build_hint_ivf.py"),
         "--base", base,
         "--hints", lm,
@@ -77,7 +78,7 @@ def main():
     score_work = args.work / "scoring"
     score_work.mkdir(parents=True, exist_ok=True)
     run([
-        "python3", learner,
+        sys.executable, learner,
         "--trace", args.trace,
         "--out-dir", score_work,
         "--history-rows", "5000",
@@ -112,7 +113,7 @@ def main():
         hw = args.work / f"train-h{h}"
         hw.mkdir(parents=True, exist_ok=True)
         run([
-            "python3", learner,
+            sys.executable, learner,
             "--trace", args.trace,
             "--out-dir", hw,
             "--history-rows", str(h),
