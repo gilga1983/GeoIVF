@@ -135,22 +135,14 @@ Instrumentation-only build reports:
 Do not use profiler build for headline QPS.
 
 ### PQ gather locality
-Semantics-preserving layout transformation:
-- representative IDs and bucket boundaries unchanged;
-- sort child database IDs ascending inside each bucket;
-- state size unchanged;
-- canonical winner unchanged.
 
-A/B should require exact recall/I/O/hops/comparisons equality.
+Seven-run semantics-preserving layout A/B:
+- original median QPS: 13,746.89
+- child-ID-sorted median QPS: 13,794.97 (+0.35%)
+- latency: 287.321 -> 286.795 us (-0.18%)
+- CPU: 19.352 -> 19.563 us (+1.09%)
+- exact same recall/I/O/hops/comparisons and exact same state bytes.
 
-## After optimization converges
+Conclusion: effect is noise-sized and CPU does not improve. Keep the original
+bucket order; do not complicate the deployed format for locality reordering.
 
-Rerun from scratch under the final path:
-1. vocabulary size;
-2. nlist;
-3. nprobe;
-4. memory/performance frontier;
-5. realistic Recall@10 / L sweep;
-6. properly recall-matched baselines.
-
-Do not carry old CPU-derived knees forward automatically.
