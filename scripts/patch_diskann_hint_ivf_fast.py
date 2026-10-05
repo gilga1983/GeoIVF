@@ -162,7 +162,6 @@ struct HintIvfSearch<'a> {
 
             // Select the exact same top-nprobe coarse cells as a full
             // canonical sort by (distance, cell), but keep only nprobe entries.
-            const MAX_NPROBE: usize = 64;
             let mut coarse_storage =
                 [(f32::INFINITY, usize::MAX, u32::MAX); MAX_NPROBE];
             let coarse = &mut coarse_storage[..ivf.nprobe];
