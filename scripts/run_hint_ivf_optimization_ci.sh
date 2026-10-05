@@ -28,6 +28,7 @@ git rev-parse HEAD > artifacts/hint-ivf-optimization/geoivf-commit.txt
   scripts/learn_global_navigation_landmarks.py \
   scripts/build_hint_ivf.py \
   scripts/patch_diskann_hint_ivf.py \
+  scripts/patch_diskann_hint_ivf_integrated.py \
   scripts/patch_diskann_hint_ivf_fast.py \
   scripts/qualify_hint_ivf_optimization.py
 
@@ -63,7 +64,7 @@ for kind in reference optimized; do
   git clone --filter=blob:none https://github.com/microsoft/DiskANN.git "$dir"
   git -C "$dir" checkout --detach "$DISKANN_REV"
   if [ "$kind" = reference ]; then
-    .venv/bin/python scripts/patch_diskann_hint_ivf.py "$dir"
+    .venv/bin/python scripts/patch_diskann_hint_ivf_integrated.py "$dir"
   else
     .venv/bin/python scripts/patch_diskann_hint_ivf_fast.py "$dir"
   fi
