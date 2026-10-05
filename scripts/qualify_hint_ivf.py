@@ -227,9 +227,9 @@ def main():
             "mean_ios": avg(rr, "mean_ios"),
             "median_qps": med(rr, "qps"),
             "median_latency_us": med(rr, "mean_latency"),
-            "median_cpu_us_search_only": med(rr, "mean_cpu_time"),
+            "median_cpu_us": med(rr, "mean_cpu_time"),
             "mean_hops": avg(rr, "mean_hops"),
-            "mean_comparisons_search_only": avg(rr, "mean_comparisons"),
+            "mean_comparisons": avg(rr, "mean_comparisons"),
         }
 
     flat16 = summary["flat-b16000"]
