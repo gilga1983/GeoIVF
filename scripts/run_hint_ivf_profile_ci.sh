@@ -53,6 +53,8 @@ BIN="$PWD/third_party/DiskANN-hint-profile/target/release/diskann-benchmark"
 
 WORK="$RUNNER_TEMP/hintprofile-eval-$GITHUB_RUN_ID"
 mkdir -p "$WORK" artifacts/hint-ivf-profile/results
+source scripts/perf_guard.sh
+geoivf_perf_lock
 .venv/bin/python scripts/qualify_hint_ivf_profile.py   --binary "$BIN"   --queries "$QUERIES"   --gt "$GT"   --index-prefix "$INDEX_PREFIX"   --ivf "$IVF"   --work "$WORK"   --out "$PWD/artifacts/hint-ivf-profile/results"   --reps 3   2>&1 | tee artifacts/hint-ivf-profile/eval.log
 
 rm -rf "$WORK"
