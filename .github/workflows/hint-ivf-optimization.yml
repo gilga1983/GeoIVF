@@ -9,6 +9,8 @@ on:
       - 'scripts/patch_diskann_hint_ivf.py'
       - 'scripts/patch_diskann_hint_ivf_fast.py'
       - 'scripts/patch_diskann_hint_ivf_integrated.py'
+      - 'scripts/patch_diskann_hint_ivf_hybrid.py'
+      - 'scripts/patch_diskann_hint_ivf_nosort.py'
       - 'scripts/build_hint_ivf.py'
       - 'scripts/learn_global_navigation_landmarks.py'
   workflow_dispatch:
