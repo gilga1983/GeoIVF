@@ -44,9 +44,9 @@ for kind in reference optimized; do
   git clone --filter=blob:none https://github.com/microsoft/DiskANN.git "$dir"
   git -C "$dir" checkout --detach "$DISKANN_REV"
   if [ "$kind" = reference ]; then
-    .venv/bin/python scripts/patch_diskann_hint_ivf_packed_direct.py "$dir"
-  else
     .venv/bin/python scripts/patch_diskann_hint_ivf_packed_coarse.py "$dir"
+  else
+    .venv/bin/python scripts/patch_diskann_hint_ivf_packed_direct.py "$dir"
   fi
   (
     cd "$dir"
