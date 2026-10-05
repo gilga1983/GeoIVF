@@ -97,7 +97,7 @@ def patch_provider_hint_ivf(path: Path) -> None:
             coarse.push((distance, coarse_pos, id));
             coarse_pos += 1;
         })?;
-        coarse.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+        coarse.sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
         coarse.truncate(nprobe);
 
         // Include selected representatives themselves as valid starts, then
@@ -114,7 +114,7 @@ def patch_provider_hint_ivf(path: Path) -> None:
         accessor.pq_distances(&children, |distance, id| {
             fine.push((distance, id));
         })?;
-        fine.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+        fine.sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
 
         let mut starts = Vec::with_capacity(max_starts.min(fine.len()));
         for (_, id) in fine {
