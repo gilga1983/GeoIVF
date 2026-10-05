@@ -103,6 +103,26 @@ Clean five-run adjacent A/B against rung-2 no-sort:
 
 Keep pooled-batch: small but positive and no semantic downside.
 
+
+## Stage profile on pooled-batch selector
+
+Instrumentation-only three-run profile at 16K hints / nlist=512 / nprobe=8:
+- median QPS: 13,703.61
+- median latency: 289.720 us
+- median CPU (excluding PQ preprocess + I/O): 19.683 us
+- median PQ preprocess: 6.964 us
+- median coarse routing: 7.889 us
+- median fine routing: 4.520 us
+- median residual CPU: 7.275 us
+- recall: 14.18%
+- I/O/query: 2.4194
+
+Interpretation:
+- routing consumes ~12.41 us, about 63% of measured CPU after PQ preprocess;
+- coarse routing is the largest routing stage (~40% of measured CPU);
+- fine scoring is material but secondary;
+- optimize coarse selection/scoring before reinterpreting nlist/nprobe knees.
+
 ## Prepared follow-ups
 
 ### Stage profiler
