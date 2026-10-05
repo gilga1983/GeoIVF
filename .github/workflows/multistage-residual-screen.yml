@@ -1,0 +1,35 @@
+name: NavHints multistage residual screening
+on:
+  push:
+    branches: [experiment/staged-navhints]
+    paths:
+      - '.github/workflows/multistage-residual-screen.yml'
+      - 'scripts/analyze_multistage_residual.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  screen:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Screen residual stages
+        shell: bash
+        run: |
+          set -euxo pipefail
+          trace="$HOME/.cache/geoivf/onpolicy-staged-navhints-v1/onpolicy-trace/navhints8k-teacher-L4.jsonl"
+          start="$HOME/.cache/geoivf/onpolicy-staged-navhints-v1/offpolicy-landmarks/stage0-b8000.bin"
+          test -s "$trace"
+          test -s "$start"
+          mkdir -p artifacts/multistage-residual-screen
+          python scripts/analyze_multistage_residual.py             --trace "$trace"             --start-ids "$start"             --out artifacts/multistage-residual-screen/residual-screen.json             --max-stage 8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: multistage-residual-screen-${{ github.run_id }}
+          path: artifacts/multistage-residual-screen/
+          retention-days: 30
