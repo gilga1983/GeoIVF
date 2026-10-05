@@ -1,0 +1,42 @@
+name: NavHints code quality
+on:
+  push:
+    branches: [experiment/hint-ivf-quality]
+    paths:
+      - '.github/workflows/navhints-quality.yml'
+      - 'scripts/learn_global_navigation_landmarks.py'
+      - 'scripts/build_hint_ivf.py'
+      - 'scripts/patch_diskann_hint_ivf_fast.py'
+      - 'tests/test_navhints.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install test dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install numpy==2.2.6 pytest==8.4.2
+      - name: Compile Python
+        run: |
+          .venv/bin/python -m py_compile             scripts/learn_global_navigation_landmarks.py             scripts/build_hint_ivf.py             scripts/patch_diskann_hint_ivf_fast.py             tests/test_navhints.py
+      - name: Run NavHints unit tests
+        run: .venv/bin/pytest -q tests/test_navhints.py
