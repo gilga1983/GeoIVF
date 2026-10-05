@@ -8,6 +8,7 @@ on:
       - 'scripts/qualify_hint_ivf_optimization.py'
       - 'scripts/patch_diskann_hint_ivf.py'
       - 'scripts/patch_diskann_hint_ivf_fast.py'
+      - 'scripts/patch_diskann_hint_ivf_integrated.py'
       - 'scripts/build_hint_ivf.py'
       - 'scripts/learn_global_navigation_landmarks.py'
   workflow_dispatch:
