@@ -15,7 +15,7 @@ import numpy as np
 THREADS = 4
 IO_BEAM = 8
 K = 1
-NPROBES = (1, 2, 4, 8)
+NPROBES = (1, 2, 4, 8, 16, 32, 64)
 
 
 def save(path: Path, obj) -> None:
