@@ -19,6 +19,7 @@ import json
 import os
 import struct
 import subprocess
+import time
 from pathlib import Path
 
 import numpy as np
@@ -36,6 +37,8 @@ CACHE_COUNTS = (30, 32)
 DIM = 768
 FLOAT_BYTES = 4
 MAX_DEGREE = 64
+RUN_TIMEOUT_SECONDS = 600
+HEARTBEAT_SECONDS = 30
 
 
 def save(path: Path, obj) -> None:
@@ -143,15 +146,56 @@ def run_one(
         env["DISKANN_HINT_IVF_NPROBE"] = "8"
         env["DISKANN_HINT_IVF_MAX_STARTS"] = "1"
 
-    with (out / f"{tag}.log").open("w") as log:
-        subprocess.run(
-            [str(binary), "run", "--input-file", str(inp), "--output-file", str(output)],
+    method_log = out / f"{tag}.log"
+    command = [str(binary), "run", "--input-file", str(inp), "--output-file", str(output)]
+    started = time.monotonic()
+    print(
+        f"starting tag={tag} binary={binary.name} timeout={RUN_TIMEOUT_SECONDS}s",
+        flush=True,
+    )
+    with method_log.open("w") as log:
+        proc = subprocess.Popen(
+            command,
             stdout=log,
             stderr=subprocess.STDOUT,
             env=env,
-            check=True,
         )
+        while True:
+            try:
+                return_code = proc.wait(timeout=HEARTBEAT_SECONDS)
+                break
+            except subprocess.TimeoutExpired:
+                elapsed = time.monotonic() - started
+                load = os.getloadavg()
+                log_bytes = method_log.stat().st_size if method_log.exists() else 0
+                print(
+                    f"benchmark-heartbeat tag={tag} pid={proc.pid} "
+                    f"elapsed={elapsed:.0f}s log_bytes={log_bytes} "
+                    f"load1={load[0]:.2f} load5={load[1]:.2f} load15={load[2]:.2f}",
+                    flush=True,
+                )
+                if elapsed >= RUN_TIMEOUT_SECONDS:
+                    print(
+                        f"timeout tag={tag}; terminating pid={proc.pid}",
+                        flush=True,
+                    )
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=15)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+                    raise TimeoutError(
+                        f"{tag} exceeded {RUN_TIMEOUT_SECONDS}s; see {method_log}"
+                    )
+        if return_code != 0:
+            raise subprocess.CalledProcessError(return_code, command)
 
+    print(
+        f"completed tag={tag} elapsed={time.monotonic() - started:.1f}s "
+        f"log_bytes={method_log.stat().st_size}",
+        flush=True,
+    )
     rows = sorted(result_rows(json.loads(output.read_text())), key=lambda r: int(r["search_l"]))
     got = [int(row["search_l"]) for row in rows]
     if got != list(LS):
