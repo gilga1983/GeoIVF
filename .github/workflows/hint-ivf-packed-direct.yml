@@ -1,0 +1,51 @@
+name: Hint IVF packed direct A/B
+on:
+  push:
+    branches: [experiment/hint-ivf-optimized]
+    paths:
+      - '.github/workflows/hint-ivf-packed-direct.yml'
+      - 'scripts/run_hint_ivf_packed_direct_ci.sh'
+      - 'scripts/patch_diskann_hint_ivf_packed_direct.py'
+      - 'scripts/patch_diskann_hint_ivf_packed_coarse.py'
+      - 'scripts/qualify_hint_ivf_optimization.py'
+      - 'scripts/perf_guard.sh'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-performance
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    defaults:
+      run:
+        shell: bash
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run packed-direct Hint-IVF A/B
+        run: bash scripts/run_hint_ivf_packed_direct_ci.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hint-ivf-packed-direct-${{ github.run_id }}
+          path: artifacts/hint-ivf-packed-direct/
+          retention-days: 30
+      - name: Clean scratch
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/hintpackeddirect-cargo-$GITHUB_RUN_ID" \
+                 "$RUNNER_TEMP/hintpackeddirect-rustup-$GITHUB_RUN_ID" \
+                 "$RUNNER_TEMP/hintpackeddirect-eval-$GITHUB_RUN_ID"
