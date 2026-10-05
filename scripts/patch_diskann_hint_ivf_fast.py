@@ -170,7 +170,7 @@ struct HintIvfSearch<'a> {
                 coarse.push((distance, coarse_pos, id));
                 coarse_pos += 1;
             })?;
-            coarse.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+            coarse.sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
             coarse.truncate(ivf.nprobe);
 
             let mut fine = Vec::<(f32, u32)>::new();
@@ -184,7 +184,7 @@ struct HintIvfSearch<'a> {
             self.pq_distances(&children, |distance, id| {
                 fine.push((distance, id));
             })?;
-            fine.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+            fine.sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
             let winner = fine.first().copied().ok_or_else(|| {
                 diskann_error!(ErrorKind::IndexError, "Hint-IVF selected no start")
             })?;
