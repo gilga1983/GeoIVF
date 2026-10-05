@@ -1,0 +1,63 @@
+name: NavHints on-policy stage depth diagnostic
+on:
+  push:
+    branches: [experiment/staged-navhints]
+    paths:
+      - '.github/workflows/onpolicy-stage-depths.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  depths:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Analyze residual vocabularies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          trace="$HOME/.cache/geoivf/onpolicy-staged-navhints-v1/onpolicy-trace/navhints8k-teacher-L4.jsonl"
+          test -s "$trace"
+          mkdir -p artifacts/onpolicy-stage-depths
+          python - "$trace" <<'PY' | tee artifacts/onpolicy-stage-depths/depths.json
+          import json, sys
+          from collections import defaultdict
+          path=sys.argv[1]
+          records=[json.loads(x) for x in open(path) if x.strip()]
+          out={"queries":len(records),"stages":{}}
+          for stage in (1,2,3,4,5,6,7,8):
+              scores=defaultdict(int)
+              support=defaultdict(int)
+              queries_past=0
+              for rec in records:
+                  first={}
+                  for pos,raw in enumerate(rec["ids"]):
+                      first.setdefault(int(raw),pos)
+                  if any(pos>stage for pos in first.values()):
+                      queries_past += 1
+                  for vid,pos in first.items():
+                      residual=pos-stage
+                      if residual>0:
+                          scores[vid]+=residual
+                          support[vid]+=1
+              ranked=sorted(((s,support[v],v) for v,s in scores.items()),reverse=True)
+              out["stages"][str(stage)]={
+                  "eligible_vertices":len(scores),
+                  "queries_with_residual":queries_past,
+                  "fraction_queries_with_residual":queries_past/len(records),
+                  "top_score":ranked[0][0] if ranked else 0,
+                  "supports_8k":len(scores)>=8000,
+              }
+          feasible=[int(s) for s,v in out["stages"].items() if v["supports_8k"]]
+          out["latest_stage_supporting_8k"]=max(feasible) if feasible else None
+          print(json.dumps(out,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: onpolicy-stage-depths-${{ github.run_id }}
+          path: artifacts/onpolicy-stage-depths/
+          retention-days: 30
