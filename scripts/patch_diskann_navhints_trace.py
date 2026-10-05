@@ -157,19 +157,22 @@ use std::io::Write;
     s = once(
         s,
         """            .zip(statistics_vec.par_iter_mut())
-            .zip(result_counts.par_iter_mut());
+            .zip(result_counts.par_iter_mut())
+            .zip(seed_rows.par_iter());
 """,
         """            .zip(statistics_vec.par_iter_mut())
             .zip(trace_vec.par_iter_mut())
-            .zip(result_counts.par_iter_mut());
+            .zip(result_counts.par_iter_mut())
+            .zip(seed_rows.par_iter());
 """,
         "zip trace vector",
     )
 
-    # The optimized benchmark closure shape after patch_benchmark_global.
-    old_closure = """            |(((((q, vf), id_chunk), dist_chunk), stats), rc)| {
+    # The optimized benchmark already carries per-query seed rows from the
+    # start-point patch; preserve that iterator while adding trace output.
+    old_closure = """            |((((((q, vf), id_chunk), dist_chunk), stats), rc), seeds)| {
 """
-    new_closure = """            |((((((q, vf), id_chunk), dist_chunk), stats), trace_out), rc)| {
+    new_closure = """            |(((((((q, vf), id_chunk), dist_chunk), stats), trace_out), rc), seeds)| {
 """
     s = once(s, old_closure, new_closure, "trace closure shape")
 
