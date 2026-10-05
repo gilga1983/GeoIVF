@@ -101,18 +101,19 @@ struct HintIvfSearch<'a> {
             scratch_pool: &self.scratch_pool,
             start_points,
         }
-    }
-
-    /// Return the saved Vamana medoid used by the unmodified search path.
 """,
         """            vertex_provider_factory: &self.vertex_provider_factory,
             scratch_pool: &self.scratch_pool,
             start_points,
             hint_ivf: None,
         }
-    }
+""",
+        "disable Hint-IVF in generic strategy constructor",
+    )
 
-    fn search_strategy_with_hint_ivf<'a>(
+    marker = """    /// Return the saved Vamana medoid used by the unmodified search path.
+"""
+    helper = """    fn search_strategy_with_hint_ivf<'a>(
         &'a self,
         io_tracker: &'a IOTracker,
         hint_ivf: HintIvfSearch<'a>,
@@ -128,10 +129,8 @@ struct HintIvfSearch<'a> {
         }
     }
 
-    /// Return the saved Vamana medoid used by the unmodified search path.
-""",
-        "hint-IVF strategy constructor",
-    )
+"""
+    s = once(s, marker, helper + marker, "Hint-IVF strategy constructor")
 
     # Replace only the starting-point distance routine. The same DiskAccessor
     # remains alive for expand_beam, therefore the PQ query LUT is reused.
