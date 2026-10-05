@@ -1,0 +1,51 @@
+name: Spherical hint IVF knee
+on:
+  push:
+    branches: [experiment/hint-ivf-spherical-knee]
+    paths:
+      - '.github/workflows/hint-ivf-spherical-knee.yml'
+      - 'scripts/run_hint_ivf_spherical_knee_ci.sh'
+      - 'scripts/build_hint_ivf.py'
+      - 'scripts/patch_diskann_hint_ivf.py'
+      - 'scripts/qualify_hint_ivf_spherical_knee.py'
+      - 'scripts/learn_global_navigation_landmarks.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-hint-ivf-spherical-knee
+  cancel-in-progress: true
+
+jobs:
+  sweep:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    defaults:
+      run:
+        shell: bash
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run spherical hint-IVF knee
+        run: bash scripts/run_hint_ivf_spherical_knee_ci.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hint-ivf-spherical-knee-${{ github.run_id }}
+          path: artifacts/hint-ivf-spherical-knee/
+          retention-days: 30
+      - name: Clean scratch
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/hintivfsph-cargo-$GITHUB_RUN_ID" \
+                 "$RUNNER_TEMP/hintivfsph-rustup-$GITHUB_RUN_ID" \
+                 "$RUNNER_TEMP/hintivfsph-eval-$GITHUB_RUN_ID"
