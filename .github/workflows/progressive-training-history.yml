@@ -1,5 +1,12 @@
 name: Progressive NavHints training history
 on:
+  push:
+    branches: [experiment/paper-training-low]
+    paths:
+      - '.github/workflows/progressive-training-history.yml'
+      - 'scripts/run_progressive_training_history_ci.sh'
+      - 'scripts/qualify_progressive_training_history.py'
+      - 'scripts/patch_diskann_progressive_navhints.py'
   workflow_dispatch:
 
 permissions:
