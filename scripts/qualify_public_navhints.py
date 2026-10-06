@@ -77,6 +77,7 @@ def run_method(binary, out, tag, queries, gt, index_prefix, data_type, distance,
         "DISKANN_HINT_IVF_NPROBE",
         "DISKANN_HINT_IVF_MAX_STARTS",
         "DISKANN_PROGRESSIVE_HINTS",
+        "DISKANN_PROGRESSIVE_HINT_TOPK",
         "DISKANN_IP_PORTAL_ROUTER_FILE",
         "DISKANN_PAPER_CATAPULT",
         "DISKANN_QSEV_FILE",
@@ -89,6 +90,7 @@ def run_method(binary, out, tag, queries, gt, index_prefix, data_type, distance,
         env["DISKANN_HINT_IVF_MAX_STARTS"] = "1"
         if progressive:
             env["DISKANN_PROGRESSIVE_HINTS"] = "1"
+            env["DISKANN_PROGRESSIVE_HINT_TOPK"] = "16"
 
     with (out / f"{tag}.log").open("w") as log:
         subprocess.run(
@@ -270,7 +272,7 @@ def main():
         "baseline": baseline,
         "canonical_navhints": canonical,
         "navhints": navhints,
-        "navhints_policy": "progressive retained runner-ups after natural beam boundaries; no second routing pass",
+        "navhints_policy": "progressive retained runner-ups after natural beam boundaries; K_h=16; no second routing pass",
         "same_L": same_l,
         "matched_recall_interpolation": matched,
     }
