@@ -1,0 +1,192 @@
+name: Vertex NavHints training sweep
+
+on:
+  push:
+    branches: [experiment/staged-navhints]
+    paths:
+      - '.github/workflows/vertex-navhints-training-sweep.yml'
+      - 'scripts/learn_vertex_training_sweep.py'
+      - 'scripts/qualify_vertex_training_sweep.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-vertex-navhints-training-sweep
+  cancel-in-progress: true
+
+jobs:
+  sweep:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    defaults:
+      run:
+        shell: bash
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prepare sweep inputs
+        run: |
+          set -euxo pipefail
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install numpy==2.2.6 "faiss-cpu>=1.9,<2"
+
+          ART="$PWD/artifacts/vertex-navhints-training-sweep"
+          BASE="$HOME/.cache/geoivf/catapult-paper-pubmed1m/pubmed-medcpt-first1m.fbin"
+          QUERIES="$HOME/.cache/geoivf/medrag-zipf-qwen3b-v1/medrag-zipf-10k-medcpt.fbin"
+          GT5000="$HOME/.cache/geoivf/medrag-zipf-qwen3b-v1/heldout5000-pubmed1m-top16-ip.gt"
+          ORIG_PREFIX="$HOME/.cache/geoivf/catapult-paper-pubmed1m-index-v1/diskann-index"
+          IVF16="$HOME/.cache/geoivf/onpolicy-staged-navhints-v1/canonical-b16000-c512.bin"
+          TRACE="$HOME/.cache/geoivf/regional-navhints-runtime-v1/onpolicy-trace/navhints16k-teacher-L64.jsonl"
+          ROUTER="$HOME/.cache/geoivf/region-ablation-routers-v1/nlist-256/router.bin"
+          MAPROOT="$HOME/.cache/geoivf/vertex-navhints-v1/regional-map"
+          SCRATCH="$RUNNER_TEMP/vertex-training-sweep-$GITHUB_RUN_ID"
+          PAYLOAD="$SCRATCH/vertex-training-sweep.bin"
+          VERTEX_PREFIX="$SCRATCH/diskann-index"
+
+          ORIG_DISK="$ORIG_PREFIX"_disk.index
+          ORIG_PIVOTS="$ORIG_PREFIX"_pq_pivots.bin
+          ORIG_PQ="$ORIG_PREFIX"_pq_compressed.bin
+          VERTEX_DISK="$VERTEX_PREFIX"_disk.index
+          VERTEX_PIVOTS="$VERTEX_PREFIX"_pq_pivots.bin
+          VERTEX_PQ="$VERTEX_PREFIX"_pq_compressed.bin
+
+          rm -rf "$SCRATCH"
+          mkdir -p "$ART" "$SCRATCH" "$MAPROOT"
+          for f in "$BASE" "$QUERIES" "$GT5000" "$ORIG_DISK" "$ORIG_PIVOTS" "$ORIG_PQ" "$IVF16" "$TRACE" "$ROUTER"; do
+            test -s "$f"
+          done
+          test "$(wc -l < "$TRACE")" -eq 9000
+
+          echo "ART=$ART" >> "$GITHUB_ENV"
+          echo "BASE=$BASE" >> "$GITHUB_ENV"
+          echo "QUERIES=$QUERIES" >> "$GITHUB_ENV"
+          echo "GT5000=$GT5000" >> "$GITHUB_ENV"
+          echo "ORIG_DISK=$ORIG_DISK" >> "$GITHUB_ENV"
+          echo "ORIG_PIVOTS=$ORIG_PIVOTS" >> "$GITHUB_ENV"
+          echo "ORIG_PQ=$ORIG_PQ" >> "$GITHUB_ENV"
+          echo "IVF16=$IVF16" >> "$GITHUB_ENV"
+          echo "TRACE=$TRACE" >> "$GITHUB_ENV"
+          echo "ROUTER=$ROUTER" >> "$GITHUB_ENV"
+          echo "MAPROOT=$MAPROOT" >> "$GITHUB_ENV"
+          echo "SCRATCH=$SCRATCH" >> "$GITHUB_ENV"
+          echo "PAYLOAD=$PAYLOAD" >> "$GITHUB_ENV"
+          echo "VERTEX_PREFIX=$VERTEX_PREFIX" >> "$GITHUB_ENV"
+          echo "VERTEX_DISK=$VERTEX_DISK" >> "$GITHUB_ENV"
+          echo "VERTEX_PIVOTS=$VERTEX_PIVOTS" >> "$GITHUB_ENV"
+          echo "VERTEX_PQ=$VERTEX_PQ" >> "$GITHUB_ENV"
+
+          git rev-parse HEAD > "$ART/geoivf-commit.txt"
+          { df -h; free -h; } > "$ART/host-before.txt"
+          .venv/bin/python -m py_compile             scripts/learn_vertex_continuation_maps.py             scripts/learn_vertex_training_sweep.py             scripts/embed_vertex_navhints_in_diskann_index.py             scripts/patch_diskann_vertex_navhints.py             scripts/qualify_vertex_training_sweep.py             scripts/learn_equal_region_navhints_sweep.py
+
+      - name: Ensure fixed 256-region fallback map
+        run: |
+          set -euxo pipefail
+          REGIONAL="$MAPROOT/regional-256x8.bin"
+          if [ ! -s "$REGIONAL" ]; then
+            rm -rf "$MAPROOT"
+            mkdir -p "$MAPROOT"
+            .venv/bin/python scripts/learn_equal_region_navhints_sweep.py               --base "$BASE"               --router "$ROUTER"               --trace "$TRACE"               --out-dir "$MAPROOT"               --per-regions "8"               --min-entry-pos 8               --threads 4               2>&1 | tee "$ART/regional-learn.log"
+          fi
+          test -s "$REGIONAL"
+          cp "$REGIONAL.bin.manifest.json" "$ART/regional.manifest.json" 2>/dev/null ||             cp "$REGIONAL.manifest.json" "$ART/regional.manifest.json"
+          echo "REGIONAL=$REGIONAL" >> "$GITHUB_ENV"
+
+      - name: Learn nested vertex training curve
+        run: |
+          set -euxo pipefail
+          LEARNWORK="$SCRATCH/learn"
+          mkdir -p "$LEARNWORK"
+          .venv/bin/python scripts/learn_vertex_training_sweep.py             --trace "$TRACE"             --regional "$REGIONAL"             --learner scripts/learn_vertex_continuation_maps.py             --out "$PAYLOAD"             --work "$LEARNWORK"             --train-sizes "250,500,1000,2000,4000,6000,9000"             --thresholds "2,4"             --slots 4             --min-position 8             --seed 20261006             2>&1 | tee "$ART/training-sweep-learn.log"
+          test -s "$PAYLOAD"
+          cp "$PAYLOAD.manifest.json" "$ART/payload.manifest.json"
+
+      - name: Repack one graph with the full training curve
+        run: |
+          set -euxo pipefail
+          .venv/bin/python scripts/embed_vertex_navhints_in_diskann_index.py             --input-disk-index "$ORIG_DISK"             --payload "$PAYLOAD"             --output-disk-index "$VERTEX_DISK"             2>&1 | tee "$ART/embed.log"
+          test -s "$VERTEX_DISK"
+          cp "$VERTEX_DISK.manifest.json" "$ART/embed.manifest.json"
+
+          ln -s "$ORIG_PIVOTS" "$VERTEX_PIVOTS"
+          ln -s "$ORIG_PQ" "$VERTEX_PQ"
+
+          .venv/bin/python - "$ART/payload.manifest.json" "$ART/embed.manifest.json" <<'PY'
+          import json,sys
+          p=json.load(open(sys.argv[1]))
+          e=json.load(open(sys.argv[2]))
+          assert p["variants_count"] == 15
+          assert p["associated_data_bytes"] == 240
+          assert e["associated_data_bytes"] == 240
+          assert e["variants_count"] == 15
+          assert e["slots_per_variant"] == 4
+          assert e["physical_file_size_change"] == 0
+          assert e["old_sectors_per_node"] == e["new_sectors_per_node"]
+          assert e["old_nodes_per_block"] == e["new_nodes_per_block"]
+          print(json.dumps({"payload":p["sampling"],"storage":e},indent=2))
+          PY
+
+      - name: Install pinned Rust toolchain
+        run: |
+          set -euxo pipefail
+          export CARGO_HOME="$RUNNER_TEMP/vertex-training-cargo-$GITHUB_RUN_ID"
+          export RUSTUP_HOME="$RUNNER_TEMP/vertex-training-rustup-$GITHUB_RUN_ID"
+          mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
+          curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/vertex-training-rustup-$GITHUB_RUN_ID.sh"
+          sh "$RUNNER_TEMP/vertex-training-rustup-$GITHUB_RUN_ID.sh"             -y --profile minimal --no-modify-path --default-toolchain 1.97.1
+          echo "CARGO_HOME=$CARGO_HOME" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$RUSTUP_HOME" >> "$GITHUB_ENV"
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Build vertex-hint DiskANN
+        run: |
+          set -euxo pipefail
+          export PATH="$CARGO_HOME/bin:$PATH"
+          rustup component add rustfmt
+          rev=fcf90534174cf29c78c9f13b4cccf1fcabff85f5
+          rm -rf third_party/DiskANN-vertex-training
+          git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-vertex-training
+          git -C third_party/DiskANN-vertex-training checkout --detach "$rev"
+          .venv/bin/python scripts/patch_diskann_vertex_navhints.py third_party/DiskANN-vertex-training
+          (cd third_party/DiskANN-vertex-training && cargo fmt --all)
+          git -C third_party/DiskANN-vertex-training diff --check
+          git -C third_party/DiskANN-vertex-training diff > "$ART/vertex-runtime.patch"
+          (cd third_party/DiskANN-vertex-training &&             cargo build --release --locked -p diskann-benchmark --features disk-index)             2>&1 | tee "$ART/runtime-build.log"
+          echo "RUNTIME_BIN=$PWD/third_party/DiskANN-vertex-training/target/release/diskann-benchmark" >> "$GITHUB_ENV"
+
+      - name: Measure benefit versus training evidence
+        run: |
+          set -euxo pipefail
+          EVALWORK="$SCRATCH/eval"
+          OUT="$ART/results"
+          rm -rf "$EVALWORK" "$OUT"
+          mkdir -p "$EVALWORK" "$OUT"
+          .venv/bin/python scripts/qualify_vertex_training_sweep.py             --binary "$RUNTIME_BIN"             --queries "$QUERIES"             --gt5000 "$GT5000"             --index-prefix "$VERTEX_PREFIX"             --ivf-16k "$IVF16"             --payload-manifest "$ART/payload.manifest.json"             --embed-manifest "$ART/embed.manifest.json"             --work "$EVALWORK"             --out "$OUT"             --reps 3             2>&1 | tee "$ART/eval.log"
+          { df -h; free -h; } > "$ART/host-after.txt"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vertex-navhints-training-sweep-${{ github.run_id }}
+          path: artifacts/vertex-navhints-training-sweep/
+          retention-days: 30
+
+      - name: Clean scratch
+        if: always()
+        run: |
+          rm -rf             "$RUNNER_TEMP/vertex-training-sweep-$GITHUB_RUN_ID"             "$RUNNER_TEMP/vertex-training-cargo-$GITHUB_RUN_ID"             "$RUNNER_TEMP/vertex-training-rustup-$GITHUB_RUN_ID"
