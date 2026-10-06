@@ -59,6 +59,7 @@ git rev-parse HEAD > "$ART/geoivf-commit.txt"
   scripts/patch_diskann_hot_cache.py \
   scripts/patch_diskann_qsev.py \
   scripts/patch_diskann_hint_ivf_packed_direct.py \
+  scripts/patch_diskann_progressive_navhints.py \
   scripts/learn_global_navigation_landmarks.py \
   scripts/build_hint_ivf.py \
   scripts/qualify_paper_competitors_phase1.py
@@ -179,10 +180,10 @@ QSEV_BIN="$PWD/third_party/DiskANN-paper-qsev/target/release/diskann-benchmark"
 phase "build NavHints DiskANN"
 git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-paper-nav
 git -C third_party/DiskANN-paper-nav checkout --detach "$DISKANN_REV"
-.venv/bin/python scripts/patch_diskann_hint_ivf_packed_direct.py third_party/DiskANN-paper-nav
+.venv/bin/python scripts/patch_diskann_progressive_navhints.py third_party/DiskANN-paper-nav
 (cd third_party/DiskANN-paper-nav && cargo fmt --all)
 git -C third_party/DiskANN-paper-nav diff --check
-git -C third_party/DiskANN-paper-nav diff > "$ART/navhints.patch"
+git -C third_party/DiskANN-paper-nav diff > "$ART/navhints-progressive.patch"
 (cd third_party/DiskANN-paper-nav && cargo build --release --locked -p diskann-benchmark --features disk-index) \
   2>&1 | tee "$ART/navhints-build.log"
 NAV_BIN="$PWD/third_party/DiskANN-paper-nav/target/release/diskann-benchmark"
