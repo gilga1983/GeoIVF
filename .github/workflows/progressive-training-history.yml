@@ -1,0 +1,41 @@
+name: Progressive NavHints training history
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-progressive-training-history
+  cancel-in-progress: true
+
+jobs:
+  training:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run progressive training-history refresh
+        shell: bash
+        run: bash scripts/run_progressive_training_history_ci.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: progressive-training-history-${{ github.run_id }}
+          path: artifacts/progressive-training-history/
+          retention-days: 30
+      - name: Clean scratch
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/progtrain-cargo-$GITHUB_RUN_ID"                  "$RUNNER_TEMP/progtrain-rustup-$GITHUB_RUN_ID"                  "$RUNNER_TEMP/progtrain-state-$GITHUB_RUN_ID"                  "$RUNNER_TEMP/progtrain-eval-$GITHUB_RUN_ID"
