@@ -7,6 +7,7 @@ on:
       - 'scripts/run_paper_memory_frontier_ci.sh'
       - 'scripts/qualify_paper_memory_frontier.py'
       - 'scripts/patch_diskann_hint_ivf_packed_direct.py'
+      - 'scripts/patch_diskann_progressive_navhints.py'
       - 'scripts/build_hint_ivf.py'
       - 'scripts/learn_global_navigation_landmarks.py'
   workflow_dispatch:
@@ -15,8 +16,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: geoivf-performance
-  cancel-in-progress: false
+  group: geoivf-progressive-memory-frontier
+  cancel-in-progress: true
 
 jobs:
   frontier:
