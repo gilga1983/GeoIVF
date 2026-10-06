@@ -2,7 +2,7 @@
 """Patch optimized NavHints to retain runner-up hints across graph search.
 
 The canonical 16K Hint-IVF routing pass already PQ-scores the selected coarse
-cells and their children. This patch keeps the best 32 scored IDs in the
+cells and their children. This patch keeps the best 16 scored IDs in the
 per-query DiskAccessor instead of discarding all but the winner.
 
 The best ID remains the sole initial start. After each *ordinary* DiskANN beam
@@ -300,7 +300,7 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
     {
         if let Some(ivf) = self.hint_ivf {
             const MAX_NPROBE: usize = 64;
-            const RETAINED_TOPK: usize = 32;
+            const RETAINED_TOPK: usize = 16;
             if ivf.nprobe == 0 || ivf.nprobe > MAX_NPROBE || ivf.nprobe > ivf.medoid_ids.len() {
                 return Err(diskann_error!(
                     ErrorKind::IndexError,
