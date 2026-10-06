@@ -8,6 +8,7 @@ on:
       - 'scripts/qualify_catapult_vs_progressive_navhints.py'
       - 'scripts/patch_diskann_progressive_navhints_k16_clean.py'
       - 'scripts/patch_diskann_hint_ivf_packed_direct.py'
+      - 'scripts/patch_diskann_global_starts.py'
       - 'scripts/patch_diskann_catapult_snapshot.py'
   workflow_dispatch:
 
