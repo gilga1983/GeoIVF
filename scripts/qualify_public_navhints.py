@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate vanilla DiskANN vs frozen NavHints on a public 5K heldout split."""
+"""Evaluate vanilla, one-shot, and progressive frozen NavHints on a public heldout split."""
 from __future__ import annotations
 
 import argparse
@@ -36,7 +36,7 @@ def result_rows(obj):
     return out
 
 
-def run_method(binary, out, tag, queries, gt, index_prefix, data_type, distance, ivf=None):
+def run_method(binary, out, tag, queries, gt, index_prefix, data_type, distance, ivf=None, progressive=False):
     cfg = {
         "search_directories": [str(out)],
         "jobs": [{
@@ -76,6 +76,7 @@ def run_method(binary, out, tag, queries, gt, index_prefix, data_type, distance,
         "DISKANN_HINT_IVF_FILE",
         "DISKANN_HINT_IVF_NPROBE",
         "DISKANN_HINT_IVF_MAX_STARTS",
+        "DISKANN_PROGRESSIVE_HINTS",
         "DISKANN_IP_PORTAL_ROUTER_FILE",
         "DISKANN_PAPER_CATAPULT",
         "DISKANN_QSEV_FILE",
@@ -86,6 +87,8 @@ def run_method(binary, out, tag, queries, gt, index_prefix, data_type, distance,
         env["DISKANN_HINT_IVF_FILE"] = str(ivf)
         env["DISKANN_HINT_IVF_NPROBE"] = "8"
         env["DISKANN_HINT_IVF_MAX_STARTS"] = "1"
+        if progressive:
+            env["DISKANN_PROGRESSIVE_HINTS"] = "1"
 
     with (out / f"{tag}.log").open("w") as log:
         subprocess.run(
@@ -179,7 +182,7 @@ def main():
     if not queries.is_file() or not gt.is_file():
         raise FileNotFoundError("heldout files missing")
 
-    methods = ("baseline", "navhints")
+    methods = ("baseline", "canonical", "progressive")
     runs = {m: [] for m in methods}
     allowed = sorted(os.sched_getaffinity(0))
     if len(allowed) < THREADS:
@@ -203,7 +206,8 @@ def main():
                         args.index_prefix,
                         manifest["data_type"],
                         manifest["metric"],
-                        args.ivf if method == "navhints" else None,
+                        args.ivf if method != "baseline" else None,
+                        progressive=(method == "progressive"),
                     )
                     runs[method].append(rows)
                     save(args.out / "runs.partial.json", runs)
@@ -211,18 +215,24 @@ def main():
         os.sched_setaffinity(0, set(allowed))
 
     baseline = mean_rows(runs["baseline"])
-    navhints = mean_rows(runs["navhints"])
+    canonical = mean_rows(runs["canonical"])
+    navhints = mean_rows(runs["progressive"])
 
     same_l = []
     matched = []
     b_by_l = {x["L"]: x for x in baseline}
+    c_by_l = {x["L"]: x for x in canonical}
     for n in navhints:
         b = b_by_l[n["L"]]
+        c = c_by_l[n["L"]]
         same_l.append({
             "L": n["L"],
-            "recall_gain_points": n["recall_percent"] - b["recall_percent"],
-            "io_ratio": n["mean_ios"] / b["mean_ios"],
-            "qps_ratio": n["median_qps"] / b["median_qps"],
+            "recall_gain_points_vs_baseline": n["recall_percent"] - b["recall_percent"],
+            "io_ratio_vs_baseline": n["mean_ios"] / b["mean_ios"],
+            "qps_ratio_vs_baseline": n["median_qps"] / b["median_qps"],
+            "recall_gain_points_vs_canonical": n["recall_percent"] - c["recall_percent"],
+            "io_ratio_vs_canonical": n["mean_ios"] / c["mean_ios"],
+            "latency_ratio_vs_canonical": n["median_latency_us"] / c["median_latency_us"],
         })
         ib = interpolate_baseline(baseline, n["recall_percent"])
         if ib is not None:
@@ -258,7 +268,9 @@ def main():
         "runtime_payload_bytes": runtime_payload,
         "search": {"K": K, "Ls": list(LS), "beam": BEAM, "threads": THREADS},
         "baseline": baseline,
+        "canonical_navhints": canonical,
         "navhints": navhints,
+        "navhints_policy": "progressive retained runner-ups after natural beam boundaries; no second routing pass",
         "same_L": same_l,
         "matched_recall_interpolation": matched,
     }
