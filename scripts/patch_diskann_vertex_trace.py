@@ -103,11 +103,17 @@ def patch_provider(path: Path) -> None:
 
         let routing_comparisons = io_tracker
 '''
-    # Vertex patch adds exactly one copy of this search block after the base
-    # method has already been patched by the fast Hint-IVF machinery.
-    if s.count(old) != 1:
-        raise RuntimeError(f"vertex trace search block expected once, found {s.count(old)}")
-    s=s.replace(old,new,1)
+    # The optimized Hint-IVF and vertex-Hint-IVF methods share this search
+    # block. Patch only the vertex method.
+    vertex_at=s.index("    pub fn search_with_vertex_hint_ivf(")
+    if vertex_at < 0:
+        raise RuntimeError("vertex search method not found")
+    before=s[:vertex_at]
+    after=s[vertex_at:]
+    if after.count(old) < 1:
+        raise RuntimeError("vertex trace search block not found after vertex method")
+    after=after.replace(old,new,1)
+    s=before+after
 
     stats_block=r'''            stats: SearchResultStats {
                 cmps: query_stats.total_comparisons,
