@@ -75,12 +75,8 @@ def patch_search_hook(root: Path) -> None:
                         if scratch.visited.contains(&id) {
                             return;
                         }
-                        let better = regional_best.is_none_or(|current| {
-                            distance
-                                .total_cmp(&current.1)
-                                .then_with(|| id.into_usize().cmp(&current.0.into_usize()))
-                                .is_lt()
-                        });
+                        let better = regional_best
+                            .is_none_or(|current| distance.total_cmp(&current.1).is_lt());
                         if better {
                             regional_best = Some((id, distance));
                         }
