@@ -1,16 +1,5 @@
 name: Staged NavHints equal-memory A/B
 on:
-  push:
-    branches: [experiment/staged-navhints]
-    paths:
-      - '.github/workflows/staged-navhints.yml'
-      - 'scripts/run_staged_navhints_ci.sh'
-      - 'scripts/qualify_staged_navhints.py'
-      - 'scripts/learn_staged_navigation_landmarks.py'
-      - 'scripts/patch_diskann_staged_navhints.py'
-      - 'scripts/patch_diskann_hint_ivf_packed_direct.py'
-      - 'scripts/build_hint_ivf.py'
-      - 'scripts/learn_global_navigation_landmarks.py'
   workflow_dispatch:
 
 permissions:
