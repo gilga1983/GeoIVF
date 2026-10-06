@@ -8,6 +8,7 @@ on:
       - 'scripts/run_public_dataset_one.sh'
       - 'scripts/qualify_public_navhints.py'
       - 'scripts/patch_diskann_progressive_navhints.py'
+      - 'scripts/prepare_public_ann_dataset.py'
   workflow_dispatch:
 
 permissions:
