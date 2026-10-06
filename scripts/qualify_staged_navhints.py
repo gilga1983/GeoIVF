@@ -77,7 +77,8 @@ def run_one(
     start_probe: int,
     stage_ivf: Path | None = None,
     stage_probe: int | None = None,
-    stage_hops: int | None = None,
+    stage_hops: int | str | None = None,
+    progressive_hints: bool = false,
 ):
     cfg = {
         "search_directories": [str(out)],
@@ -121,6 +122,7 @@ def run_one(
         "DISKANN_STAGE_HINT_IVF_FILE",
         "DISKANN_STAGE_HINT_IVF_NPROBE",
         "DISKANN_STAGE_HINT_HOPS",
+        "DISKANN_PROGRESSIVE_HINTS",
         "DISKANN_GLOBAL_START_IDS_FILE",
         "DISKANN_START_POINTS_FILE",
         "DISKANN_QSEV_FILE",
@@ -135,6 +137,8 @@ def run_one(
     env["DISKANN_HINT_IVF_FILE"] = str(start_ivf)
     env["DISKANN_HINT_IVF_NPROBE"] = str(start_probe)
     env["DISKANN_HINT_IVF_MAX_STARTS"] = "1"
+    if progressive_hints:
+        env["DISKANN_PROGRESSIVE_HINTS"] = "1"
     if stage_ivf is not None:
         if stage_probe is None or stage_hops is None:
             raise ValueError("stage probe/hops required")
