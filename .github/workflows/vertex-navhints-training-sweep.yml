@@ -7,6 +7,7 @@ on:
       - '.github/workflows/vertex-navhints-training-sweep.yml'
       - 'scripts/learn_vertex_training_sweep.py'
       - 'scripts/qualify_vertex_training_sweep.py'
+      - 'scripts/patch_diskann_vertex_navhints.py'
   workflow_dispatch:
 
 permissions:
@@ -162,7 +163,7 @@ jobs:
           rm -rf third_party/DiskANN-vertex-training
           git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-vertex-training
           git -C third_party/DiskANN-vertex-training checkout --detach "$rev"
-          .venv/bin/python scripts/patch_diskann_vertex_navhints.py third_party/DiskANN-vertex-training
+          .venv/bin/python scripts/patch_diskann_vertex_navhints.py third_party/DiskANN-vertex-training --variants 15
           (cd third_party/DiskANN-vertex-training && cargo fmt --all)
           git -C third_party/DiskANN-vertex-training diff --check
           git -C third_party/DiskANN-vertex-training diff > "$ART/vertex-runtime.patch"
