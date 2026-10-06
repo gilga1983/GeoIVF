@@ -78,7 +78,7 @@ def run_one(
     stage_ivf: Path | None = None,
     stage_probe: int | None = None,
     stage_hops: int | str | None = None,
-    progressive_hints: bool = false,
+    progressive_hints: bool = False,
 ):
     cfg = {
         "search_directories": [str(out)],
