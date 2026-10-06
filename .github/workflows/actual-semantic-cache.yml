@@ -158,7 +158,7 @@ jobs:
         run: |
           set -euxo pipefail
           rm -rf "$ENTRIES"; mkdir -p "$ENTRIES"
-          .venv/bin/python scripts/build_actual_semantic_cache_entries.py             --queries "$QUERIES"             --pq-pivots "$ORIG"_pq_pivots.bin             --pq-codes "$ORIG"_pq_compressed.bin             --trace "$ART/not-used.jsonl"             --results-l80 "$ART/producer.L80.bin"             --results-l160 "$ART/producer.L160.bin"             --out-dir "$ENTRIES"             --capacities "512,2048"             2>&1 | tee "$ART/cache-build.log"
+          .venv/bin/python scripts/build_actual_semantic_cache_entries.py             --queries "$QUERIES"             --pq-pivots "$ORIG"_pq_pivots.bin             --pq-codes "$ORIG"_pq_compressed.bin --results-l80 "$ART/producer.L80.bin"             --results-l160 "$ART/producer.L160.bin"             --out-dir "$ENTRIES"             --capacities "512,2048"             2>&1 | tee "$ART/cache-build.log"
           cp "$ENTRIES/manifest.json" "$ART/cache-manifest.json"
 
       - name: Evaluate actual semantic cache
