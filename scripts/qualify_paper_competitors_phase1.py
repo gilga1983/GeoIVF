@@ -6,8 +6,7 @@ DiskANN graph, PQ state, SSD, beam width, thread count, and dense L grid.
 
 Methods:
 * baseline: ordinary DiskANN medoid start
-* bfs-30 / bfs-32: native DiskANN full-node BFS cache
-* hot-30 / hot-32: full-node cache chosen from the same 5K training history
+* hot-30: equal-budget full-node cache chosen from the same 5K training history
 * qsev-32: DiskANN++-style query-sensitive entry pool, 32 FP32 vectors
 * navhints: progressive 16K hints / 512 spherical lists / nprobe=8; route once, retain runner-ups, and admit them after natural beam boundaries
 """
@@ -27,11 +26,7 @@ import numpy as np
 THREADS = 4
 BEAM = 8
 K = 10
-LS = (
-    10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 40, 44, 48,
-    56, 64, 72, 80, 88, 96, 112, 128, 144, 160, 176, 192,
-    224, 256, 288, 320,
-)
+LS = (10, 12, 20, 22, 24, 40, 44, 80, 88, 160, 176)
 NAV_ANCHORS = (10, 20, 40, 80, 160)
 CACHE_COUNTS = (30, 32)
 DIM = 768
@@ -374,9 +369,7 @@ def main() -> None:
             f"QSEV state {qsev_bytes} exceeds NavHints runtime state {nav_runtime_bytes}"
         )
 
-    methods = [
-        "baseline", "bfs-30", "bfs-32", "hot-30", "hot-32", "qsev-32", "navhints"
-    ]
+    methods = ["baseline", "hot-30", "qsev-32", "navhints"]
     runs = {m: [] for m in methods}
 
     allowed = sorted(os.sched_getaffinity(0))
@@ -482,7 +475,7 @@ def main() -> None:
             "QSEV routing is inside the timed query path.",
             "QSEV uses exact centroid representatives, strengthening the published approximate offline mapping.",
             "The 30-node cache fits vector plus worst-case 64 edge-ID payload under the NavHints state budget before container metadata.",
-            "The 32-node cache is deliberately generous: vector payload alone consumes almost the entire NavHints budget.",
+            "A previous broader campaign also tested native BFS and a deliberately generous 32-node cache; the progressive refresh reruns only the headline equal-budget arms.",
             "Cache container/hash/allocator overhead is excluded, which favors the cache baselines.",
             "All methods are order-rotated within one device-locked timing epoch.",
         ],
