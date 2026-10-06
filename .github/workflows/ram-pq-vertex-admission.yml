@@ -1,0 +1,140 @@
+name: RAM PQ plus vertex admission
+
+on:
+  push:
+    branches: [experiment/staged-navhints]
+    paths:
+      - '.github/workflows/ram-pq-vertex-admission.yml'
+      - 'scripts/qualify_ram_pq_vertex_admission.py'
+      - 'scripts/patch_diskann_ram_pq_walk.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-ram-pq-vertex-admission
+  cancel-in-progress: true
+
+jobs:
+  screen:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    defaults:
+      run:
+        shell: bash
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prepare inputs
+        run: |
+          set -euxo pipefail
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install numpy==2.2.6
+
+          ART="$PWD/artifacts/ram-pq-vertex-admission"
+          BASE="$HOME/.cache/geoivf/catapult-paper-pubmed1m/pubmed-medcpt-first1m.fbin"
+          QUERIES="$HOME/.cache/geoivf/medrag-zipf-qwen3b-v1/medrag-zipf-10k-medcpt.fbin"
+          GT5000="$HOME/.cache/geoivf/medrag-zipf-qwen3b-v1/heldout5000-pubmed1m-top16-ip.gt"
+          ORIG_PREFIX="$HOME/.cache/geoivf/catapult-paper-pubmed1m-index-v1/diskann-index"
+          ORIG_DISK="$ORIG_PREFIX"_disk.index
+          ORIG_PIVOTS="$ORIG_PREFIX"_pq_pivots.bin
+          ORIG_PQ="$ORIG_PREFIX"_pq_compressed.bin
+          IVF16="$HOME/.cache/geoivf/onpolicy-staged-navhints-v1/canonical-b16000-c512.bin"
+          PAYLOAD="$HOME/.cache/geoivf/vertex-navhints-v1/vertex-continuations.bin"
+          VERTEX_PREFIX="$HOME/.cache/geoivf/vertex-navhints-v1/diskann-index"
+          VERTEX_DISK="$VERTEX_PREFIX"_disk.index
+          VERTEX_PIVOTS="$VERTEX_PREFIX"_pq_pivots.bin
+          VERTEX_PQ="$VERTEX_PREFIX"_pq_compressed.bin
+          RAM_GRAPH="$HOME/.cache/geoivf/ram-pq-walk-v1/graphs/pq-hnsw-level0-d4.bin"
+
+          mkdir -p "$ART"
+          for f in "$BASE" "$QUERIES" "$GT5000" "$ORIG_DISK" "$ORIG_PIVOTS" "$ORIG_PQ" "$IVF16" "$PAYLOAD" "$RAM_GRAPH"; do test -s "$f"; done
+
+          echo "ART=$ART" >> "$GITHUB_ENV"
+          echo "QUERIES=$QUERIES" >> "$GITHUB_ENV"
+          echo "GT5000=$GT5000" >> "$GITHUB_ENV"
+          echo "ORIG_DISK=$ORIG_DISK" >> "$GITHUB_ENV"
+          echo "ORIG_PIVOTS=$ORIG_PIVOTS" >> "$GITHUB_ENV"
+          echo "ORIG_PQ=$ORIG_PQ" >> "$GITHUB_ENV"
+          echo "IVF16=$IVF16" >> "$GITHUB_ENV"
+          echo "PAYLOAD=$PAYLOAD" >> "$GITHUB_ENV"
+          echo "VERTEX_PREFIX=$VERTEX_PREFIX" >> "$GITHUB_ENV"
+          echo "VERTEX_DISK=$VERTEX_DISK" >> "$GITHUB_ENV"
+          echo "VERTEX_PIVOTS=$VERTEX_PIVOTS" >> "$GITHUB_ENV"
+          echo "VERTEX_PQ=$VERTEX_PQ" >> "$GITHUB_ENV"
+          echo "RAM_GRAPH=$RAM_GRAPH" >> "$GITHUB_ENV"
+
+          .venv/bin/python -m py_compile             scripts/embed_vertex_navhints_in_diskann_index.py             scripts/patch_diskann_vertex_navhints.py             scripts/patch_diskann_ram_pq_walk.py             scripts/qualify_ram_pq_vertex_admission.py
+
+      - name: Ensure enriched vertex index
+        run: |
+          set -euxo pipefail
+          if [ ! -s "$VERTEX_DISK" ]; then
+            .venv/bin/python scripts/embed_vertex_navhints_in_diskann_index.py               --input-disk-index "$ORIG_DISK"               --payload "$PAYLOAD"               --output-disk-index "$VERTEX_DISK"               2>&1 | tee "$ART/embed.log"
+          fi
+          rm -f "$VERTEX_PIVOTS" "$VERTEX_PQ"
+          ln -s "$ORIG_PIVOTS" "$VERTEX_PIVOTS"
+          ln -s "$ORIG_PQ" "$VERTEX_PQ"
+          test -s "$VERTEX_DISK"
+
+      - name: Install pinned Rust toolchain
+        run: |
+          set -euxo pipefail
+          export CARGO_HOME="$RUNNER_TEMP/ramvertex-cargo-$GITHUB_RUN_ID"
+          export RUSTUP_HOME="$RUNNER_TEMP/ramvertex-rustup-$GITHUB_RUN_ID"
+          mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
+          curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/ramvertex-rustup-$GITHUB_RUN_ID.sh"
+          sh "$RUNNER_TEMP/ramvertex-rustup-$GITHUB_RUN_ID.sh" -y --profile minimal --no-modify-path --default-toolchain 1.97.1
+          echo "CARGO_HOME=$CARGO_HOME" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$RUSTUP_HOME" >> "$GITHUB_ENV"
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Build combined DiskANN
+        run: |
+          set -euxo pipefail
+          export PATH="$CARGO_HOME/bin:$PATH"
+          rustup component add rustfmt
+          rev=fcf90534174cf29c78c9f13b4cccf1fcabff85f5
+          rm -rf third_party/DiskANN-ram-vertex
+          git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-ram-vertex
+          git -C third_party/DiskANN-ram-vertex checkout --detach "$rev"
+          .venv/bin/python scripts/patch_diskann_vertex_navhints.py third_party/DiskANN-ram-vertex
+          .venv/bin/python scripts/patch_diskann_ram_pq_walk.py third_party/DiskANN-ram-vertex
+          (cd third_party/DiskANN-ram-vertex && cargo fmt --all)
+          git -C third_party/DiskANN-ram-vertex diff --check
+          (cd third_party/DiskANN-ram-vertex && cargo build --release --locked -p diskann-benchmark --features disk-index)             2>&1 | tee "$ART/runtime-build.log"
+          echo "RUNTIME_BIN=$PWD/third_party/DiskANN-ram-vertex/target/release/diskann-benchmark" >> "$GITHUB_ENV"
+
+      - name: Run admission comparison
+        run: |
+          set -euxo pipefail
+          WORK="$RUNNER_TEMP/ramvertex-eval-$GITHUB_RUN_ID"
+          OUT="$ART/results"
+          rm -rf "$WORK" "$OUT"; mkdir -p "$WORK" "$OUT"
+          .venv/bin/python scripts/qualify_ram_pq_vertex_admission.py             --binary "$RUNTIME_BIN"             --queries "$QUERIES"             --gt5000 "$GT5000"             --index-prefix "$VERTEX_PREFIX"             --ivf-16k "$IVF16"             --ram-graph "$RAM_GRAPH"             --work "$WORK"             --out "$OUT"             --reps 5             2>&1 | tee "$ART/eval.log"
+          rm -rf "$WORK"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ram-pq-vertex-admission-${{ github.run_id }}
+          path: artifacts/ram-pq-vertex-admission/
+          retention-days: 30
+
+      - name: Clean scratch
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/ramvertex-cargo-$GITHUB_RUN_ID"                  "$RUNNER_TEMP/ramvertex-rustup-$GITHUB_RUN_ID"                  "$RUNNER_TEMP/ramvertex-eval-$GITHUB_RUN_ID"
