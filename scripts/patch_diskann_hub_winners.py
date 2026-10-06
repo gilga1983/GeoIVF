@@ -70,28 +70,62 @@ def patch_glue(root: Path):
 
 def patch_provider(path: Path):
     s = path.read_text()
-    s = once(
-        s,
-        """    vertex_hint_last: [u32; 4],
+
+    # Compose cleanly with the semantic-cache patch when present.
+    semantic_state = """    vertex_hint_last: [u32; 4],
+    vertex_hint_last_valid: bool,
+    semantic_cache_entry: Option<&'a [u32]>,
+    semantic_cache_siblings_emitted: bool,
+}
+"""
+    semantic_state_new = """    vertex_hint_last: [u32; 4],
+    vertex_hint_last_valid: bool,
+    semantic_cache_entry: Option<&'a [u32]>,
+    semantic_cache_siblings_emitted: bool,
+    hub_winner_count: usize,
+    hub_winner_last: [u32; 10],
+    hub_winner_last_valid: bool,
+}
+"""
+    plain_state = """    vertex_hint_last: [u32; 4],
     vertex_hint_last_valid: bool,
 }
-""",
-        """    vertex_hint_last: [u32; 4],
+"""
+    plain_state_new = """    vertex_hint_last: [u32; 4],
     vertex_hint_last_valid: bool,
     hub_winner_count: usize,
     hub_winner_last: [u32; 10],
     hub_winner_last_valid: bool,
 }
-""",
-        "hub winner accessor state",
-    )
-    s = once(
-        s,
-        """            vertex_hint_last: [u32::MAX; 4],
+"""
+    if semantic_state in s:
+        s = once(s, semantic_state, semantic_state_new, "hub winner accessor state")
+    else:
+        s = once(s, plain_state, plain_state_new, "hub winner accessor state")
+
+    semantic_init = """            vertex_hint_last: [u32::MAX; 4],
+            vertex_hint_last_valid: false,
+            semantic_cache_entry: strategy.semantic_cache_entry,
+            semantic_cache_siblings_emitted: false,
+        })
+"""
+    semantic_init_new = """            vertex_hint_last: [u32::MAX; 4],
+            vertex_hint_last_valid: false,
+            semantic_cache_entry: strategy.semantic_cache_entry,
+            semantic_cache_siblings_emitted: false,
+            hub_winner_count: std::env::var("DISKANN_HUB_WINNER_COUNT")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(0),
+            hub_winner_last: [u32::MAX; 10],
+            hub_winner_last_valid: false,
+        })
+"""
+    plain_init = """            vertex_hint_last: [u32::MAX; 4],
             vertex_hint_last_valid: false,
         })
-""",
-        """            vertex_hint_last: [u32::MAX; 4],
+"""
+    plain_init_new = """            vertex_hint_last: [u32::MAX; 4],
             vertex_hint_last_valid: false,
             hub_winner_count: std::env::var("DISKANN_HUB_WINNER_COUNT")
                 .ok()
@@ -100,9 +134,11 @@ def patch_provider(path: Path):
             hub_winner_last: [u32::MAX; 10],
             hub_winner_last_valid: false,
         })
-""",
-        "hub winner accessor init",
-    )
+"""
+    if semantic_init in s:
+        s = once(s, semantic_init, semantic_init_new, "hub winner accessor init")
+    else:
+        s = once(s, plain_init, plain_init_new, "hub winner accessor init")
 
     marker = """    fn vertex_hint_distances<F>(
 """
