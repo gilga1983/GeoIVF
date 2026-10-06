@@ -168,6 +168,7 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
         """            start_points: None,
             hint_ivf: Some(hint_ivf),
             progressive_hints: false,
+            progressive_hint_limit: 0,
         }
 """,
         "canonical Hint-IVF progressive off",
@@ -196,6 +197,31 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
 
 """
     s = once(s, marker, strategy + marker, "progressive strategy constructor")
+
+    # Per-query instrumentation. The tracker is query-local; the mutex only
+    # satisfies Send/Sync bounds and is touched when a hint is actually admitted.
+    s = once(
+        s,
+        """    routing_comparisons: AtomicUsize,
+}
+""",
+        """    routing_comparisons: AtomicUsize,
+    progressive_hint_admission_hops: std::sync::Mutex<Vec<u32>>,
+}
+""",
+        "progressive admission tracker field",
+    )
+    s = once(
+        s,
+        """            routing_comparisons: AtomicUsize::new(0),
+        }
+""",
+        """            routing_comparisons: AtomicUsize::new(0),
+            progressive_hint_admission_hops: std::sync::Mutex::new(Vec::new()),
+        }
+""",
+        "progressive admission tracker init",
+    )
 
     old_start = r'''    async fn start_point_distances<F>(&mut self, mut f: F) -> ANNResult<()>
     where
