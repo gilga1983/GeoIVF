@@ -96,8 +96,8 @@ jobs:
             --ef-construction 80 \
             --add-batch 8192 \
             --threads 4 \
-            --candidate-budgets "10,20,50,100,200" \
-            --ef-search "32,64,128,256" \
+            --candidate-budgets "10,20,50,100,200,500,1000" \
+            --ef-search "32,64,128,256,512,1024,2048" \
             2>&1 | tee "$ART/eval.log"
           { free -h; df -h; } > "$ART/host-after.txt"
 
