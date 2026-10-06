@@ -149,6 +149,15 @@ def main():
                 check=True,
             )
 
+    # The trace patch writes the base filename directly when only one L is
+    # requested, but uses .L<value> before the suffix for multi-L runs.
+    # Canonicalize the single-L case so downstream caches use one naming scheme.
+    if len(ls) == 1 and trace_base.is_file():
+        canonical = trace_path(trace_base, ls[0])
+        if canonical.exists():
+            canonical.unlink()
+        trace_base.replace(canonical)
+
     summary = {"queries": args.train_rows, "teacher_ls": ls, "traces": {}}
     for lval in ls:
         path = trace_path(trace_base, lval)
