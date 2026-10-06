@@ -52,6 +52,9 @@ def patch_search_hook(root: Path) -> None:
         std::future::ready(Ok(()))
     }
 
+    /// Record one accepted progressive hint at the current expansion count.
+    fn record_progressive_hint_admission(&self, _hops: u32) {}
+
 """
     s = once(s, marker, hook + marker, "progressive SearchAccessor hook")
     glue.write_text(s)
@@ -80,6 +83,9 @@ def patch_search_hook(root: Path) -> None:
                         }
                     })
                     .await?;
+                if progressive_inserted {
+                    accessor.record_progressive_hint_admission(scratch.hops);
+                }
 """
     s = once(s, anchor, replacement, "natural-beam progressive injection")
     index.write_text(s)
@@ -94,6 +100,7 @@ def patch_provider_progressive(path: Path) -> None:
 """,
         """    hint_ivf: Option<HintIvfSearch<'a>>,
     progressive_hints: bool,
+    progressive_hint_limit: usize,
 """,
         2,
         "strategy/accessor progressive flag",
@@ -101,6 +108,8 @@ def patch_provider_progressive(path: Path) -> None:
 
     accessor_anchor = """    hint_ivf: Option<HintIvfSearch<'a>>,
     progressive_hints: bool,
+    progressive_hint_limit: usize,
+    retained_hint_ranked: Vec<(u32, f32)>,
 }
 
 impl<Data, VP> DiskAccessor<'_, Data, VP>
@@ -110,6 +119,7 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
         accessor_anchor,
         """    hint_ivf: Option<HintIvfSearch<'a>>,
     progressive_hints: bool,
+    progressive_hint_limit: usize,
     retained_hint_ranked: Vec<(u32, f32)>,
 }
 
@@ -127,6 +137,7 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
         """            start_points: strategy.start_points,
             hint_ivf: strategy.hint_ivf,
             progressive_hints: strategy.progressive_hints,
+            progressive_hint_limit: strategy.progressive_hint_limit,
             retained_hint_ranked: Vec::new(),
         })
 """,
@@ -142,6 +153,7 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
         """            start_points,
             hint_ivf: None,
             progressive_hints: false,
+            progressive_hint_limit: 0,
         }
 """,
         "generic strategy progressive off",
@@ -167,6 +179,7 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
         &'a self,
         io_tracker: &'a IOTracker,
         hint_ivf: HintIvfSearch<'a>,
+        progressive_hint_limit: usize,
     ) -> DiskSearchStrategy<'a, Data, ProviderFactory> {
         DiskSearchStrategy {
             io_tracker,
@@ -177,6 +190,7 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
             start_points: None,
             hint_ivf: Some(hint_ivf),
             progressive_hints: true,
+            progressive_hint_limit,
         }
     }
 
@@ -426,11 +440,25 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
         F: FnMut(Self::Id, f32) + Send,
     {
         if self.progressive_hints {
-            for &(id, distance) in &self.retained_hint_ranked {
+            for &(id, distance) in self
+                .retained_hint_ranked
+                .iter()
+                .take(self.progressive_hint_limit)
+            {
                 f(id, distance);
             }
         }
         Ok(())
+    }
+
+    fn record_progressive_hint_admission(&self, hops: u32) {
+        if self.progressive_hints {
+            self.io_tracker
+                .progressive_hint_admission_hops
+                .lock()
+                .expect("progressive hint admission lock poisoned")
+                .push(hops);
+        }
     }
 
     async fn num_starting_points(&self) -> ANNResult<usize> {
@@ -453,6 +481,7 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
         offsets: &[u32],
         hint_ids: &[u32],
         nprobe: usize,
+        progressive_hint_limit: usize,
     ) -> ANNResult<SearchResult<Data::AssociatedDataType>> {
         if medoid_ids.is_empty()
             || coarse_local_ids.len() != medoid_ids.len()
@@ -466,6 +495,8 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
             || nprobe == 0
             || nprobe > medoid_ids.len()
             || nprobe > 64
+            || progressive_hint_limit == 0
+            || progressive_hint_limit > 32
         {
             return Err(diskann_error!(
                 ErrorKind::IndexError,
@@ -501,7 +532,11 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
             hint_ids,
             nprobe,
         };
-        let strategy = self.search_strategy_with_progressive_hint_ivf(&io_tracker, hint_ivf);
+        let strategy = self.search_strategy_with_progressive_hint_ivf(
+            &io_tracker,
+            hint_ivf,
+            progressive_hint_limit,
+        );
         let knn_search = Knn::new(search_list_size as usize, beam_width)
             .map_err(|e| diskann_error!(ErrorKind::IndexError, e))?;
 
@@ -528,6 +563,11 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
             .total_execution_time_us
             .saturating_sub(query_stats.io_time_us)
             .saturating_sub(query_stats.query_pq_preprocess_time_us);
+        query_stats.progressive_hint_admission_hops = io_tracker
+            .progressive_hint_admission_hops
+            .lock()
+            .expect("progressive hint admission lock poisoned")
+            .clone();
 
         let mut search_result = SearchResult {
             results: Vec::with_capacity(return_list_size as usize),
@@ -583,6 +623,14 @@ def patch_benchmark_progressive(path: Path) -> None:
     let progressive_hints = std::env::var("DISKANN_PROGRESSIVE_HINTS")
         .ok()
         .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"));
+    let progressive_hint_topk = std::env::var("DISKANN_PROGRESSIVE_HINT_TOPK")
+        .ok()
+        .map(|v| v.parse::<usize>())
+        .transpose()?
+        .unwrap_or(32);
+    if progressive_hints && !(1..=32).contains(&progressive_hint_topk) {
+        anyhow::bail!("DISKANN_PROGRESSIVE_HINT_TOPK must be in [1,32]");
+    }
 
     // Load the vector filters
 """
@@ -616,6 +664,7 @@ def patch_benchmark_progressive(path: Path) -> None:
                             &index.offsets,
                             &index.hint_ids,
                             hint_ivf_nprobe,
+                            progressive_hint_topk,
                         )
                     } else {
                         searcher.search_with_hint_ivf(
@@ -658,6 +707,92 @@ def main():
     patch_search_hook(root)
     patch_provider_progressive(provider)
     patch_benchmark_progressive(benchmark)
+
+    statistics = root / "diskann-disk/src/utils/statistics.rs"
+    ss = statistics.read_text()
+    ss = once(
+        ss,
+        """    /// Number of hops performed during search.
+    pub search_hops: u32,
+""",
+        """    /// Number of hops performed during search.
+    pub search_hops: u32,
+
+    /// Expansion counts at which retained NavHints were admitted.
+    pub progressive_hint_admission_hops: Vec<u32>,
+""",
+        "progressive QueryStatistics field",
+    )
+    statistics.write_text(ss)
+
+    bs = benchmark.read_text()
+    bs = once(
+        bs,
+        """    pub(super) mean_hops: f64,
+    pub(super) cache_hit_percentage: f64,
+""",
+        """    pub(super) mean_hops: f64,
+    pub(super) progressive_hint_mean_admissions: f64,
+    pub(super) progressive_hint_queries_with_admission_percent: f64,
+    pub(super) progressive_hint_count_histogram: Vec<u64>,
+    pub(super) progressive_hint_hop_histogram: Vec<u64>,
+    pub(super) cache_hit_percentage: f64,
+""",
+        "progressive benchmark result fields",
+    )
+    bs = once(
+        bs,
+        """        Ok(DiskSearchResult {
+            search_l,
+""",
+        """        let max_admissions = statistics
+            .iter()
+            .map(|s| s.progressive_hint_admission_hops.len())
+            .max()
+            .unwrap_or(0);
+        let mut progressive_hint_count_histogram = vec![0u64; max_admissions + 1];
+        let max_admission_hop = statistics
+            .iter()
+            .flat_map(|s| s.progressive_hint_admission_hops.iter().copied())
+            .max()
+            .unwrap_or(0) as usize;
+        let mut progressive_hint_hop_histogram = vec![0u64; max_admission_hop + 1];
+        let mut progressive_hint_total_admissions = 0usize;
+        let mut progressive_hint_queries_with_admission = 0usize;
+        for stats in statistics {
+            let count = stats.progressive_hint_admission_hops.len();
+            progressive_hint_count_histogram[count] += 1;
+            progressive_hint_total_admissions += count;
+            if count > 0 {
+                progressive_hint_queries_with_admission += 1;
+            }
+            for &hop in &stats.progressive_hint_admission_hops {
+                progressive_hint_hop_histogram[hop as usize] += 1;
+            }
+        }
+
+        Ok(DiskSearchResult {
+            search_l,
+""",
+        "progressive benchmark histogram setup",
+    )
+    bs = once(
+        bs,
+        """            mean_hops: statistics::get_mean_stats(statistics, |s| s.search_hops as f64),
+            cache_hit_percentage,
+""",
+        """            mean_hops: statistics::get_mean_stats(statistics, |s| s.search_hops as f64),
+            progressive_hint_mean_admissions:
+                progressive_hint_total_admissions as f64 / num_queries as f64,
+            progressive_hint_queries_with_admission_percent:
+                100.0 * progressive_hint_queries_with_admission as f64 / num_queries as f64,
+            progressive_hint_count_histogram,
+            progressive_hint_hop_histogram,
+            cache_hit_percentage,
+""",
+        "progressive benchmark histogram output",
+    )
+    benchmark.write_text(bs)
     print(f"patched DiskANN {PINNED} with progressive retained NavHints")
 
 
