@@ -9,7 +9,7 @@ Methods:
 * bfs-30 / bfs-32: native DiskANN full-node BFS cache
 * hot-30 / hot-32: full-node cache chosen from the same 5K training history
 * qsev-32: DiskANN++-style query-sensitive entry pool, 32 FP32 vectors
-* navhints: canonical packed-direct 16K hints / 512 spherical lists / nprobe=8
+* navhints: progressive 16K hints / 512 spherical lists / nprobe=8; route once, retain runner-ups, and admit them after natural beam boundaries
 """
 from __future__ import annotations
 
@@ -84,6 +84,7 @@ def run_one(
     hot_ids: Path | None = None,
     qsev: Path | None = None,
     ivf: Path | None = None,
+    progressive_hints: bool = False,
 ):
     cfg = {
         "search_directories": [str(out)],
@@ -123,6 +124,7 @@ def run_one(
         "DISKANN_HINT_IVF_FILE",
         "DISKANN_HINT_IVF_NPROBE",
         "DISKANN_HINT_IVF_MAX_STARTS",
+        "DISKANN_PROGRESSIVE_HINTS",
         "DISKANN_GLOBAL_START_IDS_FILE",
         "DISKANN_START_POINTS_FILE",
         "DISKANN_QSEV_FILE",
@@ -145,6 +147,8 @@ def run_one(
         env["DISKANN_HINT_IVF_FILE"] = str(ivf)
         env["DISKANN_HINT_IVF_NPROBE"] = "8"
         env["DISKANN_HINT_IVF_MAX_STARTS"] = "1"
+        if progressive_hints:
+            env["DISKANN_PROGRESSIVE_HINTS"] = "1"
 
     method_log = out / f"{tag}.log"
     command = [str(binary), "run", "--input-file", str(inp), "--output-file", str(output)]
@@ -405,6 +409,7 @@ def main() -> None:
                     elif method == "navhints":
                         binary = args.nav_binary
                         kwargs["ivf"] = args.ivf
+                        kwargs["progressive_hints"] = True
 
                     rr = run_one(
                         binary,
@@ -473,6 +478,7 @@ def main() -> None:
             "full_node_cache": cache_memory,
         },
         "guardrails": [
+            "NavHints uses the progressive retained-shortlist policy: the 16K directory is routed once, runner-ups are retained in query-local scratch, and later admission occurs only after natural beam boundaries.",
             "QSEV routing is inside the timed query path.",
             "QSEV uses exact centroid representatives, strengthening the published approximate offline mapping.",
             "The 30-node cache fits vector plus worst-case 64 edge-ID payload under the NavHints state budget before container metadata.",
