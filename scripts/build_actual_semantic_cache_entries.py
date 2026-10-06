@@ -34,7 +34,7 @@ def write_rows(path:Path,a):
 
 def main():
     ap=argparse.ArgumentParser()
-    for n in ("queries","pq-pivots","pq-codes","trace","results-l80","results-l160","out-dir"):
+    for n in ("queries","pq-pivots","pq-codes","results-l80","results-l160","out-dir"):
         ap.add_argument("--"+n,type=Path,required=True)
     ap.add_argument("--capacities",default="512,2048")
     args=ap.parse_args()
@@ -44,7 +44,6 @@ def main():
     qwarm=np.asarray(q[WARM0:],dtype=np.float32)
     qeval=np.asarray(q[EVAL0:EVAL0+N],dtype=np.float32)
     codes=encode_queries_pq(qwarm,piv,offs)
-    nav=trace_starts(args.trace.resolve())
     prod={"80":read_ids(args.results_l80.resolve()),"160":read_ids(args.results_l160.resolve())}
     for L,a in prod.items():
         if a.shape!=(5000,10): raise ValueError(f"L{L} producer shape {a.shape}")
