@@ -187,6 +187,51 @@ def build_policy(
     }
 
 
+
+def build_multiset(
+    cap: int,
+    queries: np.ndarray,
+    results: np.ndarray,
+    pivots,
+    offsets,
+    db_codes,
+):
+    output = np.empty((EVAL_N, 10), dtype=np.uint32)
+    selected = np.empty(EVAL_N, dtype=np.uint32)
+    scan_seconds = 0.0
+    duplicate_fracs = []
+
+    for ei in range(EVAL_N):
+        abs_q = EVAL0 + ei
+        rel = abs_q - WARM0
+        lo = max(0, rel - cap)
+        hi = rel
+        anchors = results[lo:hi, 0].astype(np.int64)
+        duplicate_fracs.append(1.0 - len(np.unique(anchors)) / len(anchors))
+
+        t0 = time.perf_counter()
+        scores = score_values(
+            np.asarray(queries[abs_q], dtype=np.float32),
+            anchors,
+            pivots,
+            offsets,
+            db_codes,
+        )
+        scan_seconds += time.perf_counter() - t0
+        ri = lo + int(np.argmax(scores))
+        ids = unique_results(results[ri])
+        selected[ei] = ids[0]
+        output[ei] = np.asarray(ids, dtype=np.uint32)
+
+    return output, selected, {
+        "capacity": cap,
+        "directory_bytes": cap * 4,
+        "python_scan_us_per_eval_query": 1e6 * scan_seconds / EVAL_N,
+        "mean_eval_occupancy": float(cap),
+        "mean_duplicate_anchor_fraction": float(np.mean(duplicate_fracs)),
+        "file_semantics": "rolling previous-request multiset baseline",
+    }
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     for n in ("queries", "pq-pivots", "pq-codes", "results", "out-dir"):
@@ -218,6 +263,22 @@ def main() -> None:
         manifest["capacities"][str(cap)] = {}
         selected_by_policy = {}
 
+        rows, selected, meta = build_multiset(
+            cap, queries, results, pivots, offsets, db_codes
+        )
+        p = args.out_dir / f"multiset-c{cap}.bin"
+        write_rows(p, rows)
+        meta["file"] = p.name
+        manifest["capacities"][str(cap)]["multiset"] = meta
+        selected_by_policy["multiset"] = selected
+        print(json.dumps({
+            "capacity": cap,
+            "policy": "multiset",
+            "directory_kib": meta["directory_bytes"] / 1024,
+            "duplicate_anchor_fraction": meta["mean_duplicate_anchor_fraction"],
+            "python_scan_us": meta["python_scan_us_per_eval_query"],
+        }), flush=True)
+
         for policy in ("skipdup", "nextdistinct"):
             rows, selected, meta = build_policy(
                 policy, cap, queries, results, pivots, offsets, db_codes
@@ -239,12 +300,17 @@ def main() -> None:
                 "rank_hist": meta["insert_rank_histogram"],
             }), flush=True)
 
-        manifest["capacities"][str(cap)]["selected_anchor_agreement_fraction"] = float(
-            np.mean(
-                selected_by_policy["skipdup"]
-                == selected_by_policy["nextdistinct"]
-            )
-        )
+        manifest["capacities"][str(cap)]["anchor_agreement"] = {
+            "multiset_vs_skipdup": float(np.mean(
+                selected_by_policy["multiset"] == selected_by_policy["skipdup"]
+            )),
+            "multiset_vs_nextdistinct": float(np.mean(
+                selected_by_policy["multiset"] == selected_by_policy["nextdistinct"]
+            )),
+            "skipdup_vs_nextdistinct": float(np.mean(
+                selected_by_policy["skipdup"] == selected_by_policy["nextdistinct"]
+            )),
+        }
 
     (args.out_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n"
