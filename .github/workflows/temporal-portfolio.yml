@@ -1,0 +1,49 @@
+name: Temporal NavHints portfolio study
+on:
+  push:
+    branches: [experiment/staged-navhints]
+    paths:
+      - '.github/workflows/temporal-portfolio.yml'
+      - 'scripts/run_temporal_portfolio_ci.sh'
+      - 'scripts/learn_temporal_banks.py'
+      - 'scripts/patch_diskann_temporal_portfolio.py'
+      - 'scripts/qualify_temporal_portfolio.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-temporal-portfolio
+  cancel-in-progress: true
+
+jobs:
+  portfolio:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run temporal portfolio study
+        shell: bash
+        run: bash scripts/run_temporal_portfolio_ci.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: temporal-portfolio-${{ github.run_id }}
+          path: artifacts/temporal-portfolio/
+          retention-days: 30
+      - name: Clean scratch
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/temporalpf-cargo-$GITHUB_RUN_ID"                  "$RUNNER_TEMP/temporalpf-rustup-$GITHUB_RUN_ID"                  "$RUNNER_TEMP/temporalpf-eval-$GITHUB_RUN_ID"
