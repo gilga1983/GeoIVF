@@ -1,0 +1,43 @@
+name: Progressive NavHints beam sensitivity
+on:
+  push:
+    branches: [experiment/staged-navhints]
+    paths:
+      - '.github/workflows/progressive-beam-sensitivity.yml'
+      - 'scripts/run_progressive_beam_sensitivity_ci.sh'
+      - 'scripts/qualify_progressive_beam_sensitivity.py'
+      - 'scripts/patch_diskann_progressive_navhints_k16_clean.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-progressive-beam-sensitivity
+  cancel-in-progress: true
+
+jobs:
+  beam:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run beam-width robustness
+        shell: bash
+        run: bash scripts/run_progressive_beam_sensitivity_ci.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: progressive-beam-sensitivity-${{ github.run_id }}
+          path: artifacts/progressive-beam-sensitivity/
+          retention-days: 30
