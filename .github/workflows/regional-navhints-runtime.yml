@@ -1,0 +1,201 @@
+name: Regional NavHints runtime screen
+
+on:
+  push:
+    branches: [experiment/staged-navhints]
+    paths:
+      - '.github/workflows/regional-navhints-runtime.yml'
+      - 'scripts/patch_diskann_regional_navhints.py'
+      - 'scripts/learn_equal_region_navhints.py'
+      - 'scripts/collect_regional_navhints_onpolicy.py'
+      - 'scripts/qualify_regional_navhints_runtime.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-regional-navhints-runtime
+  cancel-in-progress: true
+
+jobs:
+  runtime:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    defaults:
+      run:
+        shell: bash
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prepare inputs
+        run: |
+          set -euxo pipefail
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install numpy==2.2.6 "faiss-cpu>=1.9,<2"
+
+          ART="$PWD/artifacts/regional-navhints-runtime"
+          BASE="$HOME/.cache/geoivf/catapult-paper-pubmed1m/pubmed-medcpt-first1m.fbin"
+          QUERIES="$HOME/.cache/geoivf/medrag-zipf-qwen3b-v1/medrag-zipf-10k-medcpt.fbin"
+          GT5000="$HOME/.cache/geoivf/medrag-zipf-qwen3b-v1/heldout5000-pubmed1m-top16-ip.gt"
+          INDEX_PREFIX="$HOME/.cache/geoivf/catapult-paper-pubmed1m-index-v1/diskann-index"
+          IVF16="$HOME/.cache/geoivf/onpolicy-staged-navhints-v1/canonical-b16000-c512.bin"
+          ROUTER="$HOME/.cache/geoivf/region-ablation-routers-v1/nlist-256/router.bin"
+          ROOT="$HOME/.cache/geoivf/regional-navhints-runtime-v1"
+          TRACE_DIR="$ROOT/onpolicy-trace"
+          REGIONAL="$ROOT/regional-256x16.bin"
+
+          mkdir -p "$ART" "$ROOT" "$TRACE_DIR"
+          for f in "$BASE" "$QUERIES" "$GT5000" "$IVF16" "$ROUTER"; do test -s "$f"; done
+
+          echo "ART=$ART" >> "$GITHUB_ENV"
+          echo "BASE=$BASE" >> "$GITHUB_ENV"
+          echo "QUERIES=$QUERIES" >> "$GITHUB_ENV"
+          echo "GT5000=$GT5000" >> "$GITHUB_ENV"
+          echo "INDEX_PREFIX=$INDEX_PREFIX" >> "$GITHUB_ENV"
+          echo "IVF16=$IVF16" >> "$GITHUB_ENV"
+          echo "ROUTER=$ROUTER" >> "$GITHUB_ENV"
+          echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+          echo "TRACE_DIR=$TRACE_DIR" >> "$GITHUB_ENV"
+          echo "REGIONAL=$REGIONAL" >> "$GITHUB_ENV"
+
+          git rev-parse HEAD > "$ART/geoivf-commit.txt"
+          .venv/bin/python -m py_compile \
+            scripts/patch_diskann_regional_navhints.py \
+            scripts/learn_equal_region_navhints.py \
+            scripts/collect_regional_navhints_onpolicy.py \
+            scripts/qualify_regional_navhints_runtime.py
+
+      - name: Install pinned Rust toolchain
+        run: |
+          set -euxo pipefail
+          export CARGO_HOME="$RUNNER_TEMP/regional-cargo-$GITHUB_RUN_ID"
+          export RUSTUP_HOME="$RUNNER_TEMP/regional-rustup-$GITHUB_RUN_ID"
+          mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
+          curl -fsSL --retry 3 https://sh.rustup.rs -o "$RUNNER_TEMP/regional-rustup-$GITHUB_RUN_ID.sh"
+          sh "$RUNNER_TEMP/regional-rustup-$GITHUB_RUN_ID.sh" \
+            -y --profile minimal --no-modify-path --default-toolchain 1.97.1
+          echo "CARGO_HOME=$CARGO_HOME" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$RUSTUP_HOME" >> "$GITHUB_ENV"
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Collect 9K canonical-NavHints L64 training trace
+        run: |
+          set -euxo pipefail
+          export PATH="$CARGO_HOME/bin:$PATH"
+          rustup component add rustfmt
+          TRACE="$TRACE_DIR/navhints16k-teacher-L64.jsonl"
+          if [ ! -s "$TRACE" ] || [ "$(wc -l < "$TRACE")" -ne 9000 ]; then
+            rev=fcf90534174cf29c78c9f13b4cccf1fcabff85f5
+            rm -rf third_party/DiskANN-regional-trace
+            git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-regional-trace
+            git -C third_party/DiskANN-regional-trace checkout --detach "$rev"
+            .venv/bin/python scripts/patch_diskann_navhints_trace.py third_party/DiskANN-regional-trace
+            (cd third_party/DiskANN-regional-trace && cargo fmt --all)
+            git -C third_party/DiskANN-regional-trace diff --check
+            (cd third_party/DiskANN-regional-trace && \
+              cargo build --release --locked -p diskann-benchmark --features disk-index) \
+              2>&1 | tee "$ART/trace-build.log"
+
+            TRACE_BIN="$PWD/third_party/DiskANN-regional-trace/target/release/diskann-benchmark"
+            WORK="$RUNNER_TEMP/regional-trace-$GITHUB_RUN_ID"
+            rm -rf "$WORK" "$TRACE_DIR"
+            mkdir -p "$WORK" "$TRACE_DIR"
+            .venv/bin/python scripts/collect_regional_navhints_onpolicy.py \
+              --binary "$TRACE_BIN" \
+              --queries "$QUERIES" \
+              --index-prefix "$INDEX_PREFIX" \
+              --start-ivf "$IVF16" \
+              --work "$WORK" \
+              --out "$TRACE_DIR" \
+              --train-rows 9000 \
+              2>&1 | tee "$ART/trace.log"
+            rm -rf "$WORK"
+          fi
+          test -s "$TRACE"
+          test "$(wc -l < "$TRACE")" -eq 9000
+          cp "$TRACE_DIR/trace-summary.json" "$ART/"
+          sha256sum "$TRACE" > "$ART/trace.sha256"
+          echo "TRACE=$TRACE" >> "$GITHUB_ENV"
+
+      - name: Learn equal 16-hint maps for 256 regions
+        run: |
+          set -euxo pipefail
+          rm -f "$REGIONAL" "$REGIONAL.manifest.json"
+          .venv/bin/python scripts/learn_equal_region_navhints.py \
+            --base "$BASE" \
+            --router "$ROUTER" \
+            --trace "$TRACE" \
+            --out "$REGIONAL" \
+            --per-region 16 \
+            --min-entry-pos 8 \
+            --threads 4 \
+            2>&1 | tee "$ART/learn.log"
+          test -s "$REGIONAL"
+          cp "$REGIONAL.manifest.json" "$ART/regional.manifest.json"
+          sha256sum "$REGIONAL" > "$ART/regional.sha256"
+
+      - name: Build regional runtime DiskANN
+        run: |
+          set -euxo pipefail
+          export PATH="$CARGO_HOME/bin:$PATH"
+          rev=fcf90534174cf29c78c9f13b4cccf1fcabff85f5
+          rm -rf third_party/DiskANN-regional-runtime
+          git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-regional-runtime
+          git -C third_party/DiskANN-regional-runtime checkout --detach "$rev"
+          .venv/bin/python scripts/patch_diskann_regional_navhints.py third_party/DiskANN-regional-runtime
+          (cd third_party/DiskANN-regional-runtime && cargo fmt --all)
+          git -C third_party/DiskANN-regional-runtime diff --check
+          git -C third_party/DiskANN-regional-runtime diff > "$ART/regional-runtime.patch"
+          (cd third_party/DiskANN-regional-runtime && \
+            cargo build --release --locked -p diskann-benchmark --features disk-index) \
+            2>&1 | tee "$ART/runtime-build.log"
+          echo "RUNTIME_BIN=$PWD/third_party/DiskANN-regional-runtime/target/release/diskann-benchmark" >> "$GITHUB_ENV"
+
+      - name: Run held-out speed and recall comparison
+        run: |
+          set -euxo pipefail
+          WORK="$RUNNER_TEMP/regional-eval-$GITHUB_RUN_ID"
+          OUT="$ART/results"
+          rm -rf "$WORK" "$OUT"
+          mkdir -p "$WORK" "$OUT"
+          .venv/bin/python scripts/qualify_regional_navhints_runtime.py \
+            --binary "$RUNTIME_BIN" \
+            --queries "$QUERIES" \
+            --gt5000 "$GT5000" \
+            --index-prefix "$INDEX_PREFIX" \
+            --ivf-16k "$IVF16" \
+            --regional "$REGIONAL" \
+            --work "$WORK" \
+            --out "$OUT" \
+            --reps 5 \
+            2>&1 | tee "$ART/eval.log"
+          rm -rf "$WORK"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: regional-navhints-runtime-${{ github.run_id }}
+          path: artifacts/regional-navhints-runtime/
+          retention-days: 30
+
+      - name: Clean scratch
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/regional-cargo-$GITHUB_RUN_ID" \
+                 "$RUNNER_TEMP/regional-rustup-$GITHUB_RUN_ID" \
+                 "$RUNNER_TEMP/regional-trace-$GITHUB_RUN_ID" \
+                 "$RUNNER_TEMP/regional-eval-$GITHUB_RUN_ID"
