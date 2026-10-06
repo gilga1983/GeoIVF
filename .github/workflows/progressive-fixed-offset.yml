@@ -1,0 +1,47 @@
+name: Progressive NavHints fixed-offset study
+on:
+  push:
+    branches: [experiment/staged-navhints]
+    paths:
+      - '.github/workflows/progressive-fixed-offset.yml'
+      - 'scripts/run_progressive_fixed_offset_ci.sh'
+      - 'scripts/qualify_progressive_fixed_offset.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-progressive-fixed-offset
+  cancel-in-progress: true
+
+jobs:
+  offset:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run fixed-offset study
+        shell: bash
+        run: bash scripts/run_progressive_fixed_offset_ci.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: progressive-fixed-offset-${{ github.run_id }}
+          path: artifacts/progressive-fixed-offset/
+          retention-days: 30
+      - name: Clean scratch
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/progoffset-cargo-$GITHUB_RUN_ID"                  "$RUNNER_TEMP/progoffset-rustup-$GITHUB_RUN_ID"                  "$RUNNER_TEMP/progoffset-eval-$GITHUB_RUN_ID"
