@@ -52,6 +52,9 @@ def patch_search_hook(root: Path) -> None:
         std::future::ready(Ok(()))
     }
 
+    /// Record one natural beam boundary at which a retained hint can be considered.
+    fn record_progressive_hint_opportunity(&self, _hops: u32) {}
+
     /// Record one accepted progressive hint at the current expansion count.
     fn record_progressive_hint_admission(&self, _hops: u32) {}
 
@@ -70,6 +73,7 @@ def patch_search_hook(root: Path) -> None:
                 // Preserve the native beam. Only after the whole beam has
                 // completed do we consider one dormant runner-up hint.
                 let mut progressive_inserted = false;
+                accessor.record_progressive_hint_opportunity(scratch.hops);
                 accessor
                     .progressive_hint_distances(|id, distance| {
                         if progressive_inserted {
@@ -207,6 +211,7 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
 """,
         """    routing_comparisons: AtomicUsize,
     progressive_hint_admission_hops: std::sync::Mutex<Vec<u32>>,
+    progressive_hint_opportunity_hops: std::sync::Mutex<Vec<u32>>,
 }
 """,
         "progressive admission tracker field",
@@ -218,6 +223,7 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
 """,
         """            routing_comparisons: AtomicUsize::new(0),
             progressive_hint_admission_hops: std::sync::Mutex::new(Vec::new()),
+            progressive_hint_opportunity_hops: std::sync::Mutex::new(Vec::new()),
         }
 """,
         "progressive admission tracker init",
@@ -477,6 +483,16 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
         Ok(())
     }
 
+    fn record_progressive_hint_opportunity(&self, hops: u32) {
+        if self.progressive_hints {
+            self.io_tracker
+                .progressive_hint_opportunity_hops
+                .lock()
+                .expect("progressive hint opportunity lock poisoned")
+                .push(hops);
+        }
+    }
+
     fn record_progressive_hint_admission(&self, hops: u32) {
         if self.progressive_hints {
             self.io_tracker
@@ -593,6 +609,11 @@ impl<Data, VP> DiskAccessor<'_, Data, VP>
             .progressive_hint_admission_hops
             .lock()
             .expect("progressive hint admission lock poisoned")
+            .clone();
+        query_stats.progressive_hint_opportunity_hops = io_tracker
+            .progressive_hint_opportunity_hops
+            .lock()
+            .expect("progressive hint opportunity lock poisoned")
             .clone();
 
         let mut search_result = SearchResult {
@@ -746,6 +767,9 @@ def main():
 
     /// Expansion counts at which retained NavHints were admitted.
     pub progressive_hint_admission_hops: Vec<u32>,
+
+    /// Expansion counts at natural beam boundaries where a retained hint was considered.
+    pub progressive_hint_opportunity_hops: Vec<u32>,
 """,
         "progressive QueryStatistics field",
     )
@@ -762,6 +786,7 @@ def main():
     pub(super) progressive_hint_queries_with_admission_percent: f64,
     pub(super) progressive_hint_count_histogram: Vec<u64>,
     pub(super) progressive_hint_hop_histogram: Vec<u64>,
+    pub(super) progressive_hint_opportunity_hop_histogram: Vec<u64>,
     pub(super) cache_hit_percentage: f64,
 """,
         "progressive benchmark result fields",
@@ -782,7 +807,15 @@ def main():
             .flat_map(|s| s.progressive_hint_admission_hops.iter().copied())
             .max()
             .unwrap_or(0) as usize;
-        let mut progressive_hint_hop_histogram = vec![0u64; max_admission_hop + 1];
+        let max_opportunity_hop = statistics
+            .iter()
+            .flat_map(|s| s.progressive_hint_opportunity_hops.iter().copied())
+            .max()
+            .unwrap_or(0) as usize;
+        let max_progressive_hop = max_admission_hop.max(max_opportunity_hop);
+        let mut progressive_hint_hop_histogram = vec![0u64; max_progressive_hop + 1];
+        let mut progressive_hint_opportunity_hop_histogram =
+            vec![0u64; max_progressive_hop + 1];
         let mut progressive_hint_total_admissions = 0usize;
         let mut progressive_hint_queries_with_admission = 0usize;
         for stats in statistics {
@@ -794,6 +827,9 @@ def main():
             }
             for &hop in &stats.progressive_hint_admission_hops {
                 progressive_hint_hop_histogram[hop as usize] += 1;
+            }
+            for &hop in &stats.progressive_hint_opportunity_hops {
+                progressive_hint_opportunity_hop_histogram[hop as usize] += 1;
             }
         }
 
@@ -814,6 +850,7 @@ def main():
                 100.0 * progressive_hint_queries_with_admission as f64 / num_queries as f64,
             progressive_hint_count_histogram,
             progressive_hint_hop_histogram,
+            progressive_hint_opportunity_hop_histogram,
             cache_hit_percentage,
 """,
         "progressive benchmark histogram output",
