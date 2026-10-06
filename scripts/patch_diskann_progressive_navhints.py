@@ -113,7 +113,6 @@ def patch_provider_progressive(path: Path) -> None:
     accessor_anchor = """    hint_ivf: Option<HintIvfSearch<'a>>,
     progressive_hints: bool,
     progressive_hint_limit: usize,
-    retained_hint_ranked: Vec<(u32, f32)>,
 }
 
 impl<Data, VP> DiskAccessor<'_, Data, VP>
