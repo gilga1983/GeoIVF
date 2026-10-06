@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Paper memory frontier for the current hierarchical NavHints algorithm."""
+"""Paper memory frontier for progressive NavHints with retained runner-ups."""
 from __future__ import annotations
 
 import argparse, fcntl, json, os, struct, subprocess, time
@@ -70,7 +70,8 @@ def run(binary, out, tag, queries, gt, prefix, ls, ivf=None, probe=None):
     save(inp, cfg)
     env = os.environ.copy()
     for name in ("DISKANN_SKIP_RECALL","DISKANN_STATIC_CACHE_IDS_FILE","DISKANN_HINT_IVF_FILE",
-        "DISKANN_HINT_IVF_NPROBE","DISKANN_HINT_IVF_MAX_STARTS","DISKANN_GLOBAL_START_IDS_FILE",
+        "DISKANN_HINT_IVF_NPROBE","DISKANN_HINT_IVF_MAX_STARTS","DISKANN_PROGRESSIVE_HINTS",
+        "DISKANN_PROGRESSIVE_HINT_TOPK","DISKANN_GLOBAL_START_IDS_FILE",
         "DISKANN_START_POINTS_FILE","DISKANN_QSEV_FILE","DISKANN_IP_PORTAL_ROUTER_FILE",
         "DISKANN_IP_PORTAL_NPROBE","DISKANN_PAPER_CATAPULT","DISKANN_WAYPOINT_CACHE_FILE",
         "DISKANN_WAYPOINT_MAX_IDS_PER_QUERY"):
@@ -79,6 +80,8 @@ def run(binary, out, tag, queries, gt, prefix, ls, ivf=None, probe=None):
         env["DISKANN_HINT_IVF_FILE"] = str(ivf)
         env["DISKANN_HINT_IVF_NPROBE"] = str(probe)
         env["DISKANN_HINT_IVF_MAX_STARTS"] = "1"
+        env["DISKANN_PROGRESSIVE_HINTS"] = "1"
+        env["DISKANN_PROGRESSIVE_HINT_TOPK"] = "32"
     cmd = [str(binary),"run","--input-file",str(inp),"--output-file",str(output)]
     started = time.monotonic()
     print(f"starting {tag} Ls={list(ls)}", flush=True)
@@ -232,6 +235,7 @@ def main():
     result={
         "workload":"MedRAG-Zipf heldout 5000, exact PubMed1M IP top-16 ground truth",
         "training":"ordinary DiskANN medoid teacher L=4 on first 5000 queries",
+        "policy":"progressive retained shortlist, K_h=32, one start plus at most one runner-up admission after each native beam",
         "design":{"variants":[{"name":n,"hints":b,"nlist":c,"nprobe":p} for n,b,c,p in SPECS],
             "principle":"about 32 hints per cell and about 1/64 of cells probed"},
         "evaluation":{"K":K,"navhints_Ls":list(NAV_LS),"baseline_Ls":list(BASE_LS),
