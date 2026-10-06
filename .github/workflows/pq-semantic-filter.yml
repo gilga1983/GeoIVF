@@ -57,6 +57,7 @@ jobs:
           IVF16="$HOME/.cache/geoivf/onpolicy-staged-navhints-v1/canonical-b16000-c512.bin"
           CACHE="$HOME/.cache/geoivf/pq-semantic-filter-v1"
           EPS="$CACHE/pubmed1m-pq-epsilon.npy"
+          EPS_CHUNK="$CACHE/pubmed1m-pq-epsilon-chunk-f16.npy"
 
           mkdir -p "$ART" "$CACHE"
           for f in "$BASE" "$QUERIES" "$GT5000" "$DISK" "$PIVOTS" "$CODES" "$IVF16"; do
@@ -73,9 +74,10 @@ jobs:
           echo "CODES=$CODES" >> "$GITHUB_ENV"
           echo "IVF16=$IVF16" >> "$GITHUB_ENV"
           echo "EPS=$EPS" >> "$GITHUB_ENV"
+          echo "EPS_CHUNK=$EPS_CHUNK" >> "$GITHUB_ENV"
 
           git rev-parse HEAD > "$ART/geoivf-commit.txt"
-          .venv/bin/python -m py_compile             scripts/collect_navhints_heldout_traces.py             scripts/analyze_pq_semantic_filter.py             scripts/patch_diskann_navhints_trace.py
+          .venv/bin/python -m py_compile             scripts/collect_navhints_heldout_traces.py             scripts/analyze_pq_semantic_filter.py             scripts/analyze_pq_semantic_filter_chunkwise.py             scripts/patch_diskann_navhints_trace.py
 
       - name: Install pinned Rust toolchain
         run: |
@@ -118,6 +120,24 @@ jobs:
         run: |
           set -euxo pipefail
           .venv/bin/python scripts/analyze_pq_semantic_filter.py             --base "$BASE"             --queries "$QUERIES"             --gt5000 "$GT5000"             --pq-pivots "$PIVOTS"             --pq-codes "$CODES"             --disk-index "$DISK"             --trace-dir "$ART/traces"             --epsilon-cache "$EPS"             --query-offset 9000             --gt-offset 4000             --k 10             --out "$ART/pq-semantic-filter.json"             2>&1 | tee "$ART/analyze.log"
+
+      - name: Analyze chunkwise certified PQ filters
+        run: |
+          set -euxo pipefail
+          .venv/bin/python scripts/analyze_pq_semantic_filter_chunkwise.py \
+            --base "$BASE" \
+            --queries "$QUERIES" \
+            --gt5000 "$GT5000" \
+            --pq-pivots "$PIVOTS" \
+            --pq-codes "$CODES" \
+            --disk-index "$DISK" \
+            --trace-dir "$ART/traces" \
+            --chunk-epsilon-cache "$EPS_CHUNK" \
+            --query-offset 9000 \
+            --gt-offset 4000 \
+            --k 10 \
+            --out "$ART/pq-semantic-filter-chunkwise.json" \
+            2>&1 | tee "$ART/analyze-chunkwise.log"
 
       - uses: actions/upload-artifact@v4
         if: always()
