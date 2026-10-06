@@ -86,6 +86,7 @@ def patch_provider(path: Path) -> None:
 """,
         """    semantic_cache_entry: Option<&'a [u32]>,
     semantic_cache_siblings_emitted: bool,
+    persistent_hint_variant: Option<usize>,
     persistent_hint_last: [u32; 4],
     persistent_hint_last_valid: bool,
 }
@@ -101,6 +102,9 @@ def patch_provider(path: Path) -> None:
 """,
         """            semantic_cache_entry: strategy.semantic_cache_entry,
             semantic_cache_siblings_emitted: false,
+            persistent_hint_variant: std::env::var("DISKANN_PERSISTENT_HINT_VARIANT")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok()),
             persistent_hint_last: [u32::MAX; 4],
             persistent_hint_last_valid: false,
         })
@@ -119,19 +123,12 @@ def patch_provider(path: Path) -> None:
         F: FnMut(Self::Id, f32) + Send,
     {
         let result = (|| {
-            let Some(raw_variant) = std::env::var_os("DISKANN_PERSISTENT_HINT_VARIANT") else {
+            let Some(variant) = self.persistent_hint_variant else {
                 return Ok(());
             };
             if expanded.is_empty() {
                 return Ok(());
             }
-            let variant: usize = raw_variant
-                .to_string_lossy()
-                .parse()
-                .map_err(|_| diskann_error!(
-                    ErrorKind::IndexError,
-                    "invalid DISKANN_PERSISTENT_HINT_VARIANT",
-                ))?;
             const SLOTS: usize = 4;
 
             let associated = self
