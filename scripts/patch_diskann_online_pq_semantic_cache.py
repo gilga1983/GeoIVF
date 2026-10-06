@@ -463,8 +463,8 @@ def patch_benchmark(path:Path):
     s=once(s,marker,helper+marker,"GT slice helper")
 
     # replace parallel block
-    start="        let zipped = queries\\n"
-    end="        let total_time = start.elapsed();\\n"
+    start="        let zipped = queries\n"
+    end="        let total_time = start.elapsed();\n"
     a=s.find(start);b=s.find(end,a)
     if a<0 or b<0: raise RuntimeError("parallel block markers missing")
     parallel=s[a:b]
