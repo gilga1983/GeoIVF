@@ -7,6 +7,7 @@ on:
       - '.github/workflows/pq-semantic-filter.yml'
       - 'scripts/collect_navhints_heldout_traces.py'
       - 'scripts/analyze_pq_semantic_filter.py'
+      - 'scripts/analyze_pq_semantic_filter_chunkwise.py'
   workflow_dispatch:
 
 permissions:
