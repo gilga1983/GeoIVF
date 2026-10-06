@@ -4,6 +4,10 @@ on:
     branches: [experiment/public-dataset-eval]
     paths:
       - '.github/workflows/public-dataset-suite.yml'
+      - 'scripts/run_public_dataset_suite_ci.sh'
+      - 'scripts/run_public_dataset_one.sh'
+      - 'scripts/qualify_public_navhints.py'
+      - 'scripts/patch_diskann_progressive_navhints.py'
   workflow_dispatch:
 
 permissions:
