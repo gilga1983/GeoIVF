@@ -24,7 +24,10 @@ def suffix_fbin(src,dst,start):
         rem=(r-start)*d*4
         while rem:
             b=fi.read(min(16<<20,rem))
-            if not b: raise ValueError("truncated"); fo.write(b); rem-=len(b)
+            if not b:
+                raise ValueError("truncated")
+            fo.write(b)
+            rem -= len(b)
 
 def suffix_gt(src,dst,start):
     raw=src.read_bytes(); r,k=struct.unpack("<II",raw[:8])
