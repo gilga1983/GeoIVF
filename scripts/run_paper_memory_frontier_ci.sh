@@ -50,6 +50,7 @@ git rev-parse HEAD > "$ART/geoivf-commit.txt"
   scripts/learn_global_navigation_landmarks.py \
   scripts/build_hint_ivf.py \
   scripts/patch_diskann_hint_ivf_packed_direct.py \
+  scripts/patch_diskann_progressive_navhints.py \
   scripts/qualify_paper_memory_frontier.py
 
 LANDMARK_DIR="$ROOT/landmarks"
@@ -102,10 +103,10 @@ rustup component add rustfmt
 rm -rf third_party/DiskANN-paper-memory
 git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-paper-memory
 git -C third_party/DiskANN-paper-memory checkout --detach "$DISKANN_REV"
-.venv/bin/python scripts/patch_diskann_hint_ivf_packed_direct.py third_party/DiskANN-paper-memory
+.venv/bin/python scripts/patch_diskann_progressive_navhints.py third_party/DiskANN-paper-memory
 (cd third_party/DiskANN-paper-memory && cargo fmt --all)
 git -C third_party/DiskANN-paper-memory diff --check
-git -C third_party/DiskANN-paper-memory diff > "$ART/navhints.patch"
+git -C third_party/DiskANN-paper-memory diff > "$ART/navhints-progressive.patch"
 (cd third_party/DiskANN-paper-memory && cargo build --release --locked -p diskann-benchmark --features disk-index) \
   2>&1 | tee "$ART/build.log"
 BIN="$PWD/third_party/DiskANN-paper-memory/target/release/diskann-benchmark"
