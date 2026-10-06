@@ -214,13 +214,15 @@ def main():
                     break
             if len(out) == args.slots:
                 fully_local += 1
-            for u in base:
-                if u == SENTINEL or u in seen:
-                    continue
-                seen.add(u)
-                out.append(int(u))
-                if len(out) == args.slots:
-                    break
+            if len(out) < args.slots:
+                for u in base:
+                    if u == SENTINEL or u in seen:
+                        continue
+                    seen.add(u)
+                    out.append(int(u))
+                    if len(out) == args.slots:
+                        break
+            out = out[: args.slots]
             out.extend([SENTINEL] * (args.slots - len(out)))
             payload[v, vi, :] = out
 
