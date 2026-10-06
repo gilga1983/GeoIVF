@@ -109,22 +109,36 @@ def patch_provider(path: Path) -> None:
         raise RuntimeError(f"vertex trace search block expected once, found {s.count(old)}")
     s=s.replace(old,new,1)
 
-    old_stats=r'''            stats: SearchResultStats {
+    stats_block=r'''            stats: SearchResultStats {
                 cmps: query_stats.total_comparisons,
                 result_count: stats.result_count,
                 query_statistics: query_stats,
             },
 '''
-    new_stats=r'''            stats: SearchResultStats {
+    stats_init=r'''            stats: SearchResultStats {
                 cmps: query_stats.total_comparisons,
                 result_count: stats.result_count,
                 query_statistics: query_stats,
-                trace_ids,
+                trace_ids: Vec::new(),
             },
 '''
-    if s.count(old_stats) != 1:
-        raise RuntimeError(f"vertex result stats expected once, found {s.count(old_stats)}")
-    s=s.replace(old_stats,new_stats,1)
+    nstats=s.count(stats_block)
+    if nstats < 2:
+        raise RuntimeError(f"expected optimized Hint-IVF and vertex result stats, found {nstats}")
+    s=s.replace(stats_block,stats_init)
+
+    # Only the vertex-hint method records a traversal. Replace its initialized
+    # empty trace with the local trace_ids produced by RecordedKnn.
+    vertex_at=s.index("    pub fn search_with_vertex_hint_ivf(")
+    if vertex_at < 0:
+        raise RuntimeError("vertex search method not found")
+    after=s[vertex_at:]
+    empty="                trace_ids: Vec::new(),"
+    local="                trace_ids,"
+    if empty not in after:
+        raise RuntimeError("vertex trace init not found")
+    after=after.replace(empty,local,1)
+    s=s[:vertex_at]+after
     path.write_text(s)
 
 
