@@ -8,7 +8,7 @@ Methods:
 * baseline: ordinary DiskANN medoid start
 * hot-30: equal-budget full-node cache chosen from the same 5K training history
 * qsev-32: DiskANN++-style query-sensitive entry pool, 32 FP32 vectors
-* navhints: progressive 16K hints / 512 spherical lists / nprobe=8; route once, retain runner-ups, and admit them after natural beam boundaries
+* navhints: progressive 16K hints / 512 spherical lists / nprobe=8 / K_h=16; route once, retain runner-ups, and admit them after natural beam boundaries
 """
 from __future__ import annotations
 
@@ -120,6 +120,7 @@ def run_one(
         "DISKANN_HINT_IVF_NPROBE",
         "DISKANN_HINT_IVF_MAX_STARTS",
         "DISKANN_PROGRESSIVE_HINTS",
+        "DISKANN_PROGRESSIVE_HINT_TOPK",
         "DISKANN_GLOBAL_START_IDS_FILE",
         "DISKANN_START_POINTS_FILE",
         "DISKANN_QSEV_FILE",
@@ -144,6 +145,7 @@ def run_one(
         env["DISKANN_HINT_IVF_MAX_STARTS"] = "1"
         if progressive_hints:
             env["DISKANN_PROGRESSIVE_HINTS"] = "1"
+            env["DISKANN_PROGRESSIVE_HINT_TOPK"] = "16"
 
     method_log = out / f"{tag}.log"
     command = [str(binary), "run", "--input-file", str(inp), "--output-file", str(output)]
