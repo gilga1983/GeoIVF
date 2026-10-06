@@ -67,7 +67,7 @@ struct HintIvfSearch<'a> {
     s = section_replace(
         s,
         "    pub fn search_with_hint_ivf(",
-        "    /// Perform the ordinary graph search from caller-supplied starting vertices.",
+        "    pub fn search_with_vertex_hint_ivf(",
         """        let hint_ivf = HintIvfSearch {
             medoid_ids,
             coarse_local_ids,
