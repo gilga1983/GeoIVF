@@ -124,6 +124,14 @@ def validate_xbin(path: Path, rows: int, dim: int, itemsize: int) -> None:
 
 def crop_base(cfg, dst: Path) -> None:
     wanted = 8 + cfg["rows"] * cfg["dim"] * cfg["itemsize"]
+    # The first successful preparation rewrites the downloaded 1B header to
+    # the frozen subset size. Treat that already-cropped file as final instead
+    # of interpreting it as a malformed 1B source on later evaluation runs.
+    if dst.is_file() and dst.stat().st_size == wanted:
+        rows, dim = read_xbin_header(dst)
+        if (rows, dim) == (cfg["rows"], cfg["dim"]):
+            validate_xbin(dst, cfg["rows"], cfg["dim"], cfg["itemsize"])
+            return
     download(cfg["base_url"], dst, max_bytes=wanted)
     src_rows, src_dim = read_xbin_header(dst)
     if src_rows != cfg["base_source_rows"] or src_dim != cfg["dim"]:
