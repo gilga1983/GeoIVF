@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 """Patch DiskANN for vertex-granular embedded continuation maps.
 
-Each disk node carries 5 variants x 4 u32 continuation IDs in associated data:
-  variant 0: regional baseline
-  variant 1: vertex map at support >= 2, else regional
-  variant 2: vertex map at support >= 4, else regional
-  variant 3: vertex map at support >= 8, else regional
-  variant 4: vertex map at support >= 16, else regional
+Each disk node carries a compile-time number of variants x 4 u32 continuation
+IDs in associated data. The default is the original five-arm experiment; larger
+packed experiments can select a different variant count with --variants.
 
 The ordinary 16K Hint-IVF remains the bootstrap. After each natural beam, the
 closest expanded node's selected four-edge overlay is PQ-scored and at most one
@@ -28,12 +25,12 @@ from patch_diskann_paper_catapult import patch_provider_medoid
 from patch_diskann_start_points import once, patch_provider as patch_provider_starts
 from patch_diskann_waypoint_cache import patch_provider_waypoint
 
-VARIANTS = 5
+DEFAULT_VARIANTS = 5
 SLOTS = 4
-TOTAL = VARIANTS * SLOTS
 
 
-def patch_graph_data_type(root: Path) -> None:
+def patch_graph_data_type(root: Path, variants: int) -> None:
+    total = variants * SLOTS
     path = root / "diskann-disk/src/data_model/graph_data_types.rs"
     s = path.read_text()
     anchor = """    type VectorIdType: VectorId;
@@ -49,7 +46,7 @@ def patch_graph_data_type(root: Path) -> None:
     }}
 }}
 
-/// Search-only graph type carrying {VARIANTS} x {SLOTS} continuation IDs.
+/// Search-only graph type carrying {variants} x {SLOTS} continuation IDs.
 pub struct VertexNavHints<T, I = u32> {{
     data: std::marker::PhantomData<T>,
     id: std::marker::PhantomData<I>,
@@ -61,7 +58,7 @@ where
     I: VectorId + 'static,
 {{
     type VectorDataType = T;
-    type AssociatedDataType = [u32; {TOTAL}];
+    type AssociatedDataType = [u32; {total}];
     type VectorIdType = I;
 
     fn embedded_navigation_hints(data: &Self::AssociatedDataType) -> &[u32] {{
@@ -141,7 +138,7 @@ def patch_search_hook(root: Path) -> None:
     index.write_text(s)
 
 
-def patch_provider(path: Path) -> None:
+def patch_provider(path: Path, variants: int) -> None:
     s = path.read_text()
 
     s = once(
@@ -257,7 +254,7 @@ def patch_provider(path: Path) -> None:
                 return Ok(());
             }
 
-            const VARIANTS: usize = 5;
+            const VARIANTS: usize = __VARIANTS__;
             const SLOTS: usize = 4;
             if variant >= VARIANTS {
                 return Err(diskann_error!(
@@ -309,6 +306,7 @@ def patch_provider(path: Path) -> None:
     }
 
 '''
+    method = method.replace("__VARIANTS__", str(variants))
     s = once(s, marker, method + marker, "vertex-hint accessor scoring")
 
     marker = """    /// Perform the ordinary graph search from caller-supplied starting vertices.
@@ -339,7 +337,7 @@ def patch_provider(path: Path) -> None:
             || nprobe == 0
             || nprobe > medoid_ids.len()
             || nprobe > 64
-            || vertex_hint_variant >= 5
+            || vertex_hint_variant >= __VARIANTS__
         {
             return Err(diskann_error!(
                 ErrorKind::IndexError,
@@ -428,11 +426,12 @@ def patch_provider(path: Path) -> None:
     }
 
 '''
+    public_method = public_method.replace("__VARIANTS__", str(variants))
     s = once(s, marker, public_method + marker, "vertex-hint public search")
     path.write_text(s)
 
 
-def patch_benchmark(path: Path) -> None:
+def patch_benchmark(path: Path, variants: int) -> None:
     s = path.read_text()
     s = once(
         s,
@@ -468,8 +467,8 @@ def patch_benchmark(path: Path) -> None:
         .ok()
         .map(|v| v.parse::<usize>())
         .transpose()?;
-    if vertex_hint_variant.is_some_and(|v| v >= 5) {
-        anyhow::bail!("DISKANN_VERTEX_HINT_VARIANT must be in [0,4]");
+    if vertex_hint_variant.is_some_and(|v| v >= __VARIANTS__) {
+        anyhow::bail!("DISKANN_VERTEX_HINT_VARIANT must be in [0,__MAX_VARIANT__]");
     }
     if vertex_hint_variant.is_some() && hint_ivf.is_none() {
         anyhow::bail!("vertex hints require DISKANN_HINT_IVF_FILE");
@@ -477,6 +476,9 @@ def patch_benchmark(path: Path) -> None:
 
     // Load the vector filters
 """
+    replacement = replacement.replace("__VARIANTS__", str(variants)).replace(
+        "__MAX_VARIANT__", str(variants - 1)
+    )
     s = once(s, anchor, replacement, "load vertex-hint variant")
 
     old_dispatch = """                let result = if let Some(index) = hint_ivf.as_ref() {
@@ -532,7 +534,10 @@ def patch_benchmark(path: Path) -> None:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("diskann", type=Path)
+    ap.add_argument("--variants", type=int, default=DEFAULT_VARIANTS)
     args = ap.parse_args()
+    if args.variants <= 0:
+        raise SystemExit("--variants must be positive")
     root = args.diskann.resolve()
     provider = root / "diskann-disk/src/search/provider/disk_provider.rs"
     benchmark = root / "diskann-benchmark/src/disk_index/search.rs"
@@ -547,11 +552,14 @@ def main():
     patch_provider_hint_ivf_fast(provider)
     patch_benchmark_hint_ivf_fast(benchmark)
 
-    patch_graph_data_type(root)
+    patch_graph_data_type(root, args.variants)
     patch_search_hook(root)
-    patch_provider(provider)
-    patch_benchmark(benchmark)
-    print(f"patched DiskANN {PINNED} with vertex-granular embedded NavHints")
+    patch_provider(provider, args.variants)
+    patch_benchmark(benchmark, args.variants)
+    print(
+        f"patched DiskANN {PINNED} with vertex-granular embedded NavHints "
+        f"({args.variants} variants x {SLOTS} slots)"
+    )
 
 
 if __name__ == "__main__":
