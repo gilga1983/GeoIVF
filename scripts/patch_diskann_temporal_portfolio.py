@@ -47,9 +47,11 @@ def patch_provider(path: Path):
 
     # Strategy and accessor both carry the three optional banks.
     s=replace_n(s,
-"""    progressive_hint_limit: usize,
+"""    progressive_hints: bool,
+    progressive_hint_limit: usize,
 """,
-"""    progressive_hint_limit: usize,
+"""    progressive_hints: bool,
+    progressive_hint_limit: usize,
     temporal_hint_ivf1: Option<HintIvfSearch<'a>>,
     temporal_hint_limit1: usize,
     temporal_hint_hop1: u32,
