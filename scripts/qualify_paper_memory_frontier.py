@@ -81,7 +81,7 @@ def run(binary, out, tag, queries, gt, prefix, ls, ivf=None, probe=None):
         env["DISKANN_HINT_IVF_NPROBE"] = str(probe)
         env["DISKANN_HINT_IVF_MAX_STARTS"] = "1"
         env["DISKANN_PROGRESSIVE_HINTS"] = "1"
-        env["DISKANN_PROGRESSIVE_HINT_TOPK"] = "32"
+        env["DISKANN_PROGRESSIVE_HINT_TOPK"] = "16"
     cmd = [str(binary),"run","--input-file",str(inp),"--output-file",str(output)]
     started = time.monotonic()
     print(f"starting {tag} Ls={list(ls)}", flush=True)
@@ -235,7 +235,7 @@ def main():
     result={
         "workload":"MedRAG-Zipf heldout 5000, exact PubMed1M IP top-16 ground truth",
         "training":"ordinary DiskANN medoid teacher L=4 on first 5000 queries",
-        "policy":"progressive retained shortlist, K_h=32, one start plus at most one runner-up admission after each native beam",
+        "policy":"progressive retained shortlist, K_h=16, one start plus at most one runner-up admission after each native beam",
         "design":{"variants":[{"name":n,"hints":b,"nlist":c,"nprobe":p} for n,b,c,p in SPECS],
             "principle":"about 32 hints per cell and about 1/64 of cells probed"},
         "evaluation":{"K":K,"navhints_Ls":list(NAV_LS),"baseline_Ls":list(BASE_LS),
