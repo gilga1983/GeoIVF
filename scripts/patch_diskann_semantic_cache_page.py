@@ -112,14 +112,16 @@ def patch_provider(path:Path)->None:
             semantic_cache_entry: None,
         }
 ""","generic semantic off")
-    # Hint-IVF constructor.
+    # Canonical Hint-IVF constructor after the vertex-hint patch.
     s=once(s,
 """            start_points: None,
             hint_ivf: Some(hint_ivf),
+            vertex_hint_variant: None,
         }
 """,
 """            start_points: None,
             hint_ivf: Some(hint_ivf),
+            vertex_hint_variant: None,
             semantic_cache_entry: None,
         }
 ""","hint ivf semantic off")
