@@ -1,13 +1,5 @@
 name: Progressive retained NavHints
 on:
-  push:
-    branches: [experiment/staged-navhints]
-    paths:
-      - '.github/workflows/progressive-navhints.yml'
-      - 'scripts/run_progressive_navhints_ci.sh'
-      - 'scripts/patch_diskann_progressive_navhints.py'
-      - 'scripts/qualify_progressive_navhints.py'
-      - 'scripts/qualify_staged_navhints.py'
   workflow_dispatch:
 
 permissions:
