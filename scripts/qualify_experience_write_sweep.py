@@ -9,24 +9,23 @@ THREADS=4
 BEAM=8
 K=10
 LS=(10,20,40,80,160,320)
-METHODS=("ivf","cache","nofill4","fill1","fill2","fill4","fill10")
+METHODS=("ivf","cache","nofill4","sample1","sample2","sample4","sample10")
 CFG={
-    "ivf":     {"cache":0,   "hub":0,  "threshold":4,  "fill":False},
-    "cache":   {"cache":512, "hub":0,  "threshold":4,  "fill":False},
-    "nofill4": {"cache":512, "hub":10, "threshold":4,  "fill":False},
-    "fill1":   {"cache":512, "hub":10, "threshold":1,  "fill":True},
-    "fill2":   {"cache":512, "hub":10, "threshold":2,  "fill":True},
-    "fill4":   {"cache":512, "hub":10, "threshold":4,  "fill":True},
-    "fill10":  {"cache":512, "hub":10, "threshold":10, "fill":True},
+    "ivf":      {"cache":0,   "hub":0,  "sample":4,  "fill":False},
+    "cache":    {"cache":512, "hub":0,  "sample":4,  "fill":False},
+    "nofill4":  {"cache":512, "hub":10, "sample":4,  "fill":False},
+    "sample1":  {"cache":512, "hub":10, "sample":1,  "fill":True},
+    "sample2":  {"cache":512, "hub":10, "sample":2,  "fill":True},
+    "sample4":  {"cache":512, "hub":10, "sample":4,  "fill":True},
+    "sample10": {"cache":512, "hub":10, "sample":10, "fill":True},
 }
 STAT_KEYS=(
-    "cache_capacity","hub_capacity","flush_threshold","fill",
+    "cache_capacity","hub_capacity","sample_denominator","fill",
     "cache_inserts","cache_skips","cache_evictions",
     "active_direct_hubs","persisted_hubs","direct_learned",
-    "direct_duplicates","direct_full","fifo_evictions","writes","eval_writes",
+    "direct_duplicates","direct_full","sample_trials","sample_accepts","sample_rejects","fifo_evictions","writes","eval_writes",
     "write_slots","write_direct_slots","write_filler_slots",
     "eval_write_slots","eval_write_filler_slots","final_page_slots",
-    "pending_hubs","pending_entries",
 )
 
 def save(p,o):
@@ -90,7 +89,7 @@ def run(binary,out,tag,q,gt,prefix,ivf,cfg):
     env["DISKANN_EXPERIENCE_WARMUP"]="4000"
     env["DISKANN_EXPERIENCE_CACHE_CAPACITY"]=str(cfg["cache"])
     env["DISKANN_EXPERIENCE_HUB_CAPACITY"]=str(cfg["hub"])
-    env["DISKANN_EXPERIENCE_FLUSH_THRESHOLD"]=str(cfg["threshold"])
+    env["DISKANN_EXPERIENCE_SAMPLE_DENOMINATOR"]=str(cfg["sample"])
     env["DISKANN_EXPERIENCE_FILL_FROM_CACHE"]="1" if cfg["fill"] else "0"
     with log.open("w") as lf:
         subprocess.run([str(binary),"run","--input-file",str(inp),"--output-file",str(op)],
@@ -207,7 +206,7 @@ def main():
             }
 
     hub_increment={m:pair(summary,"cache",m,targets) for m in METHODS if m not in ("ivf","cache")}
-    fill4_vs_nofill4=pair(summary,"nofill4","fill4",targets)
+    sample4_vs_nofill4=pair(summary,"nofill4","sample4",targets)
 
     ranking=[]
     for m in METHODS:
@@ -227,16 +226,16 @@ def main():
     ranking.sort(key=lambda x:x["mean_io_change_percent_vs_ivf"])
 
     result={
-      "question":"What flush cadence best turns the 512-result cache into packed persistent 16K-hub shortcuts?",
-      "architecture":"16K learned entry + online seed-only cache + causal persisted hub-page winners; no support2 or regional routing",
-      "write_policy":"protect direct hub winners; on rewrite, fill spare slots with already-ranked top cache candidates for the triggering query; later direct winners replace filler",
+      "question":"What stateless sampling rate best turns online winners into persistent FIFO hub shortcuts?",
+      "architecture":"16K learned entry + online seed-only cache + stateless sampled FIFO hub-page winners; no support2 or regional routing",
+      "write_policy":"sample each novel hub winner independently and reproducibly; every admitted winner changes one FIFO slot; ranked cache candidates fill only empty slots",
       "methods":CFG,
       "evaluation":{"Ls":list(LS),"reps":args.reps,"replay_queries":5000,"warmup":4000,"measured":1000},
       "summary":summary,
       "write_stats":write_stats,
       "fixed_recall_vs_16k":fixed,
       "hub_increment_over_cache":hub_increment,
-      "fill4_vs_nofill4":fill4_vs_nofill4,
+      "sample4_vs_nofill4":sample4_vs_nofill4,
       "ranking":ranking,
     }
     save(args.out/"experience-write-sweep.json",result)
