@@ -131,6 +131,7 @@ struct HintIvfSearch<'a> {
 """,
         """    routing_comparisons: AtomicUsize,
     selected_hint_start: AtomicUsize,
+    experience_cache_top: std::sync::Mutex<Vec<u32>>,
 }
 """,
         "experience selected start tracker",
@@ -142,6 +143,7 @@ struct HintIvfSearch<'a> {
 """,
         """            routing_comparisons: AtomicUsize::new(0),
             selected_hint_start: AtomicUsize::new(usize::MAX),
+            experience_cache_top: std::sync::Mutex::new(Vec::new()),
         }
 """,
         "experience selected start init",
@@ -165,16 +167,20 @@ struct HintIvfSearch<'a> {
             let mut emitted = 1usize;
             if let Some(cache_ids) = ivf.value_cache_ids {
                 if !cache_ids.is_empty() {
-                    let mut best_cache: Option<(f32, u32)> = None;
+                    let mut top_cache = Vec::<(f32, u32)>::with_capacity(10);
                     self.pq_distances(cache_ids, |distance, id| {
-                        let better = best_cache.is_none_or(|current| {
-                            distance
-                                .total_cmp(&current.0)
-                                .then_with(|| id.cmp(&current.1))
-                                .is_lt()
-                        });
-                        if better {
-                            best_cache = Some((distance, id));
+                        let pos = top_cache
+                            .binary_search_by(|cur| {
+                                cur.0
+                                    .total_cmp(&distance)
+                                    .then_with(|| cur.1.cmp(&id))
+                            })
+                            .unwrap_or_else(|x| x);
+                        if pos < 10 {
+                            top_cache.insert(pos, (distance, id));
+                            if top_cache.len() > 10 {
+                                top_cache.pop();
+                            }
                         }
                     })?;
                     routing_cmps = routing_cmps
@@ -183,7 +189,21 @@ struct HintIvfSearch<'a> {
                             ErrorKind::IndexError,
                             "experience cache comparison overflow"
                         ))?;
-                    if let Some((distance, id)) = best_cache {
+
+                    {
+                        let mut stored = self
+                            .io_tracker
+                            .experience_cache_top
+                            .lock()
+                            .map_err(|_| diskann_error!(
+                                ErrorKind::IndexError,
+                                "experience cache-top lock poisoned"
+                            ))?;
+                        stored.clear();
+                        stored.extend(top_cache.iter().map(|x| x.1));
+                    }
+
+                    if let Some(&(distance, id)) = top_cache.first() {
                         if id != winner.1 {
                             emitted += 1;
                             f(id, distance);
@@ -297,7 +317,7 @@ struct HintIvfSearch<'a> {
         nprobe: usize,
         experience_hub_pages: &std::collections::HashMap<u32, Vec<u32>>,
         value_cache_ids: &[u32],
-    ) -> ANNResult<(SearchResult<Data::AssociatedDataType>, u32)> {
+    ) -> ANNResult<(SearchResult<Data::AssociatedDataType>, u32, Vec<u32>)> {
         if medoid_ids.is_empty()
             || coarse_local_ids.len() != medoid_ids.len()
             || coarse_local_ids
@@ -410,7 +430,15 @@ struct HintIvfSearch<'a> {
                 data,
             });
         }
-        Ok((search_result, selected_hub))
+        let cache_top = io_tracker
+            .experience_cache_top
+            .lock()
+            .map_err(|_| diskann_error!(
+                ErrorKind::IndexError,
+                "experience cache-top lock poisoned"
+            ))?
+            .clone();
+        Ok((search_result, selected_hub, cache_top))
     }
 
 '''
@@ -532,11 +560,8 @@ def patch_benchmark(path: Path) -> None:
             // Volatile recent-result cache. IDs are the lookup structure; hub
             // tags and insertion stamps are used only to pack page rewrites.
             let mut cache_ids = Vec::<u32>::with_capacity(experience_cache_capacity);
-            let mut cache_hubs = Vec::<u32>::with_capacity(experience_cache_capacity);
-            let mut cache_stamps = Vec::<usize>::with_capacity(experience_cache_capacity);
             let mut cache_members = HashSet::<u32>::with_capacity(experience_cache_capacity);
             let mut cache_next = 0usize;
-            let mut cache_stamp = 0usize;
             let mut cache_inserts = 0usize;
             let mut cache_skips = 0usize;
             let mut cache_evictions = 0usize;
@@ -560,7 +585,7 @@ def patch_benchmark(path: Path) -> None:
 
             for qi in 0..num_queries {
                 let q = queries.row(qi);
-                let (search_result, selected_hub) =
+                let (search_result, selected_hub, cache_top) =
                     searcher.search_with_hint_ivf_experience(
                         q,
                         search_params.recall_at,
@@ -604,18 +629,13 @@ def patch_benchmark(path: Path) -> None:
                     if cache_members.contains(&winner) {
                         cache_skips += 1;
                     } else {
-                        cache_stamp += 1;
                         if cache_ids.len() < experience_cache_capacity {
                             cache_ids.push(winner);
-                            cache_hubs.push(selected_hub);
-                            cache_stamps.push(cache_stamp);
                             cache_members.insert(winner);
                         } else {
                             let victim = cache_ids[cache_next];
                             cache_members.remove(&victim);
                             cache_ids[cache_next] = winner;
-                            cache_hubs[cache_next] = selected_hub;
-                            cache_stamps[cache_next] = cache_stamp;
                             cache_members.insert(winner);
                             cache_next = (cache_next + 1) % experience_cache_capacity;
                             cache_evictions += 1;
@@ -653,12 +673,7 @@ def patch_benchmark(path: Path) -> None:
                 let mut page = direct_snapshot.clone();
 
                 if experience_fill_from_cache && page.len() < experience_hub_capacity {
-                    let mut slots: Vec<usize> = (0..cache_ids.len())
-                        .filter(|slot| cache_hubs[*slot] == selected_hub)
-                        .collect();
-                    slots.sort_by_key(|slot| std::cmp::Reverse(cache_stamps[*slot]));
-                    for slot in slots {
-                        let id = cache_ids[slot];
+                    for &id in &cache_top {
                         if !page.contains(&id) {
                             page.push(id);
                             if page.len() >= experience_hub_capacity {
