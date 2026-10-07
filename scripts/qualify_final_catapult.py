@@ -247,18 +247,20 @@ def main():
             print(f"rep={rep} seed={seed} order={' '.join(order)}",flush=True)
             for m in order:
                 if m=="catapult":
-                    rr,_=run(a.catapult_binary,a.out,f"r{rep}-catapult",evalq,evalgt,a.index_prefix,LS,{
-                      "DISKANN_PAPER_CATAPULT":"1","DISKANN_CATAPULT_HASHES":"8",
+                    cat_env={"DISKANN_PAPER_CATAPULT":"1","DISKANN_CATAPULT_HASHES":"8",
                       "DISKANN_CATAPULT_CAPACITY":"40","DISKANN_CATAPULT_SEED":seed,
-                      "DISKANN_CATAPULT_SNAPSHOT_LOAD":warmed[seed],
-                    })
+                      "DISKANN_CATAPULT_SNAPSHOT_LOAD":warmed[seed]}
+                    run(a.catapult_binary,a.out,f"r{rep}-catapult-cachewarm",warm,warmgt,a.index_prefix,LS,
+                        {**cat_env,"DISKANN_CATAPULT_FREEZE":"1"},skip_recall=True)
+                    rr,_=run(a.catapult_binary,a.out,f"r{rep}-catapult",evalq,evalgt,a.index_prefix,LS,cat_env)
                 elif m=="baseline":
+                    run(a.nav_binary,a.out,f"r{rep}-baseline-cachewarm",warm,warmgt,a.index_prefix,LS,{},skip_recall=True)
                     rr,_=run(a.nav_binary,a.out,f"r{rep}-baseline",evalq,evalgt,a.index_prefix,LS,{})
                 elif m=="ivf":
-                    rr,_=run(a.nav_binary,a.out,f"r{rep}-ivf",evalq,evalgt,a.index_prefix,LS,{
-                      "DISKANN_HINT_IVF_FILE":a.ivf_16k,"DISKANN_HINT_IVF_NPROBE":"8",
-                      "DISKANN_HINT_IVF_MAX_STARTS":"1",
-                    })
+                    ivf_env={"DISKANN_HINT_IVF_FILE":a.ivf_16k,"DISKANN_HINT_IVF_NPROBE":"8",
+                      "DISKANN_HINT_IVF_MAX_STARTS":"1"}
+                    run(a.nav_binary,a.out,f"r{rep}-ivf-cachewarm",warm,warmgt,a.index_prefix,LS,ivf_env,skip_recall=True)
+                    rr,_=run(a.nav_binary,a.out,f"r{rep}-ivf",evalq,evalgt,a.index_prefix,LS,ivf_env)
                 else:
                     hub=0 if m=="core" else 10
                     rr,st=run(a.nav_binary,a.out,f"r{rep}-{m}",held,a.heldout_gt,a.index_prefix,LS,{
