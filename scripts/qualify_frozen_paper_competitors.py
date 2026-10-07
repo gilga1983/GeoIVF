@@ -162,7 +162,7 @@ def matched(summary):
     for l in NAV_ANCHORS:
         n=nav[str(l)]; target=float(n["recall_percent"])
         item={"fill2_L":l,"recall_percent":target,"fill2_mean_ios":float(n["mean_ios"]),"fill2_latency_us":float(n["median_latency_us"]),"competitors":{}}
-        for m in ("baseline","hot-30","qsev-32"):
+        for m in ("baseline","hot-30","qsev-32","ivf"):
             x=interp(summary[m],target)
             if x is None:
                 item["competitors"][m]={"available":False}; continue
@@ -187,7 +187,7 @@ def main():
     slice_fbin(args.replay_queries,evalq,4000,1000); slice_gt(args.gt5000,evalgt,4000,1000)
 
     hot=args.hot_dir/"hot-cache-n30.bin"
-    methods=("baseline","hot-30","qsev-32","fill2")
+    methods=("baseline","hot-30","qsev-32","ivf","fill2")
     runs={m:[] for m in methods}; stats=[]
     allowed=sorted(os.sched_getaffinity(0)); os.sched_setaffinity(0,set(allowed[:THREADS]))
     lockp=Path.home()/".cache/geoivf/speed-device.lock"; lockp.parent.mkdir(parents=True,exist_ok=True)
@@ -201,6 +201,8 @@ def main():
                 if m=="fill2":
                     rr,st=run_one(args.nav_binary,args.out,f"r{rep}-{m}",args.replay_queries,args.gt5000,args.index_prefix,ivf=args.ivf,experience=True)
                     stats.append(st)
+                elif m=="ivf":
+                    rr,_=run_one(args.nav_binary,args.out,f"r{rep}-{m}",evalq,evalgt,args.index_prefix,ivf=args.ivf)
                 elif m=="qsev-32":
                     rr,_=run_one(args.qsev_binary,args.out,f"r{rep}-{m}",evalq,evalgt,args.index_prefix,qsev=args.qsev)
                 elif m=="hot-30":
@@ -235,6 +237,7 @@ def main():
         "All headline comparisons measure exactly the final 1,000 heldout queries.",
         "Fill2 starts cache and hub experience empty and uses only preceding heldout requests as online history.",
         "Static 16K state and hot-cache ranking use only the disjoint first 5K training queries.",
+        "The learned 16K entry-only arm uses the same final NavHints binary and packed Hint-IVF implementation as Fill2.",
         "QSEV routing runs inside the timed query path.",
         "Cache/QSEV container overhead is excluded, which favors the competitors.",
         "All methods are order-rotated within one device-locked timing epoch."
