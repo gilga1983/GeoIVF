@@ -71,8 +71,8 @@ QSEV_BIN="$PWD/third_party/DiskANN-frozen-qsev/target/release/diskann-benchmark"
 
 git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-frozen-nav
 git -C third_party/DiskANN-frozen-nav checkout --detach "$DISKANN_REV"
-.venv/bin/python scripts/patch_diskann_vertex_navhints.py third_party/DiskANN-frozen-nav --variants 5
-.venv/bin/python scripts/patch_diskann_experience_controller.py third_party/DiskANN-frozen-nav
+.venv/bin/python scripts/patch_diskann_hint_ivf_packed_direct.py third_party/DiskANN-frozen-nav
+.venv/bin/python scripts/patch_diskann_experience_core.py third_party/DiskANN-frozen-nav
 (cd third_party/DiskANN-frozen-nav && cargo fmt --all && git diff --check && cargo build --release --locked -p diskann-benchmark --features disk-index) 2>&1 | tee "$ART/navhints-build.log"
 NAV_BIN="$PWD/third_party/DiskANN-frozen-nav/target/release/diskann-benchmark"
 
