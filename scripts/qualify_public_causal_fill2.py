@@ -9,21 +9,20 @@ THREADS=4
 BEAM=8
 K=10
 LS=(10,20,40,80,160,320)
-METHODS=("baseline","ivf","cache","fill2")
+METHODS=("baseline","ivf","cache","sample2")
 CFG={
-    "baseline":{"ivf":False,"experience":False,"cache":0,"hub":0,"threshold":2,"fill":False},
-    "ivf":{"ivf":True,"experience":False,"cache":0,"hub":0,"threshold":2,"fill":False},
-    "cache":{"ivf":True,"experience":True,"cache":512,"hub":0,"threshold":2,"fill":False},
-    "fill2":{"ivf":True,"experience":True,"cache":512,"hub":10,"threshold":2,"fill":True},
+    "baseline":{"ivf":False,"experience":False,"cache":0,"hub":0,"sample":2,"fill":False},
+    "ivf":{"ivf":True,"experience":False,"cache":0,"hub":0,"sample":2,"fill":False},
+    "cache":{"ivf":True,"experience":True,"cache":512,"hub":0,"sample":2,"fill":False},
+    "sample2":{"ivf":True,"experience":True,"cache":512,"hub":10,"sample":2,"fill":True},
 }
 STAT_KEYS=(
-    "cache_capacity","hub_capacity","flush_threshold","fill",
+    "cache_capacity","hub_capacity","sample_denominator","fill",
     "cache_inserts","cache_skips","cache_evictions",
     "active_direct_hubs","persisted_hubs","direct_learned",
-    "direct_duplicates","direct_full","fifo_evictions","writes","eval_writes",
+    "direct_duplicates","direct_full","sample_trials","sample_accepts","sample_rejects","fifo_evictions","writes","eval_writes",
     "write_slots","write_direct_slots","write_filler_slots",
     "eval_write_slots","eval_write_filler_slots","final_page_slots",
-    "pending_hubs","pending_entries",
 )
 
 def save(p,o):
@@ -114,7 +113,7 @@ def run(binary,out,tag,queries,gt,prefix,data_type,distance,ivf,cfg):
         env["DISKANN_EXPERIENCE_WARMUP"]="4000"
         env["DISKANN_EXPERIENCE_CACHE_CAPACITY"]=str(cfg["cache"])
         env["DISKANN_EXPERIENCE_HUB_CAPACITY"]=str(cfg["hub"])
-        env["DISKANN_EXPERIENCE_FLUSH_THRESHOLD"]=str(cfg["threshold"])
+        env["DISKANN_EXPERIENCE_SAMPLE_DENOMINATOR"]=str(cfg["sample"])
         env["DISKANN_EXPERIENCE_FILL_FROM_CACHE"]="1" if cfg["fill"] else "0"
     with log.open("w") as lf:
         subprocess.run([str(binary),"run","--input-file",str(inp),"--output-file",str(op)],
@@ -170,11 +169,11 @@ def interp(s,t,f):
 def matched(summary):
     rows=[]
     for l in LS:
-        target=summary["fill2"][str(l)]["recall_percent"]
-        row={"fill2_L":l,"recall_percent":target}
+        target=summary["sample2"][str(l)]["recall_percent"]
+        row={"sample2_L":l,"recall_percent":target}
         for ref in ("baseline","ivf","cache"):
-            fio=summary["fill2"][str(l)]["mean_ios"]
-            fla=summary["fill2"][str(l)]["latency_us"]
+            fio=summary["sample2"][str(l)]["mean_ios"]
+            fla=summary["sample2"][str(l)]["latency_us"]
             rio=interp(summary[ref],target,"mean_ios")
             rla=interp(summary[ref],target,"latency_us")
             if rio is not None and rla is not None:
@@ -244,15 +243,15 @@ def main():
     result={
       "dataset":m["dataset"],"split":m["split"],"data_type":m["data_type"],"distance":m["metric"],
       "frozen_controller":{"entry_ids":16000,"nlist":512,"nprobe":8,"cache_ids":512,
-        "hub_winners":10,"flush_threshold":2,"fill_from_cache":True,
+        "hub_winners":10,"sample_denominator":2,"fill_from_cache":True,
         "offline_train_queries":5000,"online_warmup_queries":4000,"measured_queries":1000},
       "runtime_ivf_file_bytes":args.ivf.stat().st_size,
       "training":{"teacher_L":4,"landmarks":ivfm.get("landmark_ids"),"nlist":ivfm["nlist"]},
       "search":{"K":K,"Ls":list(LS),"beam":BEAM,"threads":THREADS},
       "summary":summary,"write_stats":write_stats,
-      "matched_fill2":match,"mean_matched_fill2":means,
+      "matched_sample2":match,"mean_matched_sample2":means,
     }
-    save(args.out/"public-causal-fill2.json",result)
+    save(args.out/"public-causal-sample2.json",result)
     print(json.dumps(result,indent=2),flush=True)
 
 if __name__=="__main__": main()
