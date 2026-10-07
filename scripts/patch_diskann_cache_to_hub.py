@@ -239,12 +239,14 @@ def patch_benchmark(path: Path) -> None:
                     // Include the completed query first; it could not have
                     // influenced the search that produced it.
                     chosen.push(winner);
+                    // Fill this single write to ten distinct successful IDs
+                    // whenever the existing value cache has enough entries.
                     for id in ranked_cache_winners {
+                        if chosen.len() >= cache_write_winners {
+                            break;
+                        }
                         if id != winner && !chosen.contains(&id) {
                             chosen.push(id);
-                            if chosen.len() == cache_write_winners {
-                                break;
-                            }
                         }
                     }
                     let previous = online_hubs.get(&selected_hub);
