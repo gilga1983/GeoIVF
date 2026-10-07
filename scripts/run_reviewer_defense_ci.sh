@@ -71,10 +71,10 @@ BIN="$WORK/DiskANN/target/release/diskann-benchmark"
 
 if command -v fio >/dev/null 2>&1; then
   FILE="$INDEX"_disk.index
-  fio --name=randread4k --filename="$FILE" --readonly=1 --rw=randread --bs=4k \
+  fio --name=randread4k --filename="$FILE" --readonly --rw=randread --bs=4k \
       --direct=1 --ioengine=libaio --iodepth=32 --numjobs=1 --time_based=1 --runtime=10 \
       --group_reporting=1 --output-format=json > "$ART/fio-4k.json"
-  fio --name=randread16k --filename="$FILE" --readonly=1 --rw=randread --bs=16k \
+  fio --name=randread16k --filename="$FILE" --readonly --rw=randread --bs=16k \
       --direct=1 --ioengine=libaio --iodepth=32 --numjobs=1 --time_based=1 --runtime=10 \
       --group_reporting=1 --output-format=json > "$ART/fio-16k.json"
 else
