@@ -1,0 +1,49 @@
+name: Motivation opportunity analysis
+
+on:
+  push:
+    branches: [experiment/motivation-opportunity]
+    paths:
+      - '.github/workflows/motivation-opportunity.yml'
+      - 'scripts/analyze_motivation_opportunity.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Analyze workload-induced graph opportunities
+        run: |
+          set -euxo pipefail
+          python -m pip install numpy==2.2.6
+          TRACE="$HOME/.cache/geoivf/high-l-medoid-teacher-traces-v1/medoid-teacher.L64.jsonl"
+          GT="$HOME/.cache/geoivf/medrag-zipf-qwen3b-v1/heldout5000-pubmed1m-top16-ip.gt"
+          test -s "$TRACE"
+          test -s "$GT"
+          mkdir -p artifacts/motivation-opportunity
+          python scripts/analyze_motivation_opportunity.py \
+            --trace "$TRACE" \
+            --gt "$GT" \
+            --corpus-size 1000000 \
+            --recent-capacity 512 \
+            --out artifacts/motivation-opportunity \
+            2>&1 | tee artifacts/motivation-opportunity/run.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: motivation-opportunity-\${{ github.run_id }}
+          path: artifacts/motivation-opportunity/
+          retention-days: 30
