@@ -27,6 +27,7 @@ def main():
     args.save_prefix.parent.mkdir(parents=True, exist_ok=True)
 
     m = json.loads(args.dataset_manifest.read_text())
+    pq_chunks = min(64, int(m["dim"]))
     cfg = {
         "search_directories": [str(args.work)],
         "jobs": [{
@@ -42,7 +43,7 @@ def main():
                     "l_build": 100,
                     "num_threads": 4,
                     "build_ram_limit_gb": args.build_ram_gb,
-                    "num_pq_chunks": 64,
+                    "num_pq_chunks": pq_chunks,
                     "quantization_type": "FP",
                     "save_path": str(args.save_prefix),
                 },
@@ -82,7 +83,7 @@ def main():
             "L_build": 100,
             "threads": 4,
             "build_ram_gb": args.build_ram_gb,
-            "pq_chunks": 64,
+            "pq_chunks": pq_chunks,
             "quantization_type": "FP",
         },
         "validation_output": str(out),
