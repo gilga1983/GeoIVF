@@ -73,6 +73,7 @@ def main():
     ap.add_argument("--out",type=Path,required=True)
     ap.add_argument("--corpus-size",type=int,default=1_000_000)
     ap.add_argument("--recent-capacity",type=int,default=512)
+    ap.add_argument("--skip-prefixes",default="0,5,10,20")
     args=ap.parse_args()
     args.out.mkdir(parents=True,exist_ok=True)
 
@@ -80,18 +81,42 @@ def main():
     if not records:
         raise ValueError("empty traversal trace")
 
-    visits=collections.Counter()
-    support=collections.Counter()
-    trace_lens=[]
-    for rec in records:
-        ids=[int(x) for x in rec["ids"]]
-        trace_lens.append(len(ids))
-        visits.update(ids)
-        support.update(set(ids))
-
     fracs=(0.0001,0.0005,0.001,0.002,0.005,0.01,0.016,0.02,0.05,0.10)
-    visit_curve,total_visits,visited_vertices=cumulative_curve(visits,args.corpus_size,fracs)
-    support_curve,total_support,_=cumulative_curve(support,args.corpus_size,fracs)
+    skip_prefixes=[int(x) for x in args.skip_prefixes.split(",") if x.strip()]
+    if not skip_prefixes or any(x<0 for x in skip_prefixes):
+        raise ValueError("invalid skip-prefix list")
+
+    junction_variants={}
+    for skip in skip_prefixes:
+        visits=collections.Counter()
+        support=collections.Counter()
+        trace_lens=[]
+        for rec in records:
+            ids=[int(x) for x in rec["ids"]]
+            kept=ids[skip:]
+            trace_lens.append(len(kept))
+            visits.update(kept)
+            support.update(set(kept))
+        visit_curve,total_visits,visited_vertices=cumulative_curve(visits,args.corpus_size,fracs)
+        support_curve,total_support,_=cumulative_curve(support,args.corpus_size,fracs)
+        junction_variants[str(skip)]={
+          "skip_first_expansions":skip,
+          "total_trace_visits":total_visits,
+          "unique_visited_vertices":visited_vertices,
+          "mean_trace_length":float(np.mean(trace_lens)),
+          "median_trace_length":float(np.median(trace_lens)),
+          "visit_gini_over_corpus":gini_from_sparse_counts(visits,args.corpus_size),
+          "query_support_gini_over_corpus":gini_from_sparse_counts(support,args.corpus_size),
+          "visit_curve":visit_curve,
+          "query_support_curve":support_curve,
+          "top_vertices_by_query_support":[
+            {"vertex":int(v),"queries":int(c),"query_fraction":float(c/len(records)),
+             "visits":int(visits[v])}
+            for v,c in support.most_common(20)
+          ],
+        }
+    # Preserve the no-skip result under the original key.
+    base_junction=junction_variants[str(skip_prefixes[0])]
 
     gt=load_gt(args.gt)
     if gt.shape[1]<10:
@@ -142,22 +167,8 @@ def main():
 
     result={
       "corpus_size":args.corpus_size,
-      "junctions":{
-        "training_queries":len(records),
-        "total_trace_visits":total_visits,
-        "unique_visited_vertices":visited_vertices,
-        "mean_trace_length":float(np.mean(trace_lens)),
-        "median_trace_length":float(np.median(trace_lens)),
-        "visit_gini_over_corpus":gini_from_sparse_counts(visits,args.corpus_size),
-        "query_support_gini_over_corpus":gini_from_sparse_counts(support,args.corpus_size),
-        "visit_curve":visit_curve,
-        "query_support_curve":support_curve,
-        "top_vertices_by_query_support":[
-          {"vertex":int(v),"queries":int(c),"query_fraction":float(c/len(records)),
-           "visits":int(visits[v])}
-          for v,c in support.most_common(20)
-        ],
-      },
+      "junctions":{"training_queries":len(records),**base_junction},
+      "junctions_by_skip_prefix":junction_variants,
       "destinations":{
         "queries":len(gt),
         "measured_queries":len(measured),
@@ -175,8 +186,8 @@ def main():
     (args.out/"motivation-opportunity.json").write_text(json.dumps(result,indent=2)+"\n")
 
     for name,rows,y in (
-        ("junction-visit-curve.csv",visit_curve,"traffic_share"),
-        ("junction-support-curve.csv",support_curve,"traffic_share"),
+        ("junction-visit-curve.csv",base_junction["visit_curve"],"traffic_share"),
+        ("junction-support-curve.csv",base_junction["query_support_curve"],"traffic_share"),
         ("result-demand-curve.csv",result_curve,"traffic_share"),
     ):
         with (args.out/name).open("w",newline="") as f:
