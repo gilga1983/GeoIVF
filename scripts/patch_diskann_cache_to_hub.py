@@ -194,6 +194,8 @@ def patch_benchmark(path: Path) -> None:
             let mut cache_to_hub_unchanged = 0usize;
             let mut cache_to_hub_new_pages = 0usize;
             let mut cache_to_hub_ids_written = 0usize;
+            let mut cache_to_hub_full10_writes = 0usize;
+            let mut cache_to_hub_short_writes = 0usize;
 
             for qi in 0..num_queries {
 ""","initialize periodic cache-to-hub accounting")
@@ -257,6 +259,11 @@ def patch_benchmark(path: Path) -> None:
                             cache_to_hub_new_pages += 1;
                         }
                         cache_to_hub_ids_written += chosen.len();
+                        if chosen.len() == cache_write_winners {
+                            cache_to_hub_full10_writes += 1;
+                        } else {
+                            cache_to_hub_short_writes += 1;
+                        }
                         online_hubs.insert(selected_hub, chosen);
                         cache_to_hub_writes += 1;
                     }
@@ -268,7 +275,7 @@ def patch_benchmark(path: Path) -> None:
     anchor = """            let dirty_pages = pending.values().filter(|x| **x > 0).count();
 """
     diag = r'''            eprintln!(
-                "CACHE_TO_HUB_WRITES L={} cadence={} slots={} logical_page_writes={} unchanged={} new_pages={} ids_written={} unique_hub_pages={} writes_per_query={:.6}",
+                "CACHE_TO_HUB_WRITES L={} cadence={} slots={} logical_page_writes={} unchanged={} new_pages={} ids_written={} full10_writes={} short_writes={} unique_hub_pages={} writes_per_query={:.6}",
                 l,
                 cache_write_every,
                 cache_write_winners,
@@ -276,6 +283,8 @@ def patch_benchmark(path: Path) -> None:
                 cache_to_hub_unchanged,
                 cache_to_hub_new_pages,
                 cache_to_hub_ids_written,
+                cache_to_hub_full10_writes,
+                cache_to_hub_short_writes,
                 online_hubs.len(),
                 cache_to_hub_writes as f64 / num_queries as f64,
             );
