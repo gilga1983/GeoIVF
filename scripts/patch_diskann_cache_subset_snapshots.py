@@ -10,7 +10,7 @@ Every successful request still inserts its rank-1 winner into the SAME
 SkipDup/FIFO 512-ID cache. We reuse the cache's resident-PQ scan to remember
 the ten best cached winners for the current query. Every X completed queries,
 one hub-page snapshot is published for the query's selected 16K start hub:
-rank-1 current winner followed by the best distinct cached winners, up to ten.
+rank-1 current winner, previously published hub winners, and then best distinct cached winners to fill the remaining slots.
 
 No second cache, query key, per-hub accumulation buffer, or second PQ scan.
 The hub page overlay is causally visible to *future* queries only, and still
@@ -284,14 +284,22 @@ def patch_benchmark(path: Path) -> None:
                 {
                     let winner = search_result.results[0].vertex_id;
                     let mut subset = Vec::<u32>::with_capacity(online_hub_capacity.min(10));
+                    // Preserve the newest successful winner, then the
+                    // already-persisted candidates at this hub. Use only the
+                    // remaining slots for relevant winners from the existing
+                    // value-ID cache. Thus each page rewrite keeps evidence
+                    // already paid for, learns the current success, and
+                    // packs all ten available slots.
                     subset.push(winner);
+                    if let Some(previous) = online_hubs.get(&selected_hub) {
+                        for &id in previous {
+                            if subset.len() >= online_hub_capacity.min(10) { break; }
+                            if !subset.contains(&id) { subset.push(id); }
+                        }
+                    }
                     for &id in &selected_cached_winners {
-                        if subset.len() == online_hub_capacity.min(10) {
-                            break;
-                        }
-                        if !subset.contains(&id) {
-                            subset.push(id);
-                        }
+                        if subset.len() >= online_hub_capacity.min(10) { break; }
+                        if !subset.contains(&id) { subset.push(id); }
                     }
 
                     let changed = online_hubs.get(&selected_hub)
