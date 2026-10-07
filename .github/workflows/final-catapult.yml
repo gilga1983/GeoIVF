@@ -1,8 +1,8 @@
-name: Final Catapult comparison
+name: Equal-budget Catapult comparison
 
 on:
   push:
-    branches: [experiment/final-catapult]
+    branches: [experiment/final-catapult-equal-budget]
     paths:
       - '.github/workflows/final-catapult.yml'
       - 'scripts/run_final_catapult_ci.sh'
@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: geoivf-final-catapult
+  group: geoivf-final-catapult-equal-budget
   cancel-in-progress: true
 
 jobs:
