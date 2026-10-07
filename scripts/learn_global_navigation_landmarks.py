@@ -46,15 +46,15 @@ def write_start_ids(path: Path, ids):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--trace", type=Path, required=True)
-    ap.add_argument("--portals", type=Path, required=True)
+    ap.add_argument("--portals", type=Path)
     ap.add_argument("--out-dir", type=Path, required=True)
     ap.add_argument("--budgets", default="64,128,256,512,768,1024,1536,2048,2500")
     args = ap.parse_args()
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     records = [json.loads(x) for x in args.trace.read_text().splitlines() if x.strip()]
-    if len(records) != 5000:
-        raise ValueError(f"expected 5000 training traces, got {len(records)}")
+    if not records:
+        raise ValueError("empty training trace")
     if [int(r["query"]) for r in records] != list(range(len(records))):
         raise ValueError("trace query numbering mismatch")
 
@@ -78,9 +78,7 @@ def main():
         ),
         key=lambda x: (-x[0], -x[1], x[2]),
     )
-    portals = list(map(int, load_start_ids(args.portals)))
-    if len(portals) != 512:
-        raise ValueError(f"expected 512 released portals, got {len(portals)}")
+    portals = [] if args.portals is None else list(map(int, load_start_ids(args.portals)))
 
     variants = {}
     for budget in [int(x) for x in args.budgets.split(",") if x.strip()]:
@@ -102,21 +100,22 @@ def main():
             if v not in seen:
                 seen.add(v)
                 combined.append(v)
-        cp = args.out_dir / f"portals512-plus-landmarks-b{budget}.bin"
-        cids = write_start_ids(cp, combined)
-        variants[f"portals512-plus-landmarks-b{budget}"] = {
-            "portal_ids": 512,
-            "landmark_budget": budget,
-            "combined_unique_ids": int(len(cids)),
-            "state_bytes": cp.stat().st_size,
-            "file": cp.name,
-        }
+        if portals:
+            cp = args.out_dir / f"portals{len(portals)}-plus-landmarks-b{budget}.bin"
+            cids = write_start_ids(cp, combined)
+            variants[f"portals-plus-landmarks-b{budget}"] = {
+                "portal_ids": len(portals),
+                "landmark_budget": budget,
+                "combined_unique_ids": int(len(cids)),
+                "state_bytes": cp.stat().st_size,
+                "file": cp.name,
+            }
 
     result = {
         "training_queries": len(records),
         "score": "global sum of first expansion positions across training traversals",
         "eligible_vertices": len(ranked),
-        "portal_ids": 512,
+        "portal_ids": len(portals),
         "variants": variants,
         "top_landmarks": [
             {"vertex": vid, "skip_score": s, "support": sup}
