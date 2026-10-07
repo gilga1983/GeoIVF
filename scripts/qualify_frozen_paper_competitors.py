@@ -15,11 +15,11 @@ DIM=768
 FLOAT_BYTES=4
 MAX_DEGREE=64
 STAT_KEYS=(
- "cache_capacity","hub_capacity","flush_threshold","fill","cache_inserts","cache_skips",
+ "cache_capacity","hub_capacity","sample_denominator","fill","cache_inserts","cache_skips",
  "cache_evictions","active_direct_hubs","persisted_hubs","direct_learned",
- "direct_duplicates","direct_full","fifo_evictions","writes","eval_writes","write_slots",
+ "direct_duplicates","direct_full","sample_trials","sample_accepts","sample_rejects","fifo_evictions","writes","eval_writes","write_slots",
  "write_direct_slots","write_filler_slots","eval_write_slots","eval_write_filler_slots",
- "final_page_slots","pending_hubs","pending_entries",
+ "final_page_slots",
 )
 
 def save(p,o):
@@ -99,7 +99,7 @@ def run_one(binary,out,tag,queries,gt,index_prefix,*,cache_nodes=None,hot_ids=No
     if experience:
         env["DISKANN_EXPERIENCE_REPLAY"]="1"; env["DISKANN_EXPERIENCE_WARMUP"]="4000"
         env["DISKANN_EXPERIENCE_CACHE_CAPACITY"]="512"; env["DISKANN_EXPERIENCE_HUB_CAPACITY"]="10"
-        env["DISKANN_EXPERIENCE_FLUSH_THRESHOLD"]="2"; env["DISKANN_EXPERIENCE_FILL_FROM_CACHE"]="1"
+        env["DISKANN_EXPERIENCE_SAMPLE_DENOMINATOR"]="2"; env["DISKANN_EXPERIENCE_FILL_FROM_CACHE"]="1"
     cmd=[str(binary),"run","--input-file",str(inp),"--output-file",str(op)]
     t=time.monotonic()
     with log.open("w") as lf:
@@ -158,10 +158,10 @@ def interp(summary,target):
 
 def matched(summary):
     out={}
-    nav=summary["fill2"]
+    nav=summary["sample2"]
     for l in NAV_ANCHORS:
         n=nav[str(l)]; target=float(n["recall_percent"])
-        item={"fill2_L":l,"recall_percent":target,"fill2_mean_ios":float(n["mean_ios"]),"fill2_latency_us":float(n["median_latency_us"]),"competitors":{}}
+        item={"sample2_L":l,"recall_percent":target,"sample2_mean_ios":float(n["mean_ios"]),"sample2_latency_us":float(n["median_latency_us"]),"competitors":{}}
         for m in ("baseline","hot-30","qsev-32","ivf"):
             x=interp(summary[m],target)
             if x is None:
@@ -187,7 +187,7 @@ def main():
     slice_fbin(args.replay_queries,evalq,4000,1000); slice_gt(args.gt5000,evalgt,4000,1000)
 
     hot=args.hot_dir/"hot-cache-n30.bin"
-    methods=("baseline","hot-30","qsev-32","ivf","fill2")
+    methods=("baseline","hot-30","qsev-32","ivf","sample2")
     runs={m:[] for m in methods}; stats=[]
     allowed=sorted(os.sched_getaffinity(0)); os.sched_setaffinity(0,set(allowed[:THREADS]))
     lockp=Path.home()/".cache/geoivf/speed-device.lock"; lockp.parent.mkdir(parents=True,exist_ok=True)
@@ -198,7 +198,7 @@ def main():
             shift=rep%len(methods); order=list(methods[shift:]+methods[:shift])
             print(f"rep={rep} order={' '.join(order)}",flush=True)
             for m in order:
-                if m=="fill2":
+                if m=="sample2":
                     rr,st=run_one(args.nav_binary,args.out,f"r{rep}-{m}",args.replay_queries,args.gt5000,args.index_prefix,ivf=args.ivf,experience=True)
                     stats.append(st)
                 elif m=="ivf":
@@ -224,14 +224,14 @@ def main():
     cache_payload=30*(DIM*FLOAT_BYTES+MAX_DEGREE*4)
     result={
       "workload":"PubMed1M / MedRAG-Zipf: static training first 5K; online warm-up heldout rows 0--3999; measured heldout rows 4000--4999",
-      "search":{"K":K,"Ls":list(LS),"fill2_anchor_Ls":list(NAV_ANCHORS),"beam":BEAM,"threads":THREADS,"metric":"inner_product","repetitions":args.reps,"same_graph_pq_ssd":True},
+      "search":{"K":K,"Ls":list(LS),"sample2_anchor_Ls":list(NAV_ANCHORS),"beam":BEAM,"threads":THREADS,"metric":"inner_product","repetitions":args.reps,"same_graph_pq_ssd":True},
       "state_budget":{
-        "fill2_static_routing_bytes":static_bytes,"fill2_cache_id_bytes":cache_ids_bytes,
-        "fill2_query_state_bytes_before_container_metadata":nav_query_state_bytes,
+        "sample2_static_routing_bytes":static_bytes,"sample2_cache_id_bytes":cache_ids_bytes,
+        "sample2_query_state_bytes_before_container_metadata":nav_query_state_bytes,
         "persistent_hub_ids":"stored in existing graph-page slack; no graph-file growth on this layout",
-        "qsev_32_bytes":qsev_bytes,"qsev_fraction_of_fill2_query_state":qsev_bytes/nav_query_state_bytes,
+        "qsev_32_bytes":qsev_bytes,"qsev_fraction_of_sample2_query_state":qsev_bytes/nav_query_state_bytes,
         "hot30_vector_plus_max_degree_edge_id_bytes":cache_payload,
-        "hot30_fraction_of_fill2_query_state":cache_payload/nav_query_state_bytes,
+        "hot30_fraction_of_sample2_query_state":cache_payload/nav_query_state_bytes,
       },
       "guardrails":[
         "All headline comparisons measure exactly the final 1,000 heldout queries.",
@@ -242,7 +242,7 @@ def main():
         "Cache/QSEV container overhead is excluded, which favors the competitors.",
         "All methods are order-rotated within one device-locked timing epoch."
       ],
-      "summary":summary,"fill2_write_stats":write_stats,"matched_recall_against_fill2":matched(summary),
+      "summary":summary,"sample2_write_stats":write_stats,"matched_recall_against_sample2":matched(summary),
     }
     save(args.out/"frozen-paper-competitors.json",result); print(json.dumps(result,indent=2),flush=True)
 
