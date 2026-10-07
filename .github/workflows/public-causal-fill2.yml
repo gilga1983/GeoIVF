@@ -8,8 +8,8 @@ on:
       - 'scripts/run_public_causal_fill2_ci.sh'
       - 'scripts/run_public_causal_one.sh'
       - 'scripts/qualify_public_causal_fill2.py'
-      - 'scripts/patch_diskann_vertex_navhints.py'
-      - 'scripts/patch_diskann_experience_controller.py'
+      - 'scripts/patch_diskann_hint_ivf_packed_direct.py'
+      - 'scripts/patch_diskann_experience_core.py'
   workflow_dispatch:
 
 permissions:
