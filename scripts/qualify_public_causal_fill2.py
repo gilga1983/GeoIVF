@@ -20,7 +20,7 @@ STAT_KEYS=(
     "cache_capacity","hub_capacity","flush_threshold","fill",
     "cache_inserts","cache_skips","cache_evictions",
     "active_direct_hubs","persisted_hubs","direct_learned",
-    "direct_duplicates","direct_full","writes","eval_writes",
+    "direct_duplicates","direct_full","fifo_evictions","writes","eval_writes",
     "write_slots","write_direct_slots","write_filler_slots",
     "eval_write_slots","eval_write_filler_slots","final_page_slots",
     "pending_hubs","pending_entries",
