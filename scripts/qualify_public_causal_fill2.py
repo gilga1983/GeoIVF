@@ -219,6 +219,14 @@ def main():
                 cfg=CFG[method]
                 q=replay if cfg["experience"] else evalq
                 gt=replay_gt if cfg["experience"] else evalgt
+                if not cfg["experience"]:
+                    warmq=args.work/f"warm4000{replay.suffix}"
+                    warmgt=args.work/"warm4000.gt"
+                    if not warmq.exists():
+                        slice_xbin(replay,warmq,0,4000,itemsize)
+                        slice_gt(replay_gt,warmgt,0,4000)
+                    run(args.binary,args.out,f"r{rep}-{method}-warm",warmq,warmgt,args.index_prefix,
+                        m["data_type"],m["metric"],args.ivf,cfg)
                 rr,st=run(args.binary,args.out,f"r{rep}-{method}",q,gt,args.index_prefix,
                           m["data_type"],m["metric"],args.ivf,cfg)
                 runs[method].append(rr)
