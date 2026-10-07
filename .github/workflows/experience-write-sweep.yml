@@ -5,7 +5,8 @@ on:
     branches: [experiment/staged-navhints]
     paths:
       - '.github/workflows/experience-write-sweep.yml'
-      - 'scripts/patch_diskann_experience_controller.py'
+      - 'scripts/patch_diskann_hint_ivf_packed_direct.py'
+      - 'scripts/patch_diskann_experience_core.py'
       - 'scripts/qualify_experience_write_sweep.py'
   workflow_dispatch:
 
@@ -48,8 +49,8 @@ jobs:
           ART="$PWD/artifacts/experience-write-sweep"
           QUERIES="$HOME/.cache/geoivf/medrag-zipf-qwen3b-v1/medrag-zipf-10k-medcpt.fbin"
           GT5000="$HOME/.cache/geoivf/medrag-zipf-qwen3b-v1/heldout5000-pubmed1m-top16-ip.gt"
-          IVF16="$HOME/.cache/geoivf/onpolicy-staged-navhints-v1/canonical-b16000-c512.bin"
-          INDEX="$HOME/.cache/geoivf/vertex-navhints-v1/diskann-index"
+          IVF16="$HOME/.cache/geoivf/paper-competitors-phase1-v1/navhints/hints-b16000-nlist512-spherical.bin"
+          INDEX="$HOME/.cache/geoivf/catapult-paper-pubmed1m-index-v1/diskann-index"
 
           mkdir -p "$ART"
           for f in "$QUERIES" "$GT5000" "$IVF16"                    "$INDEX"_disk.index "$INDEX"_pq_pivots.bin "$INDEX"_pq_compressed.bin; do
@@ -62,7 +63,7 @@ jobs:
           echo "IVF16=$IVF16" >> "$GITHUB_ENV"
           echo "INDEX=$INDEX" >> "$GITHUB_ENV"
 
-          .venv/bin/python -m py_compile             scripts/patch_diskann_vertex_navhints.py             scripts/patch_diskann_experience_controller.py             scripts/qualify_experience_write_sweep.py
+          .venv/bin/python -m py_compile             scripts/patch_diskann_hint_ivf_packed_direct.py             scripts/patch_diskann_experience_core.py             scripts/qualify_experience_write_sweep.py
 
       - name: Install pinned Rust toolchain
         run: |
@@ -85,8 +86,8 @@ jobs:
           rm -rf third_party/DiskANN-experience
           git clone --filter=blob:none https://github.com/microsoft/DiskANN.git third_party/DiskANN-experience
           git -C third_party/DiskANN-experience checkout --detach "$rev"
-          .venv/bin/python scripts/patch_diskann_vertex_navhints.py third_party/DiskANN-experience --variants 5
-          .venv/bin/python scripts/patch_diskann_experience_controller.py third_party/DiskANN-experience
+          .venv/bin/python scripts/patch_diskann_hint_ivf_packed_direct.py third_party/DiskANN-experience
+          .venv/bin/python scripts/patch_diskann_experience_core.py third_party/DiskANN-experience
           (cd third_party/DiskANN-experience && cargo fmt --all)
           git -C third_party/DiskANN-experience diff --check
           (cd third_party/DiskANN-experience && cargo build --release --locked -p diskann-benchmark --features disk-index)             2>&1 | tee "$ART/build.log"
