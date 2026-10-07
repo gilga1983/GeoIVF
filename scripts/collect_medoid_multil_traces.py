@@ -20,8 +20,6 @@ import numpy as np
 
 THREADS = 4
 IO_BEAM = 8
-DIM = 768
-
 
 def save(path: Path, obj) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -82,8 +80,10 @@ def main():
         raise ValueError("teacher L values must be unique positive integers")
 
     rows, dim = fbin_shape(args.queries)
-    if dim != DIM or args.train_rows > rows:
-        raise ValueError(f"expected >= {args.train_rows} x {DIM}, got {rows} x {dim}")
+    if args.train_rows > rows:
+        raise ValueError(f"expected at least {args.train_rows} queries, got {rows}")
+    if dim <= 0:
+        raise ValueError("invalid query dimension")
 
     qprefix = args.work / "train-prefix.fbin"
     prefix_fbin(args.queries, qprefix, args.train_rows)
