@@ -74,8 +74,8 @@ cp "$IVF.manifest.json" "$ARTIFACT_DIR/ivf.manifest.json"
 
 git clone --filter=blob:none https://github.com/microsoft/DiskANN.git "$WORK/DiskANN-search"
 git -C "$WORK/DiskANN-search" checkout --detach "$DISKANN_REV"
-python3 scripts/patch_diskann_vertex_navhints.py "$WORK/DiskANN-search" --variants 5
-python3 scripts/patch_diskann_experience_controller.py "$WORK/DiskANN-search"
+python3 scripts/patch_diskann_hint_ivf_packed_direct.py "$WORK/DiskANN-search"
+python3 scripts/patch_diskann_experience_core.py "$WORK/DiskANN-search"
 (cd "$WORK/DiskANN-search" && cargo fmt --all && git diff --check && cargo build --release --locked -p diskann-benchmark --features disk-index) 2>&1 | tee "$ARTIFACT_DIR/build-search-binary.log"
 BIN="$WORK/DiskANN-search/target/release/diskann-benchmark"
 
