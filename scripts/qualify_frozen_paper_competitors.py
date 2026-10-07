@@ -43,9 +43,18 @@ def slice_fbin(src,dst,start,count):
             fo.write(b); rem-=len(b)
 
 def slice_gt(src,dst,start,count):
-    with src.open("rb") as f: rows,k=struct.unpack("<II",f.read(8))
+    with src.open("rb") as f:
+        raw=f.read(8)
+    if len(raw)!=8: raise ValueError("bad gt header")
+    rows,k=struct.unpack("<II",raw)
     if start+count>rows: raise ValueError("bad gt slice")
-    rb=k*4; ids_bytes=rows*rb
+    rb=k*4
+    ids_bytes=rows*rb
+    size=src.stat().st_size
+    ids_only=(size==8+ids_bytes)
+    ids_and_dists=(size==8+2*ids_bytes)
+    if not ids_only and not ids_and_dists:
+        raise ValueError(f"unexpected gt size {size} for {(rows,k)}")
     with src.open("rb") as fi,dst.open("wb") as fo:
         fo.write(struct.pack("<II",count,k))
         fi.seek(8+start*rb); rem=count*rb
@@ -53,11 +62,12 @@ def slice_gt(src,dst,start,count):
             b=fi.read(min(8<<20,rem))
             if not b: raise ValueError("truncated gt ids")
             fo.write(b); rem-=len(b)
-        fi.seek(8+ids_bytes+start*rb); rem=count*rb
-        while rem:
-            b=fi.read(min(8<<20,rem))
-            if not b: raise ValueError("truncated gt dists")
-            fo.write(b); rem-=len(b)
+        if ids_and_dists:
+            fi.seek(8+ids_bytes+start*rb); rem=count*rb
+            while rem:
+                b=fi.read(min(8<<20,rem))
+                if not b: raise ValueError("truncated gt dists")
+                fo.write(b); rem-=len(b)
 
 def result_rows(o):
     out=[]
