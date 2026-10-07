@@ -585,7 +585,7 @@ def patch_benchmark(path: Path) -> None:
 
             let mut direct_learned = 0usize;
             let mut direct_duplicates = 0usize;
-            let mut direct_full = 0usize; // retained in stats for compatibility; FIFO never becomes full.
+            let mut direct_full = 0usize; // retained in stats for compatibility; updates continue after capacity.
             let mut fifo_evictions = 0usize;
             let mut writes = 0usize;
             let mut eval_writes = 0usize;
@@ -682,39 +682,58 @@ def patch_benchmark(path: Path) -> None:
                 }
 
                 // A rewrite was already triggered by fresh direct evidence.
-                // Encode recency in slot order itself: newest new winners first,
-                // then the previous page in its existing order. Truncating at H
-                // evicts the oldest tail entries with no persistent metadata.
+                // Use two regimes:
+                //   (1) warm-up: if the page is underfull, admit as many newest
+                //       pending direct winners as fit without evicting history,
+                //       preserve the old page, then fill remaining holes from cache;
+                //   (2) steady state: once the page is full, promote exactly one
+                //       newest pending direct winner and evict exactly one oldest
+                //       tail entry. Fill2 controls write frequency, while one-at-a-
+                //       time FIFO replacement controls churn.
                 let fresh = pending.remove(&selected_hub).unwrap_or_default();
                 let previous = page_hubs
                     .get(&selected_hub)
                     .cloned()
                     .unwrap_or_default();
+                let was_full = previous.len() >= experience_hub_capacity;
                 let mut page = Vec::<u32>::with_capacity(experience_hub_capacity);
+                let mut direct_slots = 0usize;
 
-                for &id in fresh.iter().rev() {
-                    if !page.contains(&id) {
+                if was_full {
+                    if let Some(&id) = fresh.last() {
                         page.push(id);
-                        if page.len() >= experience_hub_capacity {
-                            break;
+                        direct_slots = 1;
+                    }
+                    for &id in &previous {
+                        if !page.contains(&id) {
+                            page.push(id);
+                            if page.len() >= experience_hub_capacity {
+                                break;
+                            }
+                        }
+                    }
+                    // A full page changes by exactly one slot per triggered write.
+                    fifo_evictions += previous.len().saturating_sub(
+                        page.len().saturating_sub(direct_slots),
+                    );
+                } else {
+                    let free = experience_hub_capacity.saturating_sub(previous.len());
+                    for &id in fresh.iter().rev().take(free) {
+                        if !page.contains(&id) {
+                            page.push(id);
+                            direct_slots += 1;
+                        }
+                    }
+                    for &id in &previous {
+                        if !page.contains(&id) {
+                            page.push(id);
                         }
                     }
                 }
-                let direct_slots = page.len();
 
-                for &id in &previous {
-                    if !page.contains(&id) {
-                        page.push(id);
-                        if page.len() >= experience_hub_capacity {
-                            break;
-                        }
-                    }
-                }
-                let retained_old = page.len().saturating_sub(direct_slots);
-                fifo_evictions += previous.len().saturating_sub(retained_old);
-
-                // Cache candidates are bootstrap fillers only: they consume
-                // genuinely empty slots and never displace persistent history.
+                // Cache candidates accelerate warm-up only. They fill genuinely
+                // empty slots but never cause replacement. After the page reaches
+                // capacity, only direct evidence can advance the FIFO.
                 let before_fill = page.len();
                 if experience_fill_from_cache && page.len() < experience_hub_capacity {
                     for &id in &cache_top {
