@@ -123,8 +123,8 @@ struct HintIvfSearch<'a> {
         };
 """
     n = s.count(init_old)
-    if n < 2:
-        raise RuntimeError(f"expected at least two HintIvfSearch constructors, found {n}")
+    if n < 1:
+        raise RuntimeError(f"expected at least one HintIvfSearch constructor, found {n}")
     s = s.replace(init_old, init_new)
 
     s = once(
@@ -573,15 +573,20 @@ def patch_benchmark(path: Path) -> None:
             let mut cache_skips = 0usize;
             let mut cache_evictions = 0usize;
 
-            // Direct evidence is the durable logical truth for each hub.
-            // page_hubs is the currently persisted page image visible to search.
-            let mut direct_hubs = HashMap::<u32, Vec<u32>>::new();
+            // The persisted page order is the freshness policy: newest direct
+            // evidence is at the front, oldest state at the tail. No age,
+            // timestamp, or frequency metadata is persisted with a hint.
+            let mut direct_hubs = HashSet::<u32>::new();
             let mut page_hubs = HashMap::<u32, Vec<u32>>::new();
-            let mut pending = HashMap::<u32, usize>::new();
+
+            // New direct winners wait only in the volatile write buffer. Fill2
+            // therefore needs no persistent FIFO pointer or per-hint metadata.
+            let mut pending = HashMap::<u32, Vec<u32>>::new();
 
             let mut direct_learned = 0usize;
             let mut direct_duplicates = 0usize;
-            let mut direct_full = 0usize;
+            let mut direct_full = 0usize; // retained in stats for compatibility; FIFO never becomes full.
+            let mut fifo_evictions = 0usize;
             let mut writes = 0usize;
             let mut eval_writes = 0usize;
             let mut write_slots = 0usize;
@@ -655,30 +660,62 @@ def patch_benchmark(path: Path) -> None:
                     continue;
                 }
 
-                let bucket = direct_hubs.entry(selected_hub).or_default();
+                let already_persisted = page_hubs
+                    .get(&selected_hub)
+                    .is_some_and(|page| page.contains(&winner));
+                let bucket = pending.entry(selected_hub).or_default();
                 let mut added = false;
-                if bucket.contains(&winner) {
+                if already_persisted || bucket.contains(&winner) {
+                    // Strict FIFO: observing an ID that is already resident does
+                    // not refresh its age and does not trigger an extra write.
                     direct_duplicates += 1;
-                } else if bucket.len() >= experience_hub_capacity {
-                    direct_full += 1;
                 } else {
                     bucket.push(winner);
+                    direct_hubs.insert(selected_hub);
                     direct_learned += 1;
-                    *pending.entry(selected_hub).or_insert(0) += 1;
                     added = true;
                 }
 
-                let p = pending.get(&selected_hub).copied().unwrap_or(0);
-                let should_flush = added
-                    && (p >= experience_flush_threshold
-                        || bucket.len() >= experience_hub_capacity);
+                let should_flush = added && bucket.len() >= experience_flush_threshold;
                 if !should_flush {
                     continue;
                 }
 
-                let direct_snapshot = bucket.clone();
-                let mut page = direct_snapshot.clone();
+                // A rewrite was already triggered by fresh direct evidence.
+                // Encode recency in slot order itself: newest new winners first,
+                // then the previous page in its existing order. Truncating at H
+                // evicts the oldest tail entries with no persistent metadata.
+                let fresh = pending.remove(&selected_hub).unwrap_or_default();
+                let previous = page_hubs
+                    .get(&selected_hub)
+                    .cloned()
+                    .unwrap_or_default();
+                let mut page = Vec::<u32>::with_capacity(experience_hub_capacity);
 
+                for &id in fresh.iter().rev() {
+                    if !page.contains(&id) {
+                        page.push(id);
+                        if page.len() >= experience_hub_capacity {
+                            break;
+                        }
+                    }
+                }
+                let direct_slots = page.len();
+
+                for &id in &previous {
+                    if !page.contains(&id) {
+                        page.push(id);
+                        if page.len() >= experience_hub_capacity {
+                            break;
+                        }
+                    }
+                }
+                let retained_old = page.len().saturating_sub(direct_slots);
+                fifo_evictions += previous.len().saturating_sub(retained_old);
+
+                // Cache candidates are bootstrap fillers only: they consume
+                // genuinely empty slots and never displace persistent history.
+                let before_fill = page.len();
                 if experience_fill_from_cache && page.len() < experience_hub_capacity {
                     for &id in &cache_top {
                         if !page.contains(&id) {
@@ -690,10 +727,8 @@ def patch_benchmark(path: Path) -> None:
                     }
                 }
 
-                let direct_slots = direct_snapshot.len().min(page.len());
-                let filler_slots = page.len().saturating_sub(direct_slots);
+                let filler_slots = page.len().saturating_sub(before_fill);
                 page_hubs.insert(selected_hub, page.clone());
-                pending.insert(selected_hub, 0);
 
                 writes += 1;
                 write_slots += page.len();
@@ -708,11 +743,11 @@ def patch_benchmark(path: Path) -> None:
 
             let persisted_hubs = page_hubs.len();
             let final_page_slots: usize = page_hubs.values().map(Vec::len).sum();
-            let pending_hubs = pending.values().filter(|x| **x > 0).count();
-            let pending_entries: usize = pending.values().sum();
+            let pending_hubs = pending.values().filter(|x| !x.is_empty()).count();
+            let pending_entries: usize = pending.values().map(Vec::len).sum();
 
             eprintln!(
-                "EXPERIENCE_STATS L={} cache_capacity={} hub_capacity={} flush_threshold={} fill={} cache_inserts={} cache_skips={} cache_evictions={} active_direct_hubs={} persisted_hubs={} direct_learned={} direct_duplicates={} direct_full={} writes={} eval_writes={} write_slots={} write_direct_slots={} write_filler_slots={} eval_write_slots={} eval_write_filler_slots={} final_page_slots={} pending_hubs={} pending_entries={}",
+                "EXPERIENCE_STATS L={} cache_capacity={} hub_capacity={} flush_threshold={} fill={} cache_inserts={} cache_skips={} cache_evictions={} active_direct_hubs={} persisted_hubs={} direct_learned={} direct_duplicates={} direct_full={} fifo_evictions={} writes={} eval_writes={} write_slots={} write_direct_slots={} write_filler_slots={} eval_write_slots={} eval_write_filler_slots={} final_page_slots={} pending_hubs={} pending_entries={}",
                 l,
                 experience_cache_capacity,
                 experience_hub_capacity,
@@ -726,6 +761,7 @@ def patch_benchmark(path: Path) -> None:
                 direct_learned,
                 direct_duplicates,
                 direct_full,
+                fifo_evictions,
                 writes,
                 eval_writes,
                 write_slots,
