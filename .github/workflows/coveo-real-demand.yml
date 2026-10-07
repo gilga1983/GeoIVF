@@ -1,6 +1,18 @@
 name: Coveo real-demand paper evaluation
 
 on:
+  push:
+    branches: [experiment/real-demand-coveo]
+    paths:
+      - '.github/workflows/coveo-real-demand.yml'
+      - 'scripts/run_coveo_real_demand_ci.sh'
+      - 'scripts/prepare_coveo_real_demand.py'
+      - 'scripts/freeze_coveo_paper_split.py'
+      - 'scripts/build_exact_ip_gt.py'
+      - 'scripts/collect_navigation_trace_generic.py'
+      - 'scripts/learn_navhints_generic.py'
+      - 'scripts/build_hint_ivf_generic.py'
+      - 'scripts/qualify_coveo_real_demand.py'
   workflow_dispatch:
 
 permissions:
