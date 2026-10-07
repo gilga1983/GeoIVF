@@ -42,7 +42,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: reviewer-defense-\${{ github.run_id }}
+          name: reviewer-defense-${{ github.run_id }}
           path: artifacts/reviewer-defense/
           retention-days: 30
       - name: Clean scratch
