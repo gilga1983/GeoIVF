@@ -44,6 +44,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: motivation-opportunity-\${{ github.run_id }}
+          name: motivation-opportunity-${{ github.run_id }}
           path: artifacts/motivation-opportunity/
           retention-days: 30
