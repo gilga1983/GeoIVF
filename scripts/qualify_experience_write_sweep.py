@@ -9,15 +9,12 @@ THREADS=4
 BEAM=8
 K=10
 LS=(10,20,40,80,160,320)
-METHODS=("ivf","cache","nofill4","sample1","sample2","sample4","sample10")
+METHODS=("ivf","recent512","nofill2","sample2")
 CFG={
-    "ivf":      {"cache":0,   "hub":0,  "sample":4,  "fill":False},
-    "cache":    {"cache":512, "hub":0,  "sample":4,  "fill":False},
-    "nofill4":  {"cache":512, "hub":10, "sample":4,  "fill":False},
-    "sample1":  {"cache":512, "hub":10, "sample":1,  "fill":True},
-    "sample2":  {"cache":512, "hub":10, "sample":2,  "fill":True},
-    "sample4":  {"cache":512, "hub":10, "sample":4,  "fill":True},
-    "sample10": {"cache":512, "hub":10, "sample":10, "fill":True},
+    "ivf":       {"cache":0,   "hub":0,  "sample":2, "fill":False},
+    "recent512": {"cache":512, "hub":0,  "sample":2, "fill":False},
+    "nofill2":   {"cache":512, "hub":10, "sample":2, "fill":False},
+    "sample2":   {"cache":512, "hub":10, "sample":2, "fill":True},
 }
 STAT_KEYS=(
     "cache_capacity","hub_capacity","sample_denominator","fill",
@@ -205,8 +202,8 @@ def main():
               "latency_change_percent_vs_ivf":100*(la/bla-1),
             }
 
-    hub_increment={m:pair(summary,"cache",m,targets) for m in METHODS if m not in ("ivf","cache")}
-    sample4_vs_nofill4=pair(summary,"nofill4","sample4",targets)
+    hub_increment={m:pair(summary,"recent512",m,targets) for m in METHODS if m not in ("ivf","recent512")}
+    sample2_vs_nofill2=pair(summary,"nofill2","sample2",targets)
 
     ranking=[]
     for m in METHODS:
@@ -226,7 +223,7 @@ def main():
     ranking.sort(key=lambda x:x["mean_io_change_percent_vs_ivf"])
 
     result={
-      "question":"What stateless sampling rate best turns online winners into persistent FIFO hub shortcuts?",
+      "question":"Does recent-result seeding of empty persistent hub slots improve the default Sample2 controller?",
       "architecture":"16K learned entry + online seed-only cache + stateless sampled FIFO hub-page winners; no support2 or regional routing",
       "write_policy":"sample each novel hub winner independently and reproducibly; every admitted winner changes one FIFO slot; ranked cache candidates fill only empty slots",
       "methods":CFG,
@@ -235,7 +232,7 @@ def main():
       "write_stats":write_stats,
       "fixed_recall_vs_16k":fixed,
       "hub_increment_over_cache":hub_increment,
-      "sample4_vs_nofill4":sample4_vs_nofill4,
+      "sample2_vs_nofill2":sample2_vs_nofill2,
       "ranking":ranking,
     }
     save(args.out/"experience-write-sweep.json",result)
