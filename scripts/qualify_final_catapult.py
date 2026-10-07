@@ -221,7 +221,7 @@ def main():
         train_snap=a.work/f"catapult-s{seed}-train.snapshot"
         warm_snap=a.work/f"catapult-s{seed}-warm.snapshot"
         base_env={"DISKANN_PAPER_CATAPULT":"1","DISKANN_CATAPULT_HASHES":"8",
-                  "DISKANN_CATAPULT_CAPACITY":"40","DISKANN_CATAPULT_SEED":seed}
+                  "DISKANN_CATAPULT_CAPACITY":"80","DISKANN_CATAPULT_SEED":seed}
         run(a.catapult_binary,a.out,f"train-cat-s{seed}",train,a.training_gt,a.index_prefix,(10,),
             {**base_env,"DISKANN_CATAPULT_SNAPSHOT_DUMP":train_snap},
             skip_recall=True,threads=1)
@@ -248,7 +248,7 @@ def main():
             for m in order:
                 if m=="catapult":
                     cat_env={"DISKANN_PAPER_CATAPULT":"1","DISKANN_CATAPULT_HASHES":"8",
-                      "DISKANN_CATAPULT_CAPACITY":"40","DISKANN_CATAPULT_SEED":seed,
+                      "DISKANN_CATAPULT_CAPACITY":"80","DISKANN_CATAPULT_SEED":seed,
                       "DISKANN_CATAPULT_SNAPSHOT_LOAD":warmed[seed]}
                     run(a.catapult_binary,a.out,f"r{rep}-catapult-cachewarm",warm,warmgt,a.index_prefix,LS,
                         {**cat_env,"DISKANN_CATAPULT_FREEZE":"1"},skip_recall=True)
@@ -287,7 +287,7 @@ def main():
                   "static_routing_bytes":nav_static,"cache_id_bytes":2048,
                   "core":"16K entry + 512 recent-result IDs",
                   "full":"core + Sample2 10-ID hub FIFO in page slack"},
-      "catapult":{"hashes":8,"bucket_capacity":40,"seeds":list(SEEDS),
+      "catapult":{"hashes":8,"bucket_capacity":80,"seeds":list(SEEDS),
                   "snapshots":snapmeta,
                   "accounting_note":"snapshot/hyperplane payload reported separately; container overhead omitted, favoring Catapult"},
       "summary":summary,
@@ -295,7 +295,7 @@ def main():
       "matched_at_core":matched(summary,"core"),
       "matched_at_sample2":matched(summary,"sample2"),
     }
-    save(a.out/"final-catapult.json",result)
+    save(a.out/"final-catapult-equal-budget.json",result)
     print(json.dumps(result,indent=2),flush=True)
 
 if __name__=="__main__": main()
