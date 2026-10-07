@@ -1,0 +1,76 @@
+name: Validate Coveo real-demand adapter
+
+on:
+  push:
+    branches: [experiment/real-demand-coveo]
+    paths:
+      - '.github/workflows/validate-coveo-adapter.yml'
+      - 'scripts/prepare_coveo_real_demand.py'
+      - 'scripts/build_exact_ip_gt.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install minimal dependencies
+        run: python -m pip install numpy==2.2.6
+      - name: Fetch public Coveo sample files
+        run: |
+          set -euxo pipefail
+          mkdir -p "$RUNNER_TEMP/coveo-sample"
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/coveooss/SIGIR-ecom-data-challenge/main/start/search_train_sample.csv -o "$RUNNER_TEMP/coveo-sample/search_train.csv"
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/coveooss/SIGIR-ecom-data-challenge/main/start/sku_to_content_sample.csv -o "$RUNNER_TEMP/coveo-sample/sku_to_content.csv"
+      - name: Convert sample to ANN workload
+        run: |
+          set -euxo pipefail
+          python scripts/prepare_coveo_real_demand.py \
+            --search-csv "$RUNNER_TEMP/coveo-sample/search_train.csv" \
+            --catalog-csv "$RUNNER_TEMP/coveo-sample/sku_to_content.csv" \
+            --out-dir "$RUNNER_TEMP/coveo-sample/out"
+          python scripts/build_exact_ip_gt.py \
+            --base "$RUNNER_TEMP/coveo-sample/out/coveo-products-cosine.fbin" \
+            --queries "$RUNNER_TEMP/coveo-sample/out/coveo-search-chronological-cosine.fbin" \
+            --out "$RUNNER_TEMP/coveo-sample/out/sample-top2.gt" \
+            --topk 2
+      - name: Validate chronology and normalized vectors
+        run: |
+          python - "$RUNNER_TEMP/coveo-sample/out" <<'PY'
+          import json, struct, sys
+          from pathlib import Path
+          import numpy as np
+          root=Path(sys.argv[1])
+          m=json.loads((root/"coveo-ann.manifest.json").read_text())
+          assert m["catalog"]["dimension"]==50
+          assert m["queries"]["dimension"]==50
+          assert m["catalog"]["catalog_rows_with_vectors"]>=2
+          assert m["queries"]["search_events_with_vectors"]>=2
+          def fbin(p):
+              with p.open("rb") as f:r,d=struct.unpack("<II",f.read(8))
+              return np.fromfile(p,dtype="<f4",offset=8).reshape(r,d)
+          b=fbin(root/"coveo-products-cosine.fbin")
+          q=fbin(root/"coveo-search-chronological-cosine.fbin")
+          np.testing.assert_allclose(np.linalg.norm(b,axis=1),1,rtol=1e-5,atol=1e-5)
+          np.testing.assert_allclose(np.linalg.norm(q,axis=1),1,rtol=1e-5,atol=1e-5)
+          ts=[json.loads(x)["timestamp_ms"] for x in (root/"coveo-search-chronological.jsonl").read_text().splitlines()]
+          assert ts==sorted(ts)
+          print(json.dumps({"products":len(b),"queries":len(q),"dimension":q.shape[1],"first_ts":ts[0],"last_ts":ts[-1]},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coveo-adapter-smoke-${{ github.run_id }}
+          path: ${{ runner.temp }}/coveo-sample/out/
+          retention-days: 14
