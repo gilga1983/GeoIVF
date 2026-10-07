@@ -493,7 +493,7 @@ def patch_benchmark(path: Path) -> None:
         .map(|v| v.parse::<usize>())
         .transpose()?
         .unwrap_or(10);
-    let experience_flush_threshold = std::env::var("DISKANN_EXPERIENCE_FLUSH_THRESHOLD")
+    let experience_sample_denominator = std::env::var("DISKANN_EXPERIENCE_SAMPLE_DENOMINATOR")
         .ok()
         .map(|v| v.parse::<usize>())
         .transpose()?
@@ -514,8 +514,8 @@ def patch_benchmark(path: Path) -> None:
         if experience_warmup >= num_queries {
             anyhow::bail!("experience warmup must leave measured queries");
         }
-        if experience_hub_capacity > 0 && experience_flush_threshold == 0 {
-            anyhow::bail!("experience flush threshold must be positive");
+        if experience_hub_capacity > 0 && experience_sample_denominator == 0 {
+            anyhow::bail!("experience sample denominator must be positive");
         }
     }
 
@@ -546,6 +546,23 @@ def patch_benchmark(path: Path) -> None:
         gt_dim: ctx.gt_dim,
         recall_at: ctx.recall_at,
     })
+}
+
+/// Reproducible Bernoulli sampling without RNG state. Including the query
+/// sequence means an observation rejected once may be admitted if it recurs.
+fn experience_sample_accept(hub: u32, winner: u32, sequence: usize, denominator: usize) -> bool {
+    if denominator <= 1 {
+        return true;
+    }
+    let mut x = ((hub as u64) << 32)
+        ^ (winner as u64)
+        ^ (sequence as u64).wrapping_mul(0x9E3779B97F4A7C15);
+    x ^= x >> 30;
+    x = x.wrapping_mul(0xBF58476D1CE4E5B9);
+    x ^= x >> 27;
+    x = x.wrapping_mul(0x94D049BB133111EB);
+    x ^= x >> 31;
+    x % denominator as u64 == 0
 }
 
 '''
@@ -579,13 +596,15 @@ def patch_benchmark(path: Path) -> None:
             let mut direct_hubs = HashSet::<u32>::new();
             let mut page_hubs = HashMap::<u32, Vec<u32>>::new();
 
-            // New direct winners wait only in the volatile write buffer. Fill2
-            // therefore needs no persistent FIFO pointer or per-hint metadata.
-            let mut pending = HashMap::<u32, Vec<u32>>::new();
-
+            // Persist novel direct evidence by reproducible Bernoulli sampling.
+            // There is no per-hub pending state: rejected observations disappear,
+            // while accepted observations immediately update one FIFO slot.
             let mut direct_learned = 0usize;
             let mut direct_duplicates = 0usize;
-            let mut direct_full = 0usize; // retained in stats for compatibility; updates continue after capacity.
+            let mut direct_full = 0usize; // retained in stats for compatibility.
+            let mut sample_trials = 0usize;
+            let mut sample_accepts = 0usize;
+            let mut sample_rejects = 0usize;
             let mut fifo_evictions = 0usize;
             let mut writes = 0usize;
             let mut eval_writes = 0usize;
@@ -663,77 +682,52 @@ def patch_benchmark(path: Path) -> None:
                 let already_persisted = page_hubs
                     .get(&selected_hub)
                     .is_some_and(|page| page.contains(&winner));
-                let bucket = pending.entry(selected_hub).or_default();
-                let mut added = false;
-                if already_persisted || bucket.contains(&winner) {
-                    // Strict FIFO: observing an ID that is already resident does
-                    // not refresh its age and does not trigger an extra write.
+                if already_persisted {
+                    // Strict FIFO: an observation already resident on the page
+                    // neither refreshes its age nor consumes write budget.
                     direct_duplicates += 1;
-                } else {
-                    bucket.push(winner);
-                    direct_hubs.insert(selected_hub);
-                    direct_learned += 1;
-                    added = true;
-                }
-
-                let should_flush = added && bucket.len() >= experience_flush_threshold;
-                if !should_flush {
                     continue;
                 }
 
-                // A rewrite was already triggered by fresh direct evidence.
-                // Use two regimes:
-                //   (1) warm-up: if the page is underfull, admit as many newest
-                //       pending direct winners as fit without evicting history,
-                //       preserve the old page, then fill remaining holes from cache;
-                //   (2) steady state: once the page is full, promote exactly one
-                //       newest pending direct winner and evict exactly one oldest
-                //       tail entry. Fill2 controls write frequency, while one-at-a-
-                //       time FIFO replacement controls churn.
-                let fresh = pending.remove(&selected_hub).unwrap_or_default();
+                sample_trials += 1;
+                if !experience_sample_accept(
+                    selected_hub,
+                    winner,
+                    qi,
+                    experience_sample_denominator,
+                ) {
+                    sample_rejects += 1;
+                    continue;
+                }
+                sample_accepts += 1;
+                direct_hubs.insert(selected_hub);
+                direct_learned += 1;
+
+                // Every admitted observation changes exactly one direct slot.
+                // Put the fresh winner first, preserve the previous page order,
+                // and truncate at H. If the page was underfull, use already-
+                // ranked cache candidates to fill only the remaining holes.
                 let previous = page_hubs
                     .get(&selected_hub)
                     .cloned()
                     .unwrap_or_default();
-                let was_full = previous.len() >= experience_hub_capacity;
                 let mut page = Vec::<u32>::with_capacity(experience_hub_capacity);
-                let mut direct_slots = 0usize;
-
-                if was_full {
-                    if let Some(&id) = fresh.last() {
+                page.push(winner);
+                for &id in &previous {
+                    if id != winner {
                         page.push(id);
-                        direct_slots = 1;
-                    }
-                    for &id in &previous {
-                        if !page.contains(&id) {
-                            page.push(id);
-                            if page.len() >= experience_hub_capacity {
-                                break;
-                            }
-                        }
-                    }
-                    // A full page changes by exactly one slot per triggered write.
-                    fifo_evictions += previous.len().saturating_sub(
-                        page.len().saturating_sub(direct_slots),
-                    );
-                } else {
-                    let free = experience_hub_capacity.saturating_sub(previous.len());
-                    for &id in fresh.iter().rev().take(free) {
-                        if !page.contains(&id) {
-                            page.push(id);
-                            direct_slots += 1;
-                        }
-                    }
-                    for &id in &previous {
-                        if !page.contains(&id) {
-                            page.push(id);
+                        if page.len() >= experience_hub_capacity {
+                            break;
                         }
                     }
                 }
 
-                // Cache candidates accelerate warm-up only. They fill genuinely
-                // empty slots but never cause replacement. After the page reaches
-                // capacity, only direct evidence can advance the FIFO.
+                let retained_old = page.len().saturating_sub(1);
+                fifo_evictions += previous.len().saturating_sub(retained_old);
+                let direct_slots = 1usize;
+
+                // Cache candidates accelerate bootstrap only. They occupy free
+                // slots but can never evict an existing persisted entry.
                 let before_fill = page.len();
                 if experience_fill_from_cache && page.len() < experience_hub_capacity {
                     for &id in &cache_top {
@@ -762,15 +756,12 @@ def patch_benchmark(path: Path) -> None:
 
             let persisted_hubs = page_hubs.len();
             let final_page_slots: usize = page_hubs.values().map(Vec::len).sum();
-            let pending_hubs = pending.values().filter(|x| !x.is_empty()).count();
-            let pending_entries: usize = pending.values().map(Vec::len).sum();
-
             eprintln!(
-                "EXPERIENCE_STATS L={} cache_capacity={} hub_capacity={} flush_threshold={} fill={} cache_inserts={} cache_skips={} cache_evictions={} active_direct_hubs={} persisted_hubs={} direct_learned={} direct_duplicates={} direct_full={} fifo_evictions={} writes={} eval_writes={} write_slots={} write_direct_slots={} write_filler_slots={} eval_write_slots={} eval_write_filler_slots={} final_page_slots={} pending_hubs={} pending_entries={}",
+                "EXPERIENCE_STATS L={} cache_capacity={} hub_capacity={} sample_denominator={} fill={} cache_inserts={} cache_skips={} cache_evictions={} active_direct_hubs={} persisted_hubs={} direct_learned={} direct_duplicates={} direct_full={} sample_trials={} sample_accepts={} sample_rejects={} fifo_evictions={} writes={} eval_writes={} write_slots={} write_direct_slots={} write_filler_slots={} eval_write_slots={} eval_write_filler_slots={} final_page_slots={}",
                 l,
                 experience_cache_capacity,
                 experience_hub_capacity,
-                experience_flush_threshold,
+                experience_sample_denominator,
                 if experience_fill_from_cache { 1 } else { 0 },
                 cache_inserts,
                 cache_skips,
@@ -780,6 +771,9 @@ def patch_benchmark(path: Path) -> None:
                 direct_learned,
                 direct_duplicates,
                 direct_full,
+                sample_trials,
+                sample_accepts,
+                sample_rejects,
                 fifo_evictions,
                 writes,
                 eval_writes,
@@ -789,8 +783,6 @@ def patch_benchmark(path: Path) -> None:
                 eval_write_slots,
                 eval_write_filler_slots,
                 final_page_slots,
-                pending_hubs,
-                pending_entries,
             );
         } else {
 ''' + parallel + r'''        }
