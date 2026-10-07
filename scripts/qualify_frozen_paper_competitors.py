@@ -194,7 +194,9 @@ def main():
     rows,dim=fshape(args.replay_queries)
     if (rows,dim)!=(5000,DIM): raise ValueError(f"expected 5000x{DIM}, got {rows}x{dim}")
     evalq=args.work/"eval1000.fbin"; evalgt=args.work/"eval1000.gt"
+    warmq=args.work/"warm4000.fbin"; warmgt=args.work/"warm4000.gt"
     slice_fbin(args.replay_queries,evalq,4000,1000); slice_gt(args.gt5000,evalgt,4000,1000)
+    slice_fbin(args.replay_queries,warmq,0,4000); slice_gt(args.gt5000,warmgt,0,4000)
 
     hot=args.hot_dir/"hot-cache-n30.bin"
     methods=("baseline","hot-30","qsev-32","ivf","sample2")
@@ -211,13 +213,17 @@ def main():
                 if m=="sample2":
                     rr,st=run_one(args.nav_binary,args.out,f"r{rep}-{m}",args.replay_queries,args.gt5000,args.index_prefix,ivf=args.ivf,experience=True)
                     stats.append(st)
-                elif m=="ivf":
-                    rr,_=run_one(args.nav_binary,args.out,f"r{rep}-{m}",evalq,evalgt,args.index_prefix,ivf=args.ivf)
                 elif m=="qsev-32":
+                    run_one(args.qsev_binary,args.out,f"r{rep}-{m}-warm",warmq,warmgt,args.index_prefix,qsev=args.qsev)
                     rr,_=run_one(args.qsev_binary,args.out,f"r{rep}-{m}",evalq,evalgt,args.index_prefix,qsev=args.qsev)
                 elif m=="hot-30":
+                    run_one(args.hot_binary,args.out,f"r{rep}-{m}-warm",warmq,warmgt,args.index_prefix,hot_ids=hot)
                     rr,_=run_one(args.hot_binary,args.out,f"r{rep}-{m}",evalq,evalgt,args.index_prefix,hot_ids=hot)
+                elif m=="ivf":
+                    run_one(args.nav_binary,args.out,f"r{rep}-{m}-warm",warmq,warmgt,args.index_prefix,ivf=args.ivf)
+                    rr,_=run_one(args.nav_binary,args.out,f"r{rep}-{m}",evalq,evalgt,args.index_prefix,ivf=args.ivf)
                 else:
+                    run_one(args.hot_binary,args.out,f"r{rep}-{m}-warm",warmq,warmgt,args.index_prefix)
                     rr,_=run_one(args.hot_binary,args.out,f"r{rep}-{m}",evalq,evalgt,args.index_prefix)
                 runs[m].append(rr); save(args.out/"runs.partial.json",runs)
     finally:
