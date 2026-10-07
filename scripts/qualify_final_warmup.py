@@ -122,6 +122,10 @@ def main():
             qeval=a.work/f"h{h}-eval.fbin"; geval=a.work/f"h{h}-eval.gt"
             slice_fbin(a.heldout,qprefix,0,h+WINDOW); slice_gt(a.gt5000,gprefix,0,h+WINDOW)
             slice_fbin(a.heldout,qeval,h,WINDOW); slice_gt(a.gt5000,geval,h,WINDOW)
+            if h>0:
+                qhist=a.work/f"h{h}-history.fbin"; ghist=a.work/f"h{h}-history.gt"
+                slice_fbin(a.heldout,qhist,0,h); slice_gt(a.gt5000,ghist,0,h)
+                run(a.binary,a.out,f"h{h}-ivf-cachewarm",qhist,ghist,a.index_prefix,a.ivf,False,0,0)
             ivf,_=run(a.binary,a.out,f"h{h}-ivf",qeval,geval,a.index_prefix,a.ivf,False,0,0)
             core,cst=run(a.binary,a.out,f"h{h}-core",qprefix,gprefix,a.index_prefix,a.ivf,True,0,h)
             full,fst=run(a.binary,a.out,f"h{h}-sample2",qprefix,gprefix,a.index_prefix,a.ivf,True,10,h)
