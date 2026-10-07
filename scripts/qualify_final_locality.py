@@ -114,9 +114,13 @@ def main():
             idx=make_indices(pool,rng)
             qp=a.work/f"pool{pool}.fbin"; gp=a.work/f"pool{pool}.gt"
             save_fbin(qp,q[idx]); save_gt(gp,gids[idx],None if gd is None else gd[idx])
-            # entry-only must be measured on the same final 1K stream window
+            # entry-only is warmed on exactly the same 4K history, then measured
+            # on the same final 1K stream window.
+            qw=a.work/f"pool{pool}-warm.fbin"; gw=a.work/f"pool{pool}-warm.gt"
             qe=a.work/f"pool{pool}-eval.fbin"; ge=a.work/f"pool{pool}-eval.gt"
+            save_fbin(qw,q[idx[:4000]]); save_gt(gw,gids[idx[:4000]],None if gd is None else gd[idx[:4000]])
             save_fbin(qe,q[idx[4000:]]); save_gt(ge,gids[idx[4000:]],None if gd is None else gd[idx[4000:]])
+            run(a.binary,a.out,f"pool{pool}-ivf-cachewarm",qw,gw,a.index_prefix,a.ivf,"ivf")
             ivf=run(a.binary,a.out,f"pool{pool}-ivf",qe,ge,a.index_prefix,a.ivf,"ivf")
             core=run(a.binary,a.out,f"pool{pool}-core",qp,gp,a.index_prefix,a.ivf,"core")
             full=run(a.binary,a.out,f"pool{pool}-sample2",qp,gp,a.index_prefix,a.ivf,"sample2")
