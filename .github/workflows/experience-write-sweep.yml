@@ -1,8 +1,8 @@
-name: Experience write packing sweep
+name: Sample2 seeding ablation
 
 on:
   push:
-    branches: [experiment/staged-navhints]
+    branches: [experiment/sample2-seeding-ablation]
     paths:
       - '.github/workflows/experience-write-sweep.yml'
       - 'scripts/patch_diskann_hint_ivf_packed_direct.py'
@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: geoivf-experience-write-sweep
+  group: geoivf-sample2-seeding-ablation
   cancel-in-progress: true
 
 jobs:
@@ -105,7 +105,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: experience-write-sweep-${{ github.run_id }}
+          name: sample2-seeding-ablation-${{ github.run_id }}
           path: artifacts/experience-write-sweep/
           retention-days: 30
 
