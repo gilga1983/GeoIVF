@@ -173,14 +173,14 @@ def main():
             qrows,qdim=struct.unpack("<II",f.read(8))
         if qrows < len(gt):
             raise ValueError("query file shorter than GT")
-        q=np.memmap(args.queries,dtype="<f4",mode="r",offset=8,shape=(qrows,qdim))
-        prior=set(row.tobytes() for row in q[:warm])
+        qmat=np.memmap(args.queries,dtype="<f4",mode="r",offset=8,shape=(qrows,qdim))
+        prior=set(row.tobytes() for row in qmat[:warm])
         seen=set(prior)
         repeated_from_prior=0
         repeated_causally=0
         within_eval_repeats=0
         eval_seen=set()
-        for row in q[warm:len(gt)]:
+        for row in qmat[warm:len(gt)]:
             key=row.tobytes()
             if key in prior:
                 repeated_from_prior += 1
