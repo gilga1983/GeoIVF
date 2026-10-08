@@ -1,0 +1,75 @@
+name: Four-dataset destination reuse opportunity
+
+on:
+  push:
+    branches: [experiment/destination-opportunity-four]
+    paths:
+      - '.github/workflows/destination-opportunity-four.yml'
+      - 'scripts/analyze_destination_opportunity_four.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-destination-opportunity-four
+  cancel-in-progress: false
+
+jobs:
+  analyze:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Analyze exact destination-reuse opportunity in four workloads
+        run: |
+          set -euxo pipefail
+          python -m pip install numpy==2.2.6
+          ROOT="$HOME/.cache/geoivf"
+          OUT="$PWD/artifacts/destination-opportunity-four"
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/geoivf-commit.txt"
+
+          PUBMED="$ROOT/medrag-zipf-qwen3b-v1/heldout5000-pubmed1m-top16-ip.gt"
+          COVEO="$ROOT/coveo-real-demand-v1/split/first30000.gt"
+          test -s "$PUBMED"
+          test -s "$COVEO"
+
+          python scripts/analyze_destination_opportunity_four.py \
+            --dataset pubmed1M --gt "$PUBMED" \
+            --history-start 0 --warmup 4000 --measured 1000 --out "$OUT" \
+            2>&1 | tee "$OUT/pubmed1M.log"
+          python scripts/analyze_destination_opportunity_four.py \
+            --dataset coveo --gt "$COVEO" \
+            --history-start 5000 --warmup 20000 --measured 5000 --out "$OUT" \
+            2>&1 | tee "$OUT/coveo.log"
+
+          for DS in text2image-10M bigann-10M; do
+            MANIFEST="$ROOT/public-eval/$DS/data/dataset.manifest.json"
+            test -s "$MANIFEST"
+            GT="$(python - "$MANIFEST" <<'PY'
+          import json,sys
+          m=json.load(open(sys.argv[1]))
+          print(m["files"]["heldout5000_gt"])
+          PY
+            )"
+            test -s "$GT"
+            python scripts/analyze_destination_opportunity_four.py \
+              --dataset "$DS" --gt "$GT" \
+              --history-start 0 --warmup 4000 --measured 1000 --out "$OUT" \
+              2>&1 | tee "$OUT/$DS.log"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: destination-opportunity-four
+          path: artifacts/destination-opportunity-four/
+          retention-days: 30
