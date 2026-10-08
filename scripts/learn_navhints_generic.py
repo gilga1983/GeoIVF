@@ -52,11 +52,10 @@ def main():
         score,
         key=lambda v: (-score[v], -support[v], v),
     )
-    if len(ranked) < args.budget:
-        raise ValueError(
-            f"only {len(ranked)} eligible landmarks for requested budget {args.budget}"
-        )
-    ids = ranked[: args.budget]
+    used_budget = min(args.budget, len(ranked))
+    if used_budget == 0:
+        raise ValueError("no eligible navigation landmarks")
+    ids = ranked[:used_budget]
     args.out.parent.mkdir(parents=True, exist_ok=True)
     write_ids(args.out, ids)
 
@@ -64,7 +63,9 @@ def main():
         "training_queries": len(records),
         "score": "sum of first expansion position across training traversals",
         "eligible_vertices": len(ranked),
+        "requested_budget": args.budget,
         "landmark_ids": len(ids),
+        "budget_capped_by_eligibility": len(ids) < args.budget,
         "state_bytes": args.out.stat().st_size,
         "file": args.out.name,
         "top_landmarks": [
