@@ -1,0 +1,46 @@
+name: Coveo opportunity diagnostics
+
+on:
+  push:
+    branches: [experiment/real-demand-coveo]
+    paths:
+      - '.github/workflows/coveo-opportunity.yml'
+      - 'scripts/analyze_coveo_opportunity.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Analyze real Coveo demand opportunity
+        run: |
+          set -euxo pipefail
+          python -m pip install numpy==2.2.6
+          ROOT="$HOME/.cache/geoivf/coveo-real-demand-v1"
+          TRACE="$ROOT/trace/teacher.jsonl"
+          GT="$ROOT/split/first30000.gt"
+          Q="$ROOT/prepared/coveo-search-chronological-cosine.fbin"
+          test -s "$TRACE"
+          test -s "$GT"
+          test -s "$Q"
+          mkdir -p artifacts/coveo-opportunity
+          python scripts/analyze_coveo_opportunity.py             --trace "$TRACE"             --gt "$GT"             --queries "$Q"             --corpus-size 31950             --recent-capacity 512             --skip-prefixes 0,5,10,20             --warmup 25000             --out artifacts/coveo-opportunity             2>&1 | tee artifacts/coveo-opportunity/run.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coveo-opportunity-${{ github.run_id }}
+          path: artifacts/coveo-opportunity/
+          retention-days: 30
