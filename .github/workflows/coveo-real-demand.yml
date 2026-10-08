@@ -41,6 +41,68 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Install licensed Coveo files from local Downloads
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import os, shutil, tempfile, zipfile
+
+          home = Path.home()
+          wanted = {"search_train.csv", "sku_to_content.csv"}
+          roots = [home / "Downloads", home / "downloads"]
+          archives = []
+          for root in roots:
+              if root.is_dir():
+                  archives.extend(p for p in root.rglob("*.zip") if p.is_file())
+          archives.sort(key=lambda p: p.stat().st_size, reverse=True)
+
+          match = None
+          members = None
+          for zpath in archives:
+              try:
+                  with zipfile.ZipFile(zpath) as zf:
+                      by_base = {}
+                      for name in zf.namelist():
+                          base = Path(name).name
+                          if base in wanted:
+                              by_base[base] = name
+                      if wanted.issubset(by_base):
+                          match = zpath
+                          members = by_base
+                          break
+              except zipfile.BadZipFile:
+                  continue
+
+          if match is None:
+              searched = ", ".join(str(x) for x in roots)
+              raise SystemExit(f"No ZIP containing both Coveo CSVs found under: {searched}")
+
+          dest = home / ".cache/geoivf/coveo-sigir-ecom-2021/raw"
+          dest.mkdir(parents=True, exist_ok=True)
+          print(f"Using licensed Coveo archive: {match} ({match.stat().st_size} bytes)")
+
+          with zipfile.ZipFile(match) as zf, tempfile.TemporaryDirectory(dir=dest) as td:
+              tmp = Path(td)
+              for base in sorted(wanted):
+                  member = members[base]
+                  info = zf.getinfo(member)
+                  if info.is_dir():
+                      raise SystemExit(f"Expected file but found directory: {member}")
+                  out = tmp / base
+                  with zf.open(member) as src, out.open("wb") as dst:
+                      shutil.copyfileobj(src, dst, length=8 << 20)
+                  if out.stat().st_size == 0:
+                      raise SystemExit(f"Extracted empty file: {base}")
+                  print(f"Extracted {base}: {out.stat().st_size} bytes")
+              for base in wanted:
+                  os.replace(tmp / base, dest / base)
+
+          for base in sorted(wanted):
+              p = dest / base
+              print(f"Installed {p}: {p.stat().st_size} bytes")
+          PY
+
       - name: Run real Coveo demand evaluation
         run: bash scripts/run_coveo_real_demand_ci.sh
       - uses: actions/upload-artifact@v4
