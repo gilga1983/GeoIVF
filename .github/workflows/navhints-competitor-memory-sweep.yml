@@ -7,6 +7,7 @@ on:
       - '.github/workflows/navhints-competitor-memory-sweep.yml'
       - 'scripts/run_competitor_memory_sweep_ci.sh'
       - 'scripts/qualify_competitor_memory_sweep.py'
+      - 'scripts/qualify_final_catapult.py'
       - 'scripts/qualify_frozen_paper_competitors.py'
       - 'scripts/patch_diskann_hot_cache.py'
   workflow_dispatch:
