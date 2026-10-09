@@ -79,6 +79,86 @@ print(json.dumps(summary,indent=2),flush=True)
 PY
 cp "$DATA/pilot.manifest.json" "$ART/"
 
+# Preserve *inner* author-implementation build and layout logs on any failure.
+# The launcher itself redirects its graph-partition logs into the native
+# index directory, so without this hook failures are otherwise opaque.
+capture_failure_diagnostics() {
+  local code=$?
+  if [[ "$code" -eq 0 ]]; then return; fi
+  set +e
+  mkdir -p "$ART/phase-logs"
+  "$WORK/venv/bin/python" - "$DATA" "$ART/phase-logs" <<'PY_DIAG'
+from pathlib import Path
+import json
+import shutil
+import struct
+import sys
+
+root, dest = map(Path, sys.argv[1:])
+summary=[]
+for path in root.rglob("*"):
+    if not path.is_file():
+        continue
+    if path.name in {"relayout.log", "_part.bin.log", "build.log"}:
+        relative=path.relative_to(root)
+        dst=dest/relative
+        dst.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copy2(path,dst)
+    if path.name != "_part.bin":
+        continue
+    result={"path":str(path.relative_to(root)),"bytes":path.stat().st_size}
+    try:
+        with path.open("rb") as f:
+            head=f.read(24)
+            if len(head)!=24: raise ValueError("truncated partition header")
+            cap, num_parts, num_nodes = struct.unpack("<QQQ",head)
+            result.update(capacity=cap,partitions=num_parts,nodes=num_nodes)
+            if num_parts>2_000_000: raise ValueError("implausibly many partitions")
+            empty=bad_first=overflow=invalid_ids=0
+            count=0
+            for i in range(num_parts):
+                n_bytes=f.read(4)
+                if len(n_bytes)!=4: raise ValueError(f"truncated block {i}")
+                (size,)=struct.unpack("<I",n_bytes)
+                if size>100_000: raise ValueError(f"implausible block size at {i}: {size}")
+                blob=f.read(size*4)
+                if len(blob)!=size*4: raise ValueError(f"truncated layout at {i}")
+                ids=struct.unpack(f"<{size}I",blob)
+                empty+=not size
+                bad_first+=bool(size and ids[0]!=i)
+                overflow+=bool(size>cap)
+                invalid_ids+=sum(x>=num_nodes for x in ids)
+                count+=1
+            result.update(parsed=count,empty_partitions=empty,
+                          first_id_mismatches=bad_first,oversized_partitions=overflow,
+                          invalid_vertex_ids=invalid_ids)
+    except Exception as exc:
+        result["error"]=repr(exc)
+    summary.append(result)
+(dest/"partition-check.json").write_text(json.dumps(summary,indent=2)+"\n")
+print(json.dumps(summary,indent=2),flush=True)
+PY_DIAG
+
+  # Read-only debugger replay of the exact official relayout utility.
+  # Optional: no system modification or C++ source patch.
+  if command -v gdb >/dev/null 2>&1; then
+    local bin="$DATA/gorgeous/release/tests/utils/index_relayout_free_mem"
+    local gp
+    gp="$(find "$DATA/gorgeous" -name '_part.bin' -path '*/GRAPH_CACHE_INDEX/*' -print -quit 2>/dev/null)"
+    local idx
+    idx="$(find "$DATA/gorgeous" -name '_disk_beam_search.index' -print -quit 2>/dev/null)"
+    if [[ -x "$bin" && -s "$gp" && -s "$idx" ]]; then
+      gdb -q -batch -ex 'set pagination off' -ex run -ex bt \
+        --args "$bin" "$idx" "$gp" uint8 3 4096 4096 \
+        >"$ART/phase-logs/gorgeous-relayout-backtrace.txt" 2>&1 || true
+    fi
+  else
+    printf '%s\n' 'gdb absent on self-hosted runner; partition and relayout logs saved' \
+      >"$ART/phase-logs/gdb-status.txt"
+  fi
+}
+trap capture_failure_diagnostics EXIT
+
 # Serializing native C++ compilation as well as I/O avoids disturbing the
 # already-running real-NVMe memory sweeps on this shared self-hosted machine.
 exec 9>"$LOCK"
