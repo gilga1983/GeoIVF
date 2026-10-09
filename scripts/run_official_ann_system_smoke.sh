@@ -63,6 +63,7 @@ verify_one() {
 
   # Build the native author's binaries. No edits to their code.
   cmake -S "$root" -B "$root/build" -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
     >"$ART/$system-configure.log" 2>&1
   cmake --build "$root/build" --target build_disk_index search_disk_index --parallel 4 \
     >"$ART/$system-build.log" 2>&1
