@@ -1,0 +1,59 @@
+name: NavHints competitor RAM-scaling (1x-16x)
+
+on:
+  push:
+    branches: [experiment/navhints-memory-sweep]
+    paths:
+      - '.github/workflows/navhints-memory-sweep.yml'
+      - 'scripts/run_navhints_memory_sweep_ci.sh'
+      - 'scripts/qualify_navhints_memory_sweep.py'
+      - 'scripts/qualify_final_catapult.py'
+      - 'scripts/patch_diskann_hot_cache.py'
+      - 'scripts/patch_diskann_qsev.py'
+      - 'scripts/patch_diskann_catapult_snapshot.py'
+      - 'scripts/patch_diskann_hint_ivf_packed_direct.py'
+      - 'scripts/patch_diskann_experience_core.py'
+      - 'scripts/prepare_diskannpp_qsev.py'
+      - 'scripts/learn_hot_cache_ids.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Share a concurrency group with the active fixed-cache correction. Avoid
+# cancelling it or allowing competing SSD measurements to overlap.
+concurrency:
+  group: geoivf-frozen-paper-competitors
+  cancel-in-progress: false
+
+jobs:
+  memory-sweep:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    defaults:
+      run:
+        shell: bash
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run RAM sensitivity against NavHints on real NVMe
+        run: bash scripts/run_navhints_memory_sweep_ci.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: navhints-memory-sweep
+          path: artifacts/navhints-memory-sweep/
+          retention-days: 30
+      - name: Clean temporary build and evaluation files
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/navhints-memory-sweep-$GITHUB_RUN_ID"
