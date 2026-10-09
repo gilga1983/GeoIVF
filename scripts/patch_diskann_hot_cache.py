@@ -103,10 +103,13 @@ def patch_factory(path: Path) -> None:
                         "static cache ID outside graph range",
                     ));
                 }
-                self.cache = Some(Arc::new(self.build_cache_from_ids(
-                    &ids,
-                    graph_metadata.dims,
-                )?));
+                let built_cache = self.build_cache_from_ids(&ids, graph_metadata.dims)?;
+                eprintln!(
+                    "NAVHINTS_CACHE_READY mode=static_ids requested={} loaded={}",
+                    ids.len(),
+                    built_cache.len()
+                );
+                self.cache = Some(Arc::new(built_cache));
             }
             CachingStrategy::None => {}
         }
@@ -206,10 +209,13 @@ def patch_benchmark(path: Path) -> None:
     new = """    let caching_strategy = if let Some(path) =
         std::env::var_os("DISKANN_STATIC_CACHE_IDS_FILE")
     {
+        eprintln!("NAVHINTS_CACHE_MODE=static_ids path={}", path.to_string_lossy());
         CachingStrategy::StaticCacheWithIdFile(path.to_string_lossy().into_owned())
     } else if let Some(num_nodes) = search_params.num_nodes_to_cache {
+        eprintln!("NAVHINTS_CACHE_MODE=native_bfs count={}", num_nodes);
         CachingStrategy::StaticCacheWithBfsNodes(num_nodes)
     } else {
+        eprintln!("NAVHINTS_CACHE_MODE=none");
         CachingStrategy::None
     };
 """
