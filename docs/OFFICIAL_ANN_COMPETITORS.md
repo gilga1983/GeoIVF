@@ -145,3 +145,35 @@ code. A new native diagnostic run is
 
 The pilot remains a qualification gate. Do not infer end-to-end 10M
 performance, a systems winner, or a full-systems SOTA comparison from it.
+
+
+## Native BigANN 20K qualification succeeded (2026-10-09)
+
+[Run #37929860156](https://github.com/gilga1983/GeoIVF/actions/runs/37929860156)
+**completed successfully** with author Starling SHA
+`17dc3e8a011533a62374445f53963e951b72883a` and Gorgeous SHA
+`04c8c27d77a19e7751748d4e0ac4ecd2f0fb3e8b` plus the exact
+one-line sector-count correction documented above. Run artifact
+`official-native-pilot-37929860156` includes native source diffs,
+original run logs and exact input hashes.
+
+Both methods built their own 20K-point BigANN subindex, constructed
+an auxiliary memory navigator and paper-native disk layouts, and ran
+200 identical held-out BigANN queries with their own exact GT for the
+20K corpus. On the smoke check:
+
+| Native author code, L | 40 | 80 | 160 |
+|---|---:|---:|---:|
+| Starling Recall@10 | 99.95% | 100% | 100% |
+| Starling mean latency (μs) | 865 | 1,318 | 2,098 |
+| Gorgeous Recall@10 | 98.50% | 99.95% | 100% |
+| Gorgeous mean latency (μs) | 794 | 1,514 | 2,678 |
+
+**These are not matched-recall comparisons**, are not independent repeated
+latency samples, and do not measure performance on 10M vectors.
+The purpose was to verify all native index build, layout, and search
+paths, not to establish a speed ranking. The real comparison must use
+all 10M points and the official 5K held-out set, matched Recall@10,
+end-to-end NVMe measurements under the same hardware and thread
+limits, and complete memory and disk footprint accounting. Gorgeous
+must retain and disclose the one-line input-buffer fix.
