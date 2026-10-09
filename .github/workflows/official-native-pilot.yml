@@ -1,0 +1,47 @@
+name: Official Starling/Gorgeous native pilot
+
+on:
+  push:
+    branches: [experiment/navhints-official-native-pilot]
+    paths:
+      - '.github/workflows/official-native-pilot.yml'
+      - 'scripts/run_official_native_pilot.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Queue after the ongoing frozen PubMed RAM-scaling campaign. The separate
+# shared speed-device.lock also excludes competing self-hosted NVMe runs.
+concurrency:
+  group: geoivf-frozen-paper-competitors
+  cancel-in-progress: false
+
+jobs:
+  author-native-pilot:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 240
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build official layouts and verify native Recall@10 on 20K BigANN
+        shell: bash
+        run: bash scripts/run_official_native_pilot.sh
+      - name: Save source revisions, native execution logs, and pilot manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-native-pilot-${{ github.run_id }}
+          path: artifacts/native-ann-pilot/
+          retention-days: 30
+      - name: Clean temporary source and data
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/native-ann-pilot-$GITHUB_RUN_ID"
