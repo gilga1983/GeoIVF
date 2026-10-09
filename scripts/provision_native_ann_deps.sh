@@ -46,7 +46,7 @@ test -d "$SYS" || mkdir -p "$SYS"
   printf 'export C_INCLUDE_PATH=%q:%q:${C_INCLUDE_PATH:-}\n' "$SYS/include" "$SYS/include/mkl"
   printf 'export LIBRARY_PATH=%q:%q:%q:${LIBRARY_PATH:-}\n' "$LIB" "$MKL" "$SYS/lib"
   printf 'export LD_LIBRARY_PATH=%q:%q:%q:${LD_LIBRARY_PATH:-}\n' "$LIB" "$MKL" "$SYS/lib"
-  printf 'export LDFLAGS=-L%q\ -L%q\ -L%q\ ${LDFLAGS:-}\n' "$LIB" "$MKL" "$SYS/lib"
+  printf 'export LDFLAGS=%q\n' "-L$LIB -L$MKL -L$SYS/lib ${LDFLAGS:-}"
 } > "$ROOT/native-deps.env"
 
 echo "Upstream dependencies staged: $(du -sh "$ROOT/sysroot" | cut -f1) scratch"
