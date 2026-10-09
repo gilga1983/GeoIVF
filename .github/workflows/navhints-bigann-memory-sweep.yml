@@ -8,6 +8,7 @@ on:
       - 'scripts/qualify_bigann_memory_sweep.py'
       - 'scripts/prepare_qsev_bigann.py'
       - 'scripts/patch_diskann_qsev_l2.py'
+      - 'scripts/qualify_public_causal_fill2.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -31,7 +32,7 @@ jobs:
         shell: bash
         run: |
           bash -n scripts/run_bigann_memory_sweep_ci.sh
-          python3 -m py_compile scripts/qualify_bigann_memory_sweep.py scripts/prepare_qsev_bigann.py scripts/patch_diskann_qsev_l2.py
+          python3 -m py_compile scripts/qualify_bigann_memory_sweep.py scripts/prepare_qsev_bigann.py scripts/patch_diskann_qsev_l2.py scripts/qualify_public_causal_fill2.py
           df -h "$RUNNER_TEMP"
       - name: Train L2 routing controls and measure matched-recall memory scaling
         shell: bash
