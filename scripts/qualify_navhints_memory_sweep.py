@@ -35,8 +35,10 @@ MEMORY_TIERS = (1, 2, 4, 8, 16)
 HOT_N = (30, 60, 120, 240, 480)
 QSEV_N = (32, 64, 128, 256, 512)
 CAT_HASHES = (7, 8)
-CAT_CAP = {7: (160, 320, 640, 1280, 2560),
-           8: (80, 160, 320, 640, 1280)}
+# Capacities chosen to keep reserved Catapult payload close to the
+# nominal 1x, 2x, 4x, 8x and 16x RAM levels, not to merely double slots.
+CAT_CAP = {7: (160, 360, 760, 1600, 3200),
+           8: (80, 180, 380, 780, 1580)}
 SEEDS = (0, 1, 2)
 
 
