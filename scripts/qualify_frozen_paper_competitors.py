@@ -122,7 +122,13 @@ def run_one(binary,out,tag,queries,gt,index_prefix,*,cache_nodes=None,hot_ids=No
     log_text = log.read_text()
     if cache_nodes is not None or hot_ids is not None:
         if hot_ids is not None:
-            expected = "NAVHINTS_CACHE_READY mode=static_ids requested=30 loaded=30"
+            with hot_ids.open("rb") as cache_file:
+                hdr = cache_file.read(16)
+            if len(hdr)!=16 or hdr[:8]!=b"GIDST001":
+                raise ValueError(f"{tag}: malformed static cache ID header")
+            cache_count = struct.unpack_from("<I",hdr,8)[0]
+            expected = (f"NAVHINTS_CACHE_READY mode=static_ids "
+                        f"requested={cache_count} loaded={cache_count}")
         else:
             expected = f"NAVHINTS_CACHE_MODE=native_bfs count={cache_nodes}"
         if expected not in log_text:
