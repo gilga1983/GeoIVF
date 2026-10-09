@@ -276,6 +276,27 @@ s=s.replace("sync; echo 3 | sudo tee /proc/sys/vm/drop_caches;","sync;")
 p.write_text(s)
 PY
     git -C "$root" diff -- scripts/config_dataset.sh scripts/config_local.sh scripts/run_benchmark.sh > "$ART/$sys-launcher.diff" || true
+
+    if [ "$sys" = "gorgeous" ]; then
+        # Correct an upstream sector-count bug in the *layout writer*, not
+        # its partitioning/search algorithms. The destination partition size
+        # C differs from the original index's nnodes_per_sector. Using C
+        # under-reads the index and dereferences beyond mem_index in memcpy.
+        python3 - "$root/tests/utils/index_relayout_free_mem.cpp" <<'PY_FIX'
+import sys
+from pathlib import Path
+p=Path(sys.argv[1])
+s=p.read_text()
+old="auto diskann_partition_number = ROUND_UP(_nd, C) / C;"
+new="auto diskann_partition_number = ROUND_UP(_nd, nnodes_per_sector) / nnodes_per_sector;"
+assert s.count(old)==1, "unexpected Gorgeous layout source; refuse non-exact patch"
+p.write_text(s.replace(old,new))
+print("Fixed original-index input sector count, no navigation/layout policy change", flush=True)
+PY_FIX
+        git -C "$root" diff --check
+        git -C "$root" diff -- tests/utils/index_relayout_free_mem.cpp > "$ART/$sys-relayout-sector-count-fix.diff"
+    fi
+
     ( cd "$root/scripts"
       bash run_benchmark.sh release build
       bash run_benchmark.sh release build_mem
