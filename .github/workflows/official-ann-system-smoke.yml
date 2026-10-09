@@ -1,0 +1,45 @@
+name: Qualify official Starling and Gorgeous
+
+on:
+  push:
+    branches: [experiment/official-ann-system-comparison]
+    paths:
+      - '.github/workflows/official-ann-system-smoke.yml'
+      - 'scripts/run_official_ann_system_smoke.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: official-ann-system-smoke
+  cancel-in-progress: true
+
+jobs:
+  native-systems:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 180
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile pinned author repositories, verify public inputs
+        shell: bash
+        run: bash scripts/run_official_ann_system_smoke.sh
+      - name: Preserve provenance and build logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: official-ann-system-smoke-${{ github.run_id }}
+          path: artifacts/official-ann-system-smoke/
+          retention-days: 30
+      - name: Remove temporary source checkouts
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/official-ann-smoke-$GITHUB_RUN_ID"
