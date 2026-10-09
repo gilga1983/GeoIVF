@@ -95,7 +95,7 @@ def run(binary: Path, folder: Path, name: str, queries: Path, gt: Path,
     if name.startswith("r") and not skip_recall:
         if any(not np.isfinite(float(row["mean_ios"])) for row in records):
             raise ValueError(f"{name}: nonfinite I/O")
-    if name.startswith("r") and ("hot-" in name or "bfs-" in name):
+    if name.startswith("r") and not skip_recall and ("hot-" in name or "bfs-" in name):
         logfile = log.read_text()
         if "hot-" in name:
             n = int(name.rsplit("hot-", 1)[1])
