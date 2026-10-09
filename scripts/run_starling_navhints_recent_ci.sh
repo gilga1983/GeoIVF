@@ -347,7 +347,12 @@ for rep in 0 1 2; do
             >"$ART/starling-rep$rep-$mode-summary.txt"
         test "$(grep -E -c '^[[:space:]]*(20|40|80|160|320|640)[[:space:]]' \
             "$ART/starling-rep$rep-$mode-summary.txt")" -ge 6
-        grep -q 'STARLING_NAVHINTS_PROTOCOL' "$ART/starling-rep$rep-$mode-execution.log"
+        # The author launcher writes native binary output to its own log.
+        # Validate that exact mode and the full 5K causal replay there.
+        search_log=$(grep 'Searching... log file:' \
+            "$ART/starling-rep$rep-$mode-execution.log" | tail -n 1 | sed -E 's/^.*log file: //')
+        test -s "$search_log"
+        grep -q "STARLING_NAVHINTS_PROTOCOL mode=$mode warmup=4000 measured=1000" "$search_log"
         cat "$ART/starling-rep$rep-$mode-summary.txt"
         echo "STARLING_HINT_EXPERIMENT rep=$rep mode=$mode complete=$(date -Is)"
     done
