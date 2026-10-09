@@ -1,0 +1,51 @@
+name: Starling native NavHints full Core and junction generality
+on:
+  push:
+    branches: [experiment/starling-navhints-core]
+    paths:
+      - '.github/workflows/starling-navhints-core.yml'
+      - 'scripts/patch_starling_native_junctions.py'
+      - 'scripts/run_starling_navhints_core_ci.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-starling-full-core-portability
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 1440
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Preflight Starling native-source routing adapter and trainer
+        shell: bash
+        run: |
+          bash -n scripts/run_starling_navhints_core_ci.sh
+          python3 -m py_compile scripts/patch_starling_recent_hints.py scripts/patch_starling_native_junctions.py scripts/build_hint_ivf_generic.py
+          test -s "$HOME/.cache/geoivf/public-eval/bigann-10M/data/dataset.manifest.json"
+          df -h "$RUNNER_TEMP"
+      - name: Learn native Starling junctions, then measure original, recent, learned and Full Core
+        shell: bash
+        run: bash scripts/run_starling_navhints_core_ci.sh
+      - name: Preserve pinned author patch, trained native IDs, recall-I/O-latency and host
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: starling-navhints-full-core
+          path: artifacts/starling-navhints-core/
+          retention-days: 30
+      - name: Clean only current job scratch, never user dataset cache
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/starling-navhints-core-$GITHUB_RUN_ID"
