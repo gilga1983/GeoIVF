@@ -183,8 +183,12 @@ import sys
 from pathlib import Path
 p=Path(sys.argv[1])
 s=p.read_text()
-# CMake 4+ no longer accepts oneTBB\x27s legacy policy minimum.\n# Apply compatibility only to this temporary author launcher, not C++ code.\ncmake_marker="cmake -DCMAKE_BUILD_TYPE="\nassert cmake_marker in s, "Author CMake invocation changed unexpectedly"\ns=s.replace(cmake_marker, "cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=")\n# Resource limit: no unbounded make -j on a shared benchmark host.
-assert "make -j" in s
+# CMake 4+ no longer accepts oneTBB's legacy policy minimum.
+# Apply compatibility only to this temporary author launcher, not C++ code.
+cmake_marker="cmake -DCMAKE_BUILD_TYPE="
+assert cmake_marker in s, "Author CMake invocation changed unexpectedly"
+s=s.replace(cmake_marker, "cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=")
+# Resource limit: no unbounded make -j on a shared benchmark host.
 s=s.replace("make -j\n","make -j4\n")
 # Starling's launcher drops kernel page cache via sudo. The experiment
 # preserves cache warmth for every method and does not use elevated access.
