@@ -158,9 +158,7 @@ def benchmark(root:Path)->None:
 """
     s=once(s,old,new,"measurement timer")
     # Preserve every line of the author's original parallel implementation.
-    anchor="""    // Using branching outside the for loop instead of inside and
-    // std::function/std::mem_fn for less switching and function calling overhead
-    if (use_page_search) {"""
+    anchor="""    if (use_page_search) {"""
     replacement=r'''    // Original native system configuration is held fixed throughout.
     // Serial causal replay gives *all three* arms identical ordering,
     // making a 512-ID online cache meaningful and preventing future leaks.
