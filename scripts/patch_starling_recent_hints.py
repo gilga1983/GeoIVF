@@ -147,15 +147,9 @@ def benchmark(root:Path)->None:
 
   for (uint32_t test_id = 0; test_id < Lvec.size(); test_id++) {'''
     s=once(s,old,new,"causal replay mode")
-    old="""    auto                  s = std::chrono::high_resolution_clock::now();
-
-    // Using branching outside the for loop instead of inside and
-"""
+    old="""    auto                  s = std::chrono::high_resolution_clock::now();"""
     new="""    auto                  s = std::chrono::high_resolution_clock::now();
-    auto measured_start = s;
-
-    // Using branching outside the for loop instead of inside and
-"""
+    auto measured_start = s;"""
     s=once(s,old,new,"measurement timer")
     # Preserve every line of the author's original parallel implementation.
     anchor="""    if (use_page_search) {"""
