@@ -99,3 +99,49 @@ configuration because it makes NavHints win.
 
 Only promote a method to the main related-work results table after
 validating its full feature path and identical workload/recall contract.
+
+
+## Native integration finding: Gorgeous replica-layout input sector count (2026-10-09)
+
+The original Starling and Gorgeous projects both compile on the self-hosted runner
+after provisioning their Ubuntu development dependencies and setting
+`CMAKE_POLICY_VERSION_MINIMUM=3.5` for their bundled CMake/oneTBB versions.
+
+The original Starling implementation completed a native 20K-vector/200-query
+BigANN pilot with Recall@10 measured. These tiny-pilot numbers are **not**
+10M dataset benchmark results.
+
+The pinned Gorgeous author revision `04c8c27d77a19e7751748d4e0ac4ecd2f0fb3e8b`
+segfaulted in `tests/utils/index_relayout_free_mem.cpp` during its
+graph-replicated `gr_layout` construction. The diagnostic
+[run #37928612627](https://github.com/gilga1983/GeoIVF/actions/runs/37928612627)
+(artifact `official-native-pilot-37928612627`) preserved:
+
+- Upstream input index: 20,000 records and **10** records/sector.
+- Replica partition map: 20,000 valid partitions and capacity **15**,
+  verified with no empty partitions, mismatched first IDs, over-capacity
+  partitions, or invalid vertex IDs.
+- Relayout allocated/read **1,334 input sectors**, using replica `C=15`,
+  although the original disk-index layout requires **2,000 input sectors**,
+  using `nnodes_per_sector=10`.
+- GDB confirmed a SIGSEGV in `memcpy` while processing graph replicas.
+
+The integration pilot now applies an **exact, one-line correctness fix** in
+the temporary checked-out author source, and archives the resulting source
+diff in `gorgeous-relayout-sector-count-fix.diff`:
+
+```diff
+-  auto diskann_partition_number = ROUND_UP(_nd, C) / C;
++  auto diskann_partition_number = ROUND_UP(_nd, nnodes_per_sector) / nnodes_per_sector;
+```
+
+This changes how many **source index sectors** are loaded, without changing
+the graph, partition assignment, search logic, or query routing decisions.
+The patch must be **disclosed** with any eventual Gorgeous performance
+comparison: the benchmark would use the pinned *original author system with
+a one-line input-buffer correctness fix*, not entirely unmodified author
+code. A new native diagnostic run is
+[#37929860156](https://github.com/gilga1983/GeoIVF/actions/runs/37929860156).
+
+The pilot remains a qualification gate. Do not infer end-to-end 10M
+performance, a systems winner, or a full-systems SOTA comparison from it.
