@@ -92,6 +92,8 @@ def parse_stats(log):
     return out
 
 def run_one(binary,out,tag,queries,gt,index_prefix,*,cache_nodes=None,hot_ids=None,qsev=None,ivf=None,experience=False):
+    if cache_nodes is not None and hot_ids is not None:
+        raise ValueError("use exactly one cache mode: native BFS or workload-selected")
     cfg={"search_directories":[str(out)],"jobs":[{"type":"disk-index","content":{
       "source":{"disk-index-source":"Load","data_type":"float32","load_path":str(index_prefix)},
       "search_phase":{"queries":str(queries),"groundtruth":str(gt),"search_list":list(LS),
@@ -117,6 +119,24 @@ def run_one(binary,out,tag,queries,gt,index_prefix,*,cache_nodes=None,hot_ids=No
     print(f"completed {tag} in {time.monotonic()-t:.1f}s",flush=True)
     rr=sorted(result_rows(json.loads(op.read_text())),key=lambda r:int(r["search_l"]))
     if [int(x["search_l"]) for x in rr]!=list(LS): raise ValueError(f"{tag}: bad L grid")
+    log_text = log.read_text()
+    if cache_nodes is not None or hot_ids is not None:
+        if hot_ids is not None:
+            expected = "NAVHINTS_CACHE_READY mode=static_ids requested=30 loaded=30"
+        else:
+            expected = f"NAVHINTS_CACHE_MODE=native_bfs count={cache_nodes}"
+        if expected not in log_text:
+            raise RuntimeError(f"{tag}: cache activation not verified: expected {expected!r}")
+        active = [float(r.get("cache_hit_percentage",0)) for r in rr]
+        if max(active) <= 0.05:
+            raise RuntimeError(f"{tag}: cache enabled but no measurable hit rate: {active}")
+        savings = [float(r["mean_hops"])-float(r["mean_ios"]) for r in rr]
+        if max(savings) <= 0.01:
+            raise RuntimeError(f"{tag}: cache reports hits but did not save SSD reads: {savings}")
+        print(f"CACHE_VERIFIED tag={tag} hit_at_L160={active[list(LS).index(160)]:.2f}% "
+              f"saved_reads_at_L160={savings[list(LS).index(160)]:.3f}",flush=True)
+    elif "NAVHINTS_CACHE_MODE=none" in log_text:
+        pass
     return rr,(parse_stats(log) if experience else None)
 
 def aggregate(reps):
@@ -130,6 +150,7 @@ def aggregate(reps):
           "median_latency_us":float(np.median([float(r["mean_latency"]) for r in rs])),
           "median_io_us":float(np.median([float(r["mean_io_time"]) for r in rs])),
           "mean_hops":float(np.mean([float(r["mean_hops"]) for r in rs])),
+          "mean_cache_hit_percent":float(np.mean([float(r.get("cache_hit_percentage",0)) for r in rs])),
           "mean_comparisons":float(np.mean([float(r["mean_comparisons"]) for r in rs])),
         }
     return out
@@ -172,7 +193,7 @@ def matched(summary):
     for l in NAV_ANCHORS:
         n=nav[str(l)]; target=float(n["recall_percent"])
         item={"sample2_L":l,"recall_percent":target,"sample2_mean_ios":float(n["mean_ios"]),"sample2_latency_us":float(n["median_latency_us"]),"competitors":{}}
-        for m in ("baseline","hot-30","qsev-32","ivf"):
+        for m in ("baseline","bfs-30","hot-30","qsev-32","ivf"):
             x=interp(summary[m],target)
             if x is None:
                 item["competitors"][m]={"available":False}; continue
@@ -199,7 +220,12 @@ def main():
     slice_fbin(args.replay_queries,warmq,0,4000); slice_gt(args.gt5000,warmgt,0,4000)
 
     hot=args.hot_dir/"hot-cache-n30.bin"
-    methods=("baseline","hot-30","qsev-32","ivf","sample2")
+    raw=hot.read_bytes()
+    if len(raw)!=136 or raw[:8]!=b"GIDST001" or struct.unpack_from("<II",raw,8)!=(30,0):
+        raise ValueError("workload-selected cache file must contain exactly 30 IDs")
+    ids=struct.unpack_from("<"+"I"*30,raw,16)
+    if len(set(ids))!=30: raise ValueError("repeated workload-hot cache vertex ID")
+    methods=("baseline","bfs-30","hot-30","qsev-32","ivf","sample2")
     runs={m:[] for m in methods}; stats=[]
     allowed=sorted(os.sched_getaffinity(0)); os.sched_setaffinity(0,set(allowed[:THREADS]))
     lockp=Path.home()/".cache/geoivf/speed-device.lock"; lockp.parent.mkdir(parents=True,exist_ok=True)
@@ -216,6 +242,9 @@ def main():
                 elif m=="qsev-32":
                     run_one(args.qsev_binary,args.out,f"r{rep}-{m}-warm",warmq,warmgt,args.index_prefix,qsev=args.qsev)
                     rr,_=run_one(args.qsev_binary,args.out,f"r{rep}-{m}",evalq,evalgt,args.index_prefix,qsev=args.qsev)
+                elif m=="bfs-30":
+                    run_one(args.hot_binary,args.out,f"r{rep}-{m}-warm",warmq,warmgt,args.index_prefix,cache_nodes=30)
+                    rr,_=run_one(args.hot_binary,args.out,f"r{rep}-{m}",evalq,evalgt,args.index_prefix,cache_nodes=30)
                 elif m=="hot-30":
                     run_one(args.hot_binary,args.out,f"r{rep}-{m}-warm",warmq,warmgt,args.index_prefix,hot_ids=hot)
                     rr,_=run_one(args.hot_binary,args.out,f"r{rep}-{m}",evalq,evalgt,args.index_prefix,hot_ids=hot)
@@ -248,6 +277,8 @@ def main():
         "qsev_32_bytes":qsev_bytes,"qsev_fraction_of_sample2_query_state":qsev_bytes/nav_query_state_bytes,
         "hot30_vector_plus_max_degree_edge_id_bytes":cache_payload,
         "hot30_fraction_of_sample2_query_state":cache_payload/nav_query_state_bytes,
+        "cache_methods_under_same_full_node_budget":["bfs-30","hot-30"],
+        "cache_activation_verified":True,
       },
       "guardrails":[
         "All headline comparisons measure exactly the final 1,000 heldout queries.",
@@ -256,7 +287,9 @@ def main():
         "The learned 16K entry-only arm uses the same final NavHints binary and packed Hint-IVF implementation as Fill2.",
         "QSEV routing runs inside the timed query path.",
         "Cache/QSEV container overhead is excluded, which favors the competitors.",
-        "All methods are order-rotated within one device-locked timing epoch."
+        "All methods are order-rotated within one device-locked timing epoch.",
+        "Cache controls include native DiskANN BFS-30 and workload-selected hot-30.",
+        "Every measured cache configuration asserts a nonzero actual hit rate and avoided SSD I/O; invalid inactive cache runs fail."
       ],
       "summary":summary,"sample2_write_stats":write_stats,"matched_recall_against_sample2":matched(summary),
     }
