@@ -1,0 +1,47 @@
+name: NavHints physical 4KiB persistence cost
+on:
+  push:
+    branches: [experiment/navhints-physical-persistence]
+    paths:
+      - '.github/workflows/navhints-physical-persistence.yml'
+      - 'scripts/run_physical_persistence_ci.sh'
+      - 'scripts/qualify_physical_persistence.py'
+      - 'scripts/patch_diskann_experience_physical.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: geoivf-physical-persistence
+  cancel-in-progress: false
+jobs:
+  experiment:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CARGO_BUILD_JOBS: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate physical page experiment before writing
+        shell: bash
+        run: |
+          bash -n scripts/run_physical_persistence_ci.sh
+          python3 -m py_compile scripts/qualify_physical_persistence.py scripts/patch_diskann_experience_physical.py
+          df -h "$RUNNER_TEMP"
+      - name: Execute self-hosted physical Sample1/Sample2 write-cost comparison
+        shell: bash
+        run: bash scripts/run_physical_persistence_ci.sh
+      - name: Archive source diff, write counters and original-copy guard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navhints-physical-persistence
+          path: artifacts/navhints-physical-persistence/
+          retention-days: 30
+      - name: Remove only job-owned scratch copies
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/navhints-physical-persistence-$GITHUB_RUN_ID"
