@@ -1,0 +1,56 @@
+name: Original Starling and Gorgeous BigANN-10M
+
+on:
+  push:
+    branches: [experiment/navhints-official-10m]
+    paths:
+      - '.github/workflows/official-native-bigann10m.yml'
+      - 'scripts/run_official_ann_10m_ci.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# No competition with the previous native pilot or other disk benchmarks;
+# script also acquires the shared speed-device.lock on the self-hosted system.
+concurrency:
+  group: geoivf-original-native-bigann10m
+  cancel-in-progress: false
+
+jobs:
+  authors-native-bigann10m:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Syntax check and storage preflight
+        shell: bash
+        run: |
+          bash -n scripts/run_official_ann_10m_ci.sh
+          df -h "$RUNNER_TEMP"
+          free -h
+          test -s "$HOME/.cache/geoivf/public-eval/bigann-10M/data/dataset.manifest.json"
+          command -v cmake
+          command -v c++
+      - name: Build native 10M indices and evaluate original-system recall frontiers
+        shell: bash
+        run: bash scripts/run_official_ann_10m_ci.sh
+      - name: Preserve native program logs, exact source diff and result records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: original-native-bigann10m-${{ github.run_id }}
+          path: artifacts/native-ann-bigann10m/
+          retention-days: 30
+      - name: Remove native 10M scratch and temporary disk layouts
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/native-ann-10m-$GITHUB_RUN_ID"
