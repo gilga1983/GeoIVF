@@ -7,6 +7,8 @@ on:
       - '.github/workflows/frozen-paper-competitors.yml'
       - 'scripts/run_frozen_paper_competitors_ci.sh'
       - 'scripts/qualify_frozen_paper_competitors.py'
+      - 'scripts/patch_diskann_hot_cache.py'
+      - 'scripts/patch_diskann_qsev.py'
       - 'scripts/patch_diskann_hint_ivf_packed_direct.py'
       - 'scripts/patch_diskann_experience_core.py'
   workflow_dispatch:
