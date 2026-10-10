@@ -124,21 +124,32 @@ def benchmark(root):
         '            (nav_mode == "gate25_diverse");',
         "strict gate source preserved") if False else s
     s=once(s,
-        '             nav_mode == "gate25_diverse");',
-        '             nav_mode == "gate25_diverse" ||\n'
-        '             nav_mode == "gate50_cover");',
-        "allow median gate on coverage arm")
+        '(nav_mode == "gate50_core" || nav_mode == "gate50_diverse");',
+        '(nav_mode == "gate50_core" || nav_mode == "gate50_diverse" ||\n'
+        '               nav_mode == "gate50_cover");',
+        "calibrate coverage gate before heldout suffix")
     s=once(s,
+        '        nav_diag[i].inject = (nav_mode != "score_only");\n'
+        '        nav_diag[i].activation_gate =\n'
+        '            (nav_mode == "gate50_core" || nav_mode == "gate50_diverse" ||\n'
         '             nav_mode == "gate25_diverse");\n'
-        '        nav_diag[i].gate_threshold',
-        '             nav_mode == "gate25_diverse" ||\n'
-        '             nav_mode == "cover_core" || nav_mode == "maxmin_core" ||\n'
-        '             nav_mode == "gate50_cover");\n'
+        '        nav_diag[i].want_diverse =\n'
+        '            (nav_mode == "diverse_core" || nav_mode == "gate50_diverse" ||\n'
+        '             nav_mode == "gate25_diverse");\n'
+        '        nav_diag[i].gate_threshold = gate_threshold;',
+        '        nav_diag[i].inject = (nav_mode != "score_only");\n'
+        '        nav_diag[i].activation_gate =\n'
+        '            (nav_mode == "gate50_core" || nav_mode == "gate50_diverse" ||\n'
+        '             nav_mode == "gate25_diverse" || nav_mode == "gate50_cover");\n'
+        '        nav_diag[i].want_diverse =\n'
+        '            (nav_mode == "diverse_core" || nav_mode == "gate50_diverse" ||\n'
+        '             nav_mode == "gate25_diverse" || nav_mode == "cover_core" ||\n'
+        '             nav_mode == "maxmin_core" || nav_mode == "gate50_cover");\n'
         '        nav_diag[i].coverage_policy =\n'
         '            (nav_mode == "cover_core" || nav_mode == "gate50_cover") ? 2 :\n'
         '            (nav_mode == "maxmin_core" ? 1 : 0);\n'
-        '        nav_diag[i].gate_threshold',
-        "new objective activation") 
+        '        nav_diag[i].gate_threshold = gate_threshold;',
+        "enable novel entry selection and no-leak causal activation")
     s=once(s,
         '            nav_mode == "gate25_diverse") {',
         '            nav_mode == "gate25_diverse" ||\n'
