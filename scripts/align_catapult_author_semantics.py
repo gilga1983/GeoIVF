@@ -28,6 +28,20 @@ def align(root):
        "pinned rand_distr workspace import")
     cargo.write_text(s)
 
+    # The distribution already exists in the workspace lockfile through other
+    # crates. Add it to this package's locked direct-dependency list so
+    # cargo --locked really compiles the reproducible author-aligned version.
+    lock=root/"Cargo.lock"
+    raw=lock.read_text()
+    first=raw.index('name = "diskann-benchmark"')
+    last=raw.index("[[package]]",first+1)
+    head,block,tail=raw[:first],raw[first:last],raw[last:]
+    block=once(block,
+       ' "rand",\n "rayon",',
+       ' "rand",\n "rand_distr",\n "rayon",',
+       "direct locked rand_distr benchmark dependency")
+    lock.write_text(head+block+tail)
+
     p=root/"diskann-benchmark/src/disk_index/search.rs"
     s=p.read_text()
     s=once(s,
