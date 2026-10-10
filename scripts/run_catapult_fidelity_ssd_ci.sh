@@ -13,7 +13,7 @@ EVAL_GT="$ROOT/medrag-zipf-qwen3b-v1/heldout5000-pubmed1m-top16-ip.gt"
 INDEX="$ROOT/catapult-paper-pubmed1m-index-v1/diskann-index"
 mkdir -p "$ART" "$WORK" "$(dirname "$LOCK")"
 for f in "$QUERIES" "$TRAIN_GT" "$EVAL_GT"; do test -s "$f"; done
-test -s "$INDEX"
+test -d "$(dirname "$INDEX")"
 git rev-parse HEAD > "$ART/geoivf-audit-sha.txt"
 { date -Is; uname -a; lscpu; free -h; df -h; } > "$ART/host.txt"
 sha256sum "$QUERIES" "$TRAIN_GT" "$EVAL_GT" > "$ART/input-hashes.txt"
