@@ -1,0 +1,58 @@
+name: CatapultDB author-source parity and SSD adapter validation
+
+on:
+  push:
+    branches: [experiment/catapult-fidelity-audit]
+    paths:
+      - '.github/workflows/catapult-fidelity-audit.yml'
+      - 'scripts/audit_catapult_source_parity.py'
+      - 'scripts/catapult_native_fidelity_oracle.rs'
+      - 'scripts/align_catapult_author_semantics.py'
+      - 'scripts/run_catapult_fidelity_audit_ci.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-catapult-fidelity-audit
+  cancel-in-progress: false
+
+jobs:
+  author-oracle-and-ssd-compile:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 360
+    env:
+      CARGO_BUILD_JOBS: '4'
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Preflight strict original source identity and alignment scripts
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile scripts/audit_catapult_source_parity.py \
+            scripts/align_catapult_author_semantics.py \
+            scripts/patch_diskann_paper_catapult.py
+          bash -n scripts/run_catapult_fidelity_audit_ci.sh
+          command -v git
+          command -v curl
+      - name: Author's unchanged runtime oracle and aligned DiskANN compilation
+        shell: bash
+        run: bash scripts/run_catapult_fidelity_audit_ci.sh
+      - name: Preserve annotated source comparison, native test and compilation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catapult-author-fidelity-audit
+          path: artifacts/catapult-fidelity-audit/
+          retention-days: 30
+      - name: Clean only audit-specific temporary author source checkouts
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/catapult-fidelity-audit-$GITHUB_RUN_ID"
