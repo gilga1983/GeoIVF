@@ -1,0 +1,60 @@
+name: Starling selective NavHints activation and diverse entries
+
+on:
+  push:
+    branches: [experiment/starling-selective-diverse]
+    paths:
+      - '.github/workflows/starling-selective-diverse.yml'
+      - 'scripts/patch_starling_selective_diverse.py'
+      - 'scripts/generate_starling_selective_diverse.py'
+      - 'scripts/summarize_starling_selective_diverse.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-starling-selective-diverse
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 1440
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate six-arm protocol and self-hosted BigANN-10M data
+        shell: bash
+        run: |
+          python3 -m py_compile \
+            scripts/patch_starling_recent_hints.py \
+            scripts/patch_starling_native_junctions.py \
+            scripts/patch_starling_entry_diagnostics.py \
+            scripts/patch_starling_selective_diverse.py \
+            scripts/generate_starling_entry_diagnostic.py \
+            scripts/generate_starling_selective_diverse.py \
+            scripts/summarize_starling_selective_diverse.py
+          python3 scripts/generate_starling_selective_diverse.py
+          test -s "$HOME/.cache/geoivf/public-eval/bigann-10M/data/dataset.manifest.json"
+          df -h "$RUNNER_TEMP"
+      - name: Native Starling 6-arm comparison under exclusive SSD lock
+        shell: bash
+        run: python3 scripts/generate_starling_selective_diverse.py --run
+      - name: Save source diff, full native logs, per-query paths, timing and matched recall
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: starling-selective-diverse
+          path: artifacts/starling-selective-diverse/
+          retention-days: 30
+      - name: Clean only scratch for this run
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/starling-selective-diverse-$GITHUB_RUN_ID"
