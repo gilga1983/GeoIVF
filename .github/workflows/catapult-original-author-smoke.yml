@@ -1,0 +1,42 @@
+name: Reproduce original author CatapultDB native code (smoke)
+
+on:
+  push:
+    branches: [experiment/catapult-original-author]
+    paths:
+      - '.github/workflows/catapult-original-author-smoke.yml'
+      - 'scripts/run_catapult_author_smoke_ci.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-catapult-original-smoke
+  cancel-in-progress: false
+
+jobs:
+  original-author-code:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 180
+    env:
+      CARGO_BUILD_JOBS: '4'
+      RUSTFLAGS: '-C target-cpu=native'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run original pinned CatapultDB with its own graph, vanilla and Catapult
+        shell: bash
+        run: bash scripts/run_catapult_author_smoke_ci.sh
+      - name: Archive original author SHA, outputs, build and smoke logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catapult-author-smoke
+          path: artifacts/catapult-author-smoke/
+          retention-days: 30
+      - name: Clean temporary author checkout only
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/catapult-author-smoke-$GITHUB_RUN_ID"
