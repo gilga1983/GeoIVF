@@ -39,7 +39,9 @@ def main():
         '        python3 scripts/patch_starling_entry_diagnostics.py "$root"',
         "apply temporary diagnostic native patch before native build",
     )
-    base = swap(base, 'LS="20 40 80 160 320 640"', 'LS="20 40 80"', "focused recall range")
+    if base.count('LS="20 40 80 160 320 640"') != 2:
+        raise RuntimeError("expected Starling and dormant Gorgeous L values")
+    base = base.replace('LS="20 40 80 160 320 640"', 'LS="20 40 80"')
     for old, new in (
         ("0) order=(baseline random512 recent512 learned16k core16k_recent512) ;;",
          "0) order=(baseline score_only core16k_recent512 oracle) ;;"),
