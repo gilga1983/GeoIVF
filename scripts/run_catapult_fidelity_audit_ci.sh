@@ -34,6 +34,7 @@ if ! command -v rustup >/dev/null 2>&1; then
   sh "$WORK/install-rustup.sh" -y --profile minimal --no-modify-path --default-toolchain nightly-2026-09-15
 fi
 rustup toolchain install nightly-2026-09-15 --profile minimal
+rustup toolchain install 1.97.1 --profile minimal
 cp scripts/catapult_native_fidelity_oracle.rs "$WORK/author/src/bin/navhints_fidelity_oracle.rs"
 (
   cd "$WORK/author"
