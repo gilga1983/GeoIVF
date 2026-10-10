@@ -351,7 +351,14 @@ for rep in 0 1 2; do
         # Validate that exact mode and the full 5K causal replay there.
         search_log=$(grep 'Searching... log file:' \
             "$ART/starling-rep$rep-$mode-execution.log" | tail -n 1 | sed -E 's/^.*log file: //')
-        test -s "$search_log"
+        # Native Starling log paths are relative to the author scripts directory.
+        # Copy the original detailed search/recall results into the artifact.
+        if [ ! -s "$source_dir/scripts/$search_log" ]; then
+          echo "STARLING_NATIVE_LOG_MISSING mode=$mode path=$source_dir/scripts/$search_log" >&2
+          exit 8
+        fi
+        cp "$source_dir/scripts/$search_log" "$ART/starling-rep$rep-$mode-native-search.log"
+        search_log="$ART/starling-rep$rep-$mode-native-search.log"
         grep -q "STARLING_NAVHINTS_PROTOCOL mode=$mode warmup=4000 measured=1000" "$search_log"
         cat "$ART/starling-rep$rep-$mode-summary.txt"
         echo "STARLING_HINT_EXPERIMENT rep=$rep mode=$mode complete=$(date -Is)"
