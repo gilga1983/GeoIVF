@@ -386,7 +386,7 @@ for rep in 0 1 2; do
     1) order=(learned16k core16k_recent512 baseline random512 recent512) ;;
     2) order=(recent512 learned16k baseline core16k_recent512 random512) ;;
   esac
-  for mode in "\${order[@]}"; do
+  for mode in "${order[@]}"; do
     echo "STARLING_FULL_CORE rep=$rep mode=$mode begin=$(date -Is)"
     (cd "$source_dir/scripts" && STARLING_NAVHINTS_EVAL="$mode" \
      STARLING_NAVHINTS_IVF_FILE="$STARLING_IVF" \
