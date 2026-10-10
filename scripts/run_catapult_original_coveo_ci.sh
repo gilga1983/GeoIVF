@@ -30,7 +30,9 @@ git -C "$WORK/rust" checkout --detach "$AUTHOR_RUST"
 test "$(git -C "$WORK/rust" rev-parse HEAD)" = "$AUTHOR_RUST"
 printf '%s\n' "$AUTHOR_RUST" > "$ART/author-rust-sha.txt"
 
-python3 scripts/prepare_catapult_original_coveo.py "$MANIFEST" "$WORK/prepared" "$ART"
+python3 -m venv "$WORK/venv"
+"$WORK/venv/bin/python" -m pip install --disable-pip-version-check numpy==2.2.6
+"$WORK/venv/bin/python" scripts/prepare_catapult_original_coveo.py "$MANIFEST" "$WORK/prepared" "$ART"
 
 cmake -S "$WORK/cpp" -B "$WORK/cpp/build" -DCMAKE_BUILD_TYPE=Release > "$ART/cpp-cmake.log" 2>&1
 cmake --build "$WORK/cpp/build" --parallel 4 --target build_memory_index > "$ART/cpp-build.log" 2>&1
