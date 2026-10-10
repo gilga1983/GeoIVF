@@ -110,10 +110,10 @@ cp "$DATA/coveo-native.manifest.json" "$ART/"'''
     }
     for old,new in names.items():
         s=s.replace(old,new)
-    s=nrep(s,'DATA_TYPE=uint8','DATA_TYPE=float',2,"native float32 author cli")
-    s=nrep(s,'DIST_FN=l2','DIST_FN=l2',2,"native squared L2 preserved")
-    s=nrep(s,'DATA_DIM=128','DATA_DIM=50',2,"Coveo dimensions")
-    s=nrep(s,'DATA_N=10000000','DATA_N=31950',2,"Coveo catalog size")
+    s=nrep(s,'DATA_TYPE=uint8','DATA_TYPE=float',1,"native float32 author cli")
+    s=nrep(s,'DIST_FN=l2','DIST_FN=l2',1,"native squared L2 preserved")
+    s=nrep(s,'DATA_DIM=128','DATA_DIM=50',1,"Coveo dimensions")
+    s=nrep(s,'DATA_N=10000000','DATA_N=31950',1,"Coveo catalog size")
     s=nrep(s,'PREFIX="bigann_native_10m"','PREFIX="coveo_native_real"',1,
            "Coveo index path")
     s=once(s,'--base-data-type uint8','--base-data-type float32',
@@ -124,7 +124,7 @@ cp "$DATA/coveo-native.manifest.json" "$ART/"'''
            '        python3 scripts/patch_starling_coveo_coverage.py "$root"',
            "float32 Coveo causal replay and complementary objective")
     s=nrep(s,'LS="20 40 80"','LS="12 20 40 80"',2,"Coveo high-recall frontier")
-    s=nrep(s,'(20|40|80|160|320|640)','(12|20|40|80)',1,
+    s=nrep(s,'(20|40|80|160|320|640)','(12|20|40|80)',2,
            "native summary regex")
     s=once(s,
        '"$ART/starling-rep$rep-$mode-summary.txt")" -ge 3',
