@@ -1,0 +1,64 @@
+name: Original Starling BigANN10M exact-PQ Core optimization
+
+on:
+  push:
+    branches: [experiment/starling-fast-bigann10m]
+    paths:
+      - '.github/workflows/starling-fast-bigann10m.yml'
+      - 'scripts/patch_starling_fast_bigann.py'
+      - 'scripts/generate_starling_fast_bigann.py'
+      - 'scripts/summarize_starling_fast_bigann.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-starling-fast-bigann10m
+  cancel-in-progress: false
+
+jobs:
+  native-bigann:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 1440
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Preflight pinned original-Starling 10M index and exact route contract
+        shell: bash
+        run: |
+          python3 -m py_compile \
+            scripts/patch_starling_recent_hints.py \
+            scripts/patch_starling_native_junctions.py \
+            scripts/patch_starling_entry_diagnostics.py \
+            scripts/patch_starling_selective_diverse.py \
+            scripts/patch_starling_fast_core.py \
+            scripts/patch_starling_fast_bigann.py \
+            scripts/generate_starling_entry_diagnostic.py \
+            scripts/generate_starling_selective_diverse.py \
+            scripts/generate_starling_fast_bigann.py \
+            scripts/summarize_starling_fast_core.py \
+            scripts/summarize_starling_fast_bigann.py
+          python3 scripts/generate_starling_fast_bigann.py
+          test -s "$HOME/.cache/geoivf/public-eval/bigann-10M/data/dataset.manifest.json"
+          df -h "$RUNNER_TEMP"
+      - name: Pinned native Starling BigANN-10M, original vs fast PQ Core
+        shell: bash
+        run: python3 scripts/generate_starling_fast_bigann.py --run
+      - name: Preserve source diff, recall sweep, per-query route matching and CPU data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: starling-fast-bigann10m
+          path: artifacts/starling-fast-bigann10m/
+          retention-days: 30
+      - name: Clean only isolated native source and scratch for this run
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/starling-fast-bigann10m-$GITHUB_RUN_ID"
