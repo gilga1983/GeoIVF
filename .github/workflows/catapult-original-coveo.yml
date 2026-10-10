@@ -43,7 +43,7 @@ jobs:
           bash -n scripts/run_catapult_original_coveo_ci.sh
           test -s "$HOME/.cache/geoivf/coveo-real-demand-v1/split/dataset.manifest.json"
           test -s "$HOME/.cache/geoivf/coveo-real-demand-v1/split/replay.gt"
-          command -v rustup
+          command -v curl
           command -v cmake
           df -h "$RUNNER_TEMP"
       - name: Build original authors source and compare vanilla to real Catapult
