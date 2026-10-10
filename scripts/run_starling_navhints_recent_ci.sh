@@ -338,7 +338,7 @@ for rep in 0 1 2; do
       1) order=(recent512 baseline random512) ;;
       2) order=(random512 recent512 baseline) ;;
     esac
-    for mode in "\${order[@]}"; do
+    for mode in "${order[@]}"; do
         echo "STARLING_HINT_EXPERIMENT rep=$rep mode=$mode begin=$(date -Is)"
         (cd "$source_dir/scripts" && STARLING_NAVHINTS_EVAL="$mode" bash run_benchmark.sh release search knn) \
             >"$ART/starling-rep$rep-$mode-execution.log" 2>&1
