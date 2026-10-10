@@ -19,6 +19,14 @@ git clone --filter=blob:none https://github.com/MRandl/catapult-db.git "$WORK/ca
 git -C "$WORK/catapult-db" checkout --detach "$AUTHOR"
 test "$(git -C "$WORK/catapult-db" rev-parse HEAD)" = "$AUTHOR"
 printf '%s\n' "$AUTHOR" > "$ART/author-original-sha.txt"
+export RUSTUP_HOME="$HOME/.cache/geoivf/catapult-authors-rustup"
+export CARGO_HOME="$HOME/.cache/geoivf/catapult-authors-cargo"
+export PATH="$CARGO_HOME/bin:$PATH"
+mkdir -p "$RUSTUP_HOME" "$CARGO_HOME"
+if ! command -v rustup >/dev/null 2>&1; then
+  curl -fsSL --retry 3 https://sh.rustup.rs -o "$WORK/rustup-init.sh"
+  sh "$WORK/rustup-init.sh" -y --profile minimal --no-modify-path --default-toolchain "$TOOLCHAIN"
+fi
 rustup toolchain install "$TOOLCHAIN" --profile minimal
 (
   cd "$WORK/catapult-db"
