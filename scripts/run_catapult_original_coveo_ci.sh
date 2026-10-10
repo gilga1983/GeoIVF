@@ -43,6 +43,14 @@ python3 scripts/verify_catapult_author_graph.py "$WORK/index/coveo-vamana" "$WOR
 
 mkdir -p "$WORK/rust/src/bin"
 cp scripts/catapult_original_coveo_eval.rs "$WORK/rust/src/bin/navhints_author_coveo_eval.rs"
+export RUSTUP_HOME="$HOME/.cache/geoivf/catapult-authors-rustup"
+export CARGO_HOME="$HOME/.cache/geoivf/catapult-authors-cargo"
+export PATH="$CARGO_HOME/bin:$PATH"
+mkdir -p "$RUSTUP_HOME" "$CARGO_HOME"
+if ! command -v rustup >/dev/null 2>&1; then
+  curl -fsSL --retry 3 https://sh.rustup.rs -o "$WORK/rustup-init.sh"
+  sh "$WORK/rustup-init.sh" -y --profile minimal --no-modify-path --default-toolchain "$TOOLCHAIN"
+fi
 rustup toolchain install "$TOOLCHAIN" --profile minimal
 (
  cd "$WORK/rust"
