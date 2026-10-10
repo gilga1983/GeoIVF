@@ -73,31 +73,32 @@ def align(root):
                         // lookup and optional static portal routing.
                         stats.total_execution_time_us = query_timer.elapsed().as_micros();
 
-                        if let (Some(c), Some((Some(bucket), _))) = (catapult.as_ref(), routed.as_ref()) {""",
-       """                        if let (Some(c), Some((Some(bucket), _))) = (catapult.as_ref(), routed.as_ref()) {""",
-       "remove early timing endpoint")
-    s=once(s,
-       """                        if let (Some(c), Some((Some(bucket), _))) = (catapult.as_ref(), routed.as_ref()) {
-                            if base_count > 0 {
-                                if let Err(e) = c.insert(*bucket, id_chunk[0]) {
-                                    eprintln!("Catapult update failed: {:?}", e);
-                                    has_any_search_failed.store(true, Ordering::Release);
+""",
+       "",
+       "remove early timing boundary without assuming frozen vs online replay")
+    # Original snapshot experiments wrap updates in if !catapult_freeze.
+    # Both frozen and online variants must use the same correct end timing.
+    if "                        if !catapult_freeze {" in s:
+        anchor='''                                        has_any_search_failed.store(true, Ordering::Release);
+                                    }
                                 }
                             }
                         }
-""",
-       """                        if let (Some(c), Some((Some(bucket), _))) = (catapult.as_ref(), routed.as_ref()) {
-                            if base_count > 0 {
-                                if let Err(e) = c.insert(*bucket, id_chunk[0]) {
-                                    eprintln!("Catapult update failed: {:?}", e);
-                                    has_any_search_failed.store(true, Ordering::Release);
+'''
+        s=once(s,anchor,anchor+
+            "                        // Include bucket lookup and conditional feedback in per-query timing.\n"
+            "                        stats.total_execution_time_us = query_timer.elapsed().as_micros();\n",
+            "time author-semantics snapshot online or frozen search")
+    else:
+        anchor='''                                    has_any_search_failed.store(true, Ordering::Release);
                                 }
                             }
                         }
-                        // The author's native search times bucket updates.
-                        stats.total_execution_time_us = query_timer.elapsed().as_micros();
-""",
-       "include Catapult feedback update in elapsed time")
+'''
+        s=once(s,anchor,anchor+
+            "                        // Include author bucket feedback in query time.\n"
+            "                        stats.total_execution_time_us = query_timer.elapsed().as_micros();\n",
+            "time author-semantics online search")
     p.write_text(s)
     print("CATAPULT_AUTHOR_SEMANTICS_ALIGNED "
           "StdNormal_f32=1 msb_bits=1 medoid_stored=1 "
