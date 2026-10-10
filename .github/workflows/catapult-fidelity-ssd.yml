@@ -1,0 +1,60 @@
+name: CatapultDB same-SSD source-fidelity sensitivity
+
+on:
+  push:
+    branches: [experiment/catapult-fidelity-audit]
+    paths:
+      - '.github/workflows/catapult-fidelity-ssd.yml'
+      - 'scripts/qualify_catapult_fidelity_ssd.py'
+      - 'scripts/run_catapult_fidelity_ssd_ci.sh'
+      - 'scripts/align_catapult_author_semantics.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-catapult-fidelity-ssd
+  cancel-in-progress: false
+
+jobs:
+  original-vs-author-aligned-port:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      CARGO_BUILD_JOBS: '4'
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      RUSTFLAGS: '-C target-cpu=native'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify frozen MedRAG-Zipf PubMed1M graph, native GT and audit programs
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile \
+            scripts/qualify_catapult_fidelity_ssd.py \
+            scripts/align_catapult_author_semantics.py \
+            scripts/patch_diskann_catapult_snapshot.py
+          bash -n scripts/run_catapult_fidelity_ssd_ci.sh
+          test -s "$HOME/.cache/geoivf/medrag-zipf-qwen3b-v1/medrag-zipf-10k-medcpt.fbin"
+          test -s "$HOME/.cache/geoivf/medrag-zipf-qwen3b-v1/heldout5000-pubmed1m-top16-ip.gt"
+          test -d "$HOME/.cache/geoivf/catapult-paper-pubmed1m-index-v1"
+      - name: Author-aligned CatapultDB versus original reproduction on same SSD index
+        shell: bash
+        run: bash scripts/run_catapult_fidelity_ssd_ci.sh
+      - name: Archive frozen same-index and recall-qualified audit metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catapult-fidelity-ssd
+          path: artifacts/catapult-fidelity-ssd/
+          retention-days: 30
+      - name: Clean only this test's isolated binaries and snapshots
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/catapult-fidelity-ssd-$GITHUB_RUN_ID"
