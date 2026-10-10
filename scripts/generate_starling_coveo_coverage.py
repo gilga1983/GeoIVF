@@ -130,6 +130,10 @@ cp "$DATA/coveo-native.manifest.json" "$ART/"'''
        '"$ART/starling-rep$rep-$mode-summary.txt")" -ge 3',
        '"$ART/starling-rep$rep-$mode-summary.txt")" -ge 4',
        "four native recall search widths")
+    s=once(s,
+       'STARLING_NAVHINTS_PROTOCOL mode=$mode warmup=4000 measured=1000',
+       'STARLING_NAVHINTS_PROTOCOL mode=$mode warmup=20000 measured=5000',
+       "validate the actual full 20K/5K chronological protocol")
     # Any unused Gorgeous launcher is never invoked. This experiment uses
     # only the original Starling index; it does not pretend to compare systems.
     oldsplit='python3 - "$SRC" "$DATA" <<\'PY_NATIVE_SPLIT\'\n'
