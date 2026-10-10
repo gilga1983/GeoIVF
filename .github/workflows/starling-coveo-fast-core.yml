@@ -1,0 +1,65 @@
+name: Starling Coveo optimized Core (identical decisions)
+
+on:
+  push:
+    branches: [experiment/starling-coveo-fast-core]
+    paths:
+      - '.github/workflows/starling-coveo-fast-core.yml'
+      - 'scripts/patch_starling_fast_core.py'
+      - 'scripts/generate_starling_coveo_fast_core.py'
+      - 'scripts/summarize_starling_fast_core.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-starling-coveo-fast-core
+  cancel-in-progress: false
+
+jobs:
+  native-fast-core:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 1440
+    env:
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '1'
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check exact-mode contract, patch syntax, frozen Coveo and self-hosted disk
+        shell: bash
+        run: |
+          python3 -m py_compile \
+            scripts/patch_starling_recent_hints.py \
+            scripts/patch_starling_native_junctions.py \
+            scripts/patch_starling_entry_diagnostics.py \
+            scripts/patch_starling_selective_diverse.py \
+            scripts/patch_starling_coveo_coverage.py \
+            scripts/patch_starling_fast_core.py \
+            scripts/generate_starling_entry_diagnostic.py \
+            scripts/generate_starling_selective_diverse.py \
+            scripts/generate_starling_coveo_coverage.py \
+            scripts/generate_starling_coveo_fast_core.py \
+            scripts/summarize_starling_fast_core.py
+          python3 scripts/generate_starling_coveo_fast_core.py
+          test -s "$HOME/.cache/geoivf/coveo-real-demand-v1/split/dataset.manifest.json"
+          test -s "$HOME/.cache/geoivf/coveo-real-demand-v1/split/replay.gt"
+          df -h "$RUNNER_TEMP"
+      - name: Original native Starling vs packed PQ, matched original Coveo chronology
+        shell: bash
+        run: python3 scripts/generate_starling_coveo_fast_core.py --run
+      - name: Archive exact per-query route validation and runtime breakdown
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: starling-coveo-fast-core
+          path: artifacts/starling-coveo-fast-core/
+          retention-days: 30
+      - name: Clean only this run temporary native source and index
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/starling-coveo-fast-core-$GITHUB_RUN_ID"
