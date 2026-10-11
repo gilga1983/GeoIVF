@@ -1,0 +1,62 @@
+name: NavHints vs author-aligned CatapultDB (same SSD)
+
+on:
+  push:
+    branches: [experiment/catapult-author-headtohead-20261011]
+    paths:
+      - ".github/workflows/navhints-catapult-author-headtohead.yml"
+      - "scripts/patch_catapult_author_causal_eval.py"
+      - "scripts/qualify_navhints_catapult_headtohead.py"
+      - "scripts/run_navhints_catapult_author_headtohead_ci.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-navhints-catapult-author-headtohead
+  cancel-in-progress: false
+
+jobs:
+  matched-recall-head-to-head:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      RUSTFLAGS: "-C target-cpu=native"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate source, data requirements, and strict causal patches
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile \
+            scripts/patch_catapult_author_causal_eval.py \
+            scripts/qualify_navhints_catapult_headtohead.py \
+            scripts/patch_diskann_catapult_snapshot.py \
+            scripts/align_catapult_author_semantics.py \
+            scripts/patch_diskann_hint_ivf_packed_direct.py \
+            scripts/patch_diskann_experience_core.py
+          bash -n scripts/run_navhints_catapult_author_headtohead_ci.sh
+          grep -F "CATAPULT_CAUSAL_REPLAY_PATCH_APPLIED" scripts/patch_catapult_author_causal_eval.py
+          grep -F "EXPERIENCE_HUB_CAPACITY" scripts/qualify_navhints_catapult_headtohead.py
+      - name: Compare author-aligned Catapult to RAM-only Core at matched recall
+        shell: bash
+        run: bash scripts/run_navhints_catapult_author_headtohead_ci.sh
+      - name: Archive proof, source diffs, measured points and partial checkpoints
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navhints-catapult-author-headtohead
+          path: artifacts/navhints-catapult-author-headtohead/
+          retention-days: 14
+      - name: Remove only temporary checkout and query replay files
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/navhints-catapult-author-$GITHUB_RUN_ID"
