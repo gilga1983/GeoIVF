@@ -54,6 +54,10 @@ def slice_gt(src,dst,start,count):
     if start<0 or count<=0 or start+count>rows: raise ValueError("bad GT slice")
     row_bytes=k*4
     ids_bytes=rows*row_bytes
+    measured=src.stat().st_size
+    has_distances=(measured==8+2*ids_bytes)
+    if measured not in (8+ids_bytes,8+2*ids_bytes):
+        raise ValueError(f"unsupported GT byte count: {measured} for rows={rows} k={k}")
     with src.open("rb") as fi,dst.open("wb") as fo:
         fo.write(struct.pack("<II",count,k))
         fi.seek(8+start*row_bytes)
@@ -62,12 +66,13 @@ def slice_gt(src,dst,start,count):
             b=fi.read(min(8<<20,rem))
             if not b: raise ValueError("truncated GT ids")
             fo.write(b); rem-=len(b)
-        fi.seek(8+ids_bytes+start*row_bytes)
-        rem=count*row_bytes
-        while rem:
-            b=fi.read(min(8<<20,rem))
-            if not b: raise ValueError("truncated GT distances")
-            fo.write(b); rem-=len(b)
+        if has_distances:
+            fi.seek(8+ids_bytes+start*row_bytes)
+            rem=count*row_bytes
+            while rem:
+                b=fi.read(min(8<<20,rem))
+                if not b: raise ValueError("truncated GT distances")
+                fo.write(b); rem-=len(b)
 
 def result_rows(o):
     out=[]
