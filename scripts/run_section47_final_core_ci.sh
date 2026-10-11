@@ -110,7 +110,7 @@ for flavor in core cache qsev;do
   cache) "$PYC" scripts/patch_diskann_hot_cache.py "$DIR";;
   qsev) "$PYC" scripts/patch_diskann_qsev.py "$DIR";;
  esac
- (cd "$DIR";cargo +1.97.1 fmt --all;git diff --check;cargo +1.97.1 build --release --locked -p diskann-benchmark --features disk-index) > "$ART/build-$flavor.log" 2>&1
+ (cd "$DIR";git diff --check;cargo +1.97.1 build --release --locked -p diskann-benchmark --features disk-index) > "$ART/build-$flavor.log" 2>&1
 done
 ARGS=(--dataset "$DATASET" --index-prefix "$INDEX" --queries "$QUERIES" --gt "$GT" --ivf "$IVF" --core-binary "$WORK/diskann-core/target/release/diskann-benchmark" --cache-binary "$WORK/diskann-cache/target/release/diskann-benchmark" --hot-dir "$WORK/hot" --out "$ART/results" --data-type "$DTYPE" --metric "$METRIC" --reps 3)
 if [[ "$DATASET" == pubmed ]];then ARGS+=(--qsev-binary "$WORK/diskann-qsev/target/release/diskann-benchmark" --qsev-dir "$WORK");fi
