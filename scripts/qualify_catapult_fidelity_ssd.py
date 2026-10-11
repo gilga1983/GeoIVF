@@ -21,11 +21,11 @@ from qualify_frozen_catapult_heldout import (
 import subprocess
 
 K=10
-WIDTHS=(20,40,80)
+WIDTHS=(20,40,80,160,320)
 SEEDS=(0,1,2)
 BEAM=8
 HASHES=8
-CAP=40
+CAP=80
 
 
 def cfg(queries, gt, index, width, threads):
@@ -175,8 +175,8 @@ def main():
         "dataset":"PubMed1M / MedRAG-Zipf first 5K train, next 5K eval",
         "description":"Author-aligned versus legacy Catapult, identical SSD graph/IO/PQ, and original author's LRU structure, seeds (0,1,2)",
         "source_kind":"adaptations running in pinned Microsoft DiskANN, NOT author's native in-memory system",
-        "same_auxiliary_ID_budget":"256 buckets × 40 slots × 4B = 40,960B (excluding hash projections, locks, allocator metadata)",
-        "search":"Recall@10, L=20/40/80, beam=8, 1-thread causal training, 4-thread frozen evaluation",
+        "same_auxiliary_ID_budget":"256 buckets × 80 slots × 4B = 81,920B plus 24,576B hyperplanes = 106,496B, close to 102,940B NavHints Core (both before container metadata)",
+        "search":"Recall@10, L=20/40/80/160/320, beam=8, 1-thread causal training, 4-thread frozen evaluation",
         "changes":"StdNormal/MSB hash seed parity; medoid admission to LRU; include update in query latency",
         "limitations":"Frozen eval omits updates by design; exact author library uses an in-memory graph, not this SSD",
         "summary":summary,
