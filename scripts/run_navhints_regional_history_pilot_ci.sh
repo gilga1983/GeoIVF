@@ -2,8 +2,8 @@
 # Controlled, source-audited, same-SSD, online-causal NavHints/Core vs CatapultDB.
 # IMPORTANT: all evaluation is on a self-hosted runner; locks serialize SSD.
 set -euxo pipefail
-ART="$PWD/artifacts/navhints-regional-history-pilot"
-WORK="$RUNNER_TEMP/navhints-regional-history-$GITHUB_RUN_ID"
+ART="$PWD/artifacts/navhints-regional-factorial"
+WORK="$RUNNER_TEMP/navhints-regional-factorial-$GITHUB_RUN_ID"
 ROOT="$HOME/.cache/geoivf"
 LOCK="$ROOT/speed-device.lock"
 REV="fcf90534174cf29c78c9f13b4cccf1fcabff85f5"
@@ -86,5 +86,5 @@ sha256sum "$NAV_BIN" > "$ART/binaries-sha256.txt"
   --index-prefix "$INDEX" --ivf "$IVF" \
   --work "$WORK/replay" --out "$ART/results" \
   > "$ART/evaluation.log" 2>&1
-grep "NAVHINTS_REGIONAL_HISTORY_PILOT_COMPLETE" "$ART/evaluation.log"
-echo "NAVHINTS_REGIONAL_HISTORY_PILOT_VALIDATED" | tee "$ART/status.txt"
+grep "NAVHINTS_REGIONAL_HISTORY_FACTORIAL_COMPLETE" "$ART/evaluation.log"
+echo "NAVHINTS_REGIONAL_HISTORY_FACTORIAL_VALIDATED" | tee "$ART/status.txt"
