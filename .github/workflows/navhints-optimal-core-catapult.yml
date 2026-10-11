@@ -1,0 +1,60 @@
+name: NavHints optimal equal-RAM Core vs CatapultDB
+
+on:
+  push:
+    branches: [experiment/navhints-optimal-core-vs-catapult-20261011]
+    paths:
+      - ".github/workflows/navhints-optimal-core-catapult.yml"
+      - "scripts/qualify_optimal_navhints_catapult.py"
+      - "scripts/run_navhints_optimal_vs_catapult_ci.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-optimal-navhints-catapult
+  cancel-in-progress: false
+
+jobs:
+  same-ssd-headtohead:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      RUSTFLAGS: "-C target-cpu=native"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify match-recall original-versus-reallocated benchmark inputs
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile \
+            scripts/qualify_optimal_navhints_catapult.py \
+            scripts/qualify_navhints_catapult_headtohead.py \
+            scripts/patch_navhints_regional_history.py \
+            scripts/align_catapult_author_semantics.py \
+            scripts/patch_catapult_author_causal_eval.py
+          bash -n scripts/run_navhints_optimal_vs_catapult_ci.sh
+          grep -F 'PAYLOAD_BYTES=102940' scripts/qualify_optimal_navhints_catapult.py
+          grep -F '"core_reallocated": {"junctions":14464,"cache":2048,"starts":8}' scripts/qualify_optimal_navhints_catapult.py
+      - name: Measure original Core, reallocated Core and author-aligned Catapult
+        shell: bash
+        run: bash scripts/run_navhints_optimal_vs_catapult_ci.sh
+      - name: Archive source provenance, per-seed recall/frontier and raw results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navhints-optimal-core-vs-catapult
+          path: artifacts/navhints-optimal-core-vs-catapult/
+          retention-days: 14
+      - name: Clean temporary data and code only
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/navhints-optimal-core-catapult-$GITHUB_RUN_ID"
