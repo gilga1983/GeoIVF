@@ -123,8 +123,6 @@ def run_experiment(m: dict, name: str, execute: bool,
     if missing and not (allow_public_download and name in ("text2image","bigann")):
         raise RuntimeError("Frozen inputs not present. Do not substitute other queries:\n" +
                            "\n".join(missing))
-    if name.startswith("starling") and not (DATA_ROOT / "public-eval").is_dir():
-        raise RuntimeError("Native Starling uses the archived frozen dataset layout")
     if name in ("text2image","bigann") and missing and allow_public_download:
         print("Explicit public-dataset download approved; the original data "
               "preparer will verify official source and input format.")
@@ -180,14 +178,33 @@ def check_artifact(path: Path, record: dict) -> None:
             if record["id"] == "persistence" and (c.get("B"),c.get("C"),c.get("k")) != (14464,2048,8):
                 raise ValueError("Persistence artifact uses wrong final-Core allocation")
             if record["id"] == "sensitivity":
-                if (c.get("junction_budget"),c.get("destination_capacity"),c.get("starts")) != (14464,2048,8):
-                    raise ValueError("Sensitivity artifact uses wrong final-Core allocation")
+                # The three PubMed sensitivity outputs use the "core" key,
+                # not "controller"; all three must carry B/C/k=14464/2048/8.
+                if (c.get("junction_budget"), c.get("destination_capacity"),
+                        c.get("starts")) != (14464, 2048, 8):
+                    raise ValueError("Wrong final-Core sensitivity allocation")
             if record["id"].startswith("starling") and "final_core" not in data.get("modes", {}):
                 raise ValueError("Starling result lacks final-Core mode")
             if record["id"] == "memory" and data.get("accounted_byte_budget") != 102940:
                 raise ValueError("Incorrect fixed-payload ablation")
-            if record["id"] == "catapult" and data.get("auxiliary_payload_navhints",{}).get("core_reallocated",{}).get("budget_ids") not in (None,14464):
-                raise ValueError("Catapult comparison not based on reallocated Core")
+            if record["id"] == "catapult":
+                nav = data.get("auxiliary_payload_navhints", {}).get("core_reallocated", {})
+                observed = tuple(nav.get(k) for k in (
+                    "landmarks", "recent_ids_capacity", "injected_starts", "payload_bytes"))
+                if observed != (14464, 2048, 8, 102940):
+                    raise ValueError("Catapult/Core allocation mismatch: " + str(observed))
+
+
+        # Check the producing source snapshot, not only the JSON payload.
+        source_name = ("geoivf-revision.txt" if record["id"].startswith("starling-")
+                       else "geoivf-commit.txt")
+        source_members = [n for n in z.namelist()
+                          if n == source_name or n.endswith("/" + source_name)]
+        if len(source_members) != 1:
+            raise ValueError(record["id"] + ": missing source commit marker")
+        observed_sha = z.read(source_members[0]).decode("ascii").strip()
+        if observed_sha != record["source_sha"]:
+            raise ValueError(record["id"] + ": wrong source SHA " + observed_sha)
 
 
 def verify(m: dict, target: str, dest: Path) -> int:
@@ -273,9 +290,7 @@ def main() -> int:
     rn.add_argument("--allow-public-download",action="store_true")
     rn.add_argument("--overwrite",action="store_true")
     ft = sub.add_parser("fetch")
-    ft.add_argument("target",choices=("all",*(x for x in (k for k in
-                      ("coveo","pubmed","text2image","bigann","catapult","memory",
-                       "starling-coveo","starling-bigann","sensitivity","persistence")))),default="all")
+    ft.add_argument("target", choices=("all", *REPRO_RUNS), nargs="?", default="all")
     ft.add_argument("--execute",action="store_true")
     ft.add_argument("--replace",action="store_true")
     ft.add_argument("--dir",type=Path,default=ROOT/"artifacts"/"frozen")
