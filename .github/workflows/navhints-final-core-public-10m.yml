@@ -1,0 +1,63 @@
+name: Final NavHints Core on Text2Image and BigANN 10M
+
+on:
+  push:
+    branches: [experiment/navhints-final-core-multidata-20261011]
+    paths:
+      - ".github/workflows/navhints-final-core-public-10m.yml"
+      - "scripts/qualify_final_core_public.py"
+      - "scripts/run_final_core_public_one.sh"
+      - "scripts/patch_navhints_regional_history.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-final-core-public-10m
+  cancel-in-progress: false
+
+jobs:
+  public-final-core:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        dataset: [text2image-10M, bigann-10M]
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      RUSTFLAGS: "-C target-cpu=native"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate final B14464 C2048 k8 causal replay
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile scripts/qualify_final_core_public.py scripts/patch_navhints_regional_history.py
+          bash -n scripts/run_final_core_public_one.sh
+          grep -F 'DISKANN_LOCAL_RECENT_STARTS' scripts/qualify_final_core_public.py
+          grep -F -- '--budget 14464' scripts/run_final_core_public_one.sh
+      - name: Evaluate final Core and Sample2 versus same frozen DiskANN
+        shell: bash
+        run: |
+          mkdir -p "artifacts/final-core-public-10m/${{ matrix.dataset }}"
+          bash scripts/run_final_core_public_one.sh "${{ matrix.dataset }}" "artifacts/final-core-public-10m/${{ matrix.dataset }}"
+      - name: Archive source, cache-state hashes, causal results and write counts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "final-core-${{ matrix.dataset }}"
+          path: "artifacts/final-core-public-10m/${{ matrix.dataset }}/"
+          retention-days: 14
+      - name: Remove only isolated temporary dataset build
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/final-core-${{ matrix.dataset }}-$GITHUB_RUN_ID"
