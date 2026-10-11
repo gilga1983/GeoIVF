@@ -126,7 +126,9 @@ def patch(path: Path) -> None:
             &gt_context,
         )?;
 '''
-    new = '''        let mut search_result = if catapult_causal_replay {
+    # Zero-warmup offline training intentionally omits recall/GT. Run causal
+    # query updates, but leave DiskSearchResult its original GT-free sentinel.
+    new = '''        let mut search_result = if catapult_causal_replay && catapult_causal_warmup > 0 {
             let from = catapult_causal_warmup;
             let result_offset = from * search_params.recall_at as usize;
             let gt_suffix = catapult_slice_ground_truth_context(&gt_context, from)?;
