@@ -11,7 +11,7 @@ permissions:
   contents: read
 concurrency:
   group: section47-final-core-memory
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   check-source:
     runs-on: [self-hosted, linux, x64, geoivf]
@@ -20,6 +20,8 @@ jobs:
       - name: Validate runner
         run: |
           python3 -m py_compile scripts/qualify_section47_final_core.py
+          python3 -m py_compile scripts/patch_diskann_start_points.py scripts/patch_diskann_waypoint_cache.py scripts/patch_diskann_global_starts.py scripts/patch_diskann_hint_ivf_packed_direct.py scripts/patch_diskann_experience_core.py scripts/patch_navhints_regional_history.py scripts/patch_diskann_qsev.py scripts/patch_diskann_hot_cache.py
+          PYTHONPATH=scripts python3 -c "import patch_diskann_hint_ivf_packed_direct, patch_diskann_experience_core, patch_navhints_regional_history, patch_diskann_qsev"
           bash -n scripts/run_section47_final_core_ci.sh
   final-core-pubmed:
     needs: check-source
