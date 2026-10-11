@@ -1,0 +1,60 @@
+name: NavHints regional destination-history pilot
+
+on:
+  push:
+    branches: [experiment/navhints-regional-history-20261011]
+    paths:
+      - ".github/workflows/navhints-regional-history-pilot.yml"
+      - "scripts/patch_navhints_regional_history.py"
+      - "scripts/qualify_navhints_regional_history_pilot.py"
+      - "scripts/qualify_navhints_catapult_headtohead.py"
+      - "scripts/run_navhints_regional_history_pilot_ci.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: navhints-regional-history-pilot
+  cancel-in-progress: false
+
+jobs:
+  same-ssd-causal-locality-pilot:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      RUSTFLAGS: "-C target-cpu=native"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate strict locality patch and input harness
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile \
+            scripts/patch_navhints_regional_history.py \
+            scripts/qualify_navhints_regional_history_pilot.py \
+            scripts/qualify_navhints_catapult_headtohead.py
+          bash -n scripts/run_navhints_regional_history_pilot_ci.sh
+          grep -F 'NAVHINTS_LOCAL_HISTORY_PROVIDER_PATCH_PASS' scripts/patch_navhints_regional_history.py
+          grep -F 'EXPERIENCE_HUB_CAPACITY' scripts/qualify_navhints_regional_history_pilot.py
+      - name: Compare global FIFO, global LRU and adaptive region LRU
+        shell: bash
+        run: bash scripts/run_navhints_regional_history_pilot_ci.sh
+      - name: Archive raw recall/read evidence, source patch and partial results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navhints-regional-history-pilot
+          path: artifacts/navhints-regional-history-pilot/
+          retention-days: 10
+      - name: Remove isolated source and query slices
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/navhints-regional-history-$GITHUB_RUN_ID"
