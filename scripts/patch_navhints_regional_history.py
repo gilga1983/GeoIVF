@@ -179,8 +179,12 @@ def patch_benchmark(path):
             // For regional LRU, maintain winners per coarse cell.
             // The global item budget adapts to observed regional demand.
             let region_mode = local_history_mode == "region_lru";
-            let mut history = vec![Vec::<(u32, usize)>::new(); index.medoid_ids.len()];
-            let mut history_view = vec![Vec::<u32>::new(); index.medoid_ids.len()];
+            let mut history = if region_mode {
+                vec![Vec::<(u32, usize)>::new(); index.medoid_ids.len()]
+            } else { Vec::new() };
+            let mut history_view = if region_mode {
+                vec![Vec::<u32>::new(); index.medoid_ids.len()]
+            } else { Vec::new() };
             let mut history_size = 0usize;
 """,
         "create query-conditioned destination histories")
