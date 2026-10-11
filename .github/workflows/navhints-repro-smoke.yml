@@ -1,0 +1,77 @@
+name: NavHints reproduction contract smoke
+
+on:
+  push:
+    branches:
+      - integrate/navhints-reproducible-main-20261011
+      - main
+    paths:
+      - "repro/**"
+      - "docs/IMPLEMENTATION.md"
+      - "docs/REPRODUCIBILITY.md"
+      - "docs/EXPERIMENTS.md"
+      - "tests/test_navhints_repro.py"
+      - "scripts/*final_core*"
+      - "scripts/*navhints*"
+      - ".github/workflows/navhints-repro-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: navhints-repro-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  static-contract:
+    if: github.repository == 'gilga1983/GeoIVF'
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 15
+    env:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate final-Core scripts without loading datasets or SSD
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p artifacts/navhints-repro-smoke
+          python3 -m compileall -q repro
+          python3 -m py_compile \
+            scripts/qualify_final_core_coveo.py \
+            scripts/qualify_final_core_public.py \
+            scripts/qualify_final_core_warmup.py \
+            scripts/qualify_final_core_locality.py \
+            scripts/qualify_final_core_shift.py \
+            scripts/qualify_final_core_write_sweep.py \
+            scripts/qualify_optimal_navhints_catapult.py \
+            scripts/patch_diskann_hint_ivf_packed_direct.py \
+            scripts/patch_diskann_experience_core.py \
+            scripts/patch_navhints_regional_history.py \
+            scripts/patch_starling_final_core.py \
+            scripts/generate_starling_final_core.py \
+            scripts/summarize_starling_final_core.py
+          for file in repro/activate.sh scripts/run_final_core_*.sh \
+                      scripts/run_navhints_*.sh; do
+            bash -n "$file"
+          done
+          python3 -m unittest discover -s tests -p 'test_navhints_repro.py' -v \
+              2>&1 | tee artifacts/navhints-repro-smoke/unittests.log
+          python3 repro/run.py list > artifacts/navhints-repro-smoke/available.txt
+          python3 repro/run.py run pubmed > artifacts/navhints-repro-smoke/dryrun.txt
+          python3 repro/run.py fetch all > artifacts/navhints-repro-smoke/fetch-preview.txt
+          python3 repro/run.py paper > artifacts/navhints-repro-smoke/paper-preview.txt
+          git rev-parse HEAD > artifacts/navhints-repro-smoke/source-sha.txt
+          git archive --format=zip --output=artifacts/navhints-repro-smoke/source.zip HEAD
+      - name: Preserve static test evidence and exact source archive
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navhints-repro-contract-${{ github.run_id }}
+          path: artifacts/navhints-repro-smoke/
+          retention-days: 14
