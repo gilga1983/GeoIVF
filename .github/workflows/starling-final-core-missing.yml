@@ -1,0 +1,62 @@
+name: First-time native Starling Table 9 missing datasets
+# This workflow exists only to qualify PubMed and Text2Image; it never
+# regenerates archived native Coveo or native BigANN comparisons.
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/starling-final-core-missing.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: starling-first-time-pubmed-t2image
+  cancel-in-progress: false
+jobs:
+  source-check:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify native float MIPS source generation
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile scripts/generate_starling_final_core_missing.py scripts/summarize_starling_final_core_missing.py
+          python3 scripts/generate_starling_final_core_missing.py pubmed
+          python3 scripts/generate_starling_final_core_missing.py text2image
+          bash -n scripts/run_starling_final_core_pubmed.generated.sh
+          bash -n scripts/run_starling_final_core_text2image.generated.sh
+          grep -F 'DIST_FN=mips' scripts/run_starling_final_core_pubmed.generated.sh
+          grep -F 'DIST_FN=mips' scripts/run_starling_final_core_text2image.generated.sh
+  first-time-native:
+    needs: source-check
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 1440
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        dataset: [pubmed, text2image]
+    env:
+      OMP_NUM_THREADS: "4"
+      OPENBLAS_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "1"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: First-time original-native Starling selected Core comparison
+        shell: bash
+        run: python3 scripts/generate_starling_final_core_missing.py "${{ matrix.dataset }}" --run
+      - name: Preserve native Starling raw I/O, latency and source audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-starling-table9-${{ matrix.dataset }}
+          path: artifacts/starling-final-core-${{ matrix.dataset }}/
+          retention-days: 14
+      - name: Remove only temporary native index
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/starling-final-core-${{ matrix.dataset }}-$GITHUB_RUN_ID"
