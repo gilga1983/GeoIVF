@@ -21,10 +21,10 @@ The offline collector records ordinary search traversals from **5,000 disjoint t
 
 Important code:
 
-- \`scripts/patch_diskann_waypoint_trace.py\` and \`scripts/collect_navigation_trace_generic.py\`: read-only traversal tracing for public workloads.
-- \`scripts/learn_global_navigation_landmarks.py\`, \`scripts/learn_navhints_generic.py\`: score and select eligible training junctions.
-- \`scripts/build_hint_ivf.py\`, \`scripts/build_hint_ivf_generic.py\`: 512-region routing directory (PubMed and generic workload formats).
-- \`scripts/patch_diskann_hint_ivf_packed_direct.py\`: optimized PQ-entry selection on pinned Microsoft DiskANN.
+- `scripts/patch_diskann_waypoint_trace.py` and `scripts/collect_navigation_trace_generic.py`: read-only traversal tracing for public workloads.
+- `scripts/learn_global_navigation_landmarks.py`, `scripts/learn_navhints_generic.py`: score and select eligible training junctions.
+- `scripts/build_hint_ivf.py`, `scripts/build_hint_ivf_generic.py`: 512-region routing directory (PubMed and generic workload formats).
+- `scripts/patch_diskann_hint_ivf_packed_direct.py`: optimized PQ-entry selection on pinned Microsoft DiskANN.
 
 ### Online RAM-only Core
 
@@ -34,9 +34,9 @@ After completion, insert the top-1 result in the FIFO history if unseen, evictin
 
 Important code:
 
-- \`scripts/patch_diskann_experience_core.py\`: causal recent destinations and optional junction persistence.
-- \`scripts/patch_navhints_regional_history.py\`: final global FIFO destination provider, explicitly configured with \`DISKANN_LOCAL_CACHE_MODE=fifo\` and \`DISKANN_LOCAL_RECENT_STARTS=8\`.
-- \`scripts/qualify_final_core_public.py\` / \`scripts/qualify_final_core_coveo.py\`: four-arm online request replay and invariant checks.
+- `scripts/patch_diskann_experience_core.py`: causal recent destinations and optional junction persistence.
+- `scripts/patch_navhints_regional_history.py`: final global FIFO destination provider, explicitly configured with `DISKANN_LOCAL_CACHE_MODE=fifo` and `DISKANN_LOCAL_RECENT_STARTS=8`.
+- `scripts/qualify_final_core_public.py` / `scripts/qualify_final_core_coveo.py`: four-arm online request replay and invariant checks.
 
 **Do not infer a new storage-memory cache from the eight starting points.** All starts reuse PQ representations that the original DiskANN instance already keeps in RAM. The selected 102,940-byte PubMed figure accounts for ID/group/PQ-representative payload and excludes hash-table allocator, scratch and other process memory. See equal-payload evidence from [run #38120556463](https://github.com/gilga1983/GeoIVF/actions/runs/38120556463).
 
@@ -48,15 +48,15 @@ The [selected-Core PubMed write sweep](https://github.com/gilga1983/GeoIVF/actio
 
 ### External methods
 
-**CatapultDB:** the author source uses Gaussian random hyperplanes and per-bucket LRU winner histories. The adapter checks source fidelity and executes its routing mechanism in the same pinned **DiskANN SSD engine**. It is not a comparison against the author's original complete in-memory graph engine. Code: \`patch_diskann_catapult_snapshot.py\`, \`align_catapult_author_semantics.py\`, \`patch_catapult_author_causal_eval.py\`, \`qualify_optimal_navhints_catapult.py\` and \`audit_catapult_source_parity.py\`.
+**CatapultDB:** the author source uses Gaussian random hyperplanes and per-bucket LRU winner histories. The adapter checks source fidelity and executes its routing mechanism in the same pinned **DiskANN SSD engine**. It is not a comparison against the author's original complete in-memory graph engine. Code: `patch_diskann_catapult_snapshot.py`, `align_catapult_author_semantics.py`, `patch_catapult_author_causal_eval.py`, `qualify_optimal_navhints_catapult.py` and `audit_catapult_source_parity.py`.
 
-**Starling:** the original \`zilliztech/starling\` index, graph-page layout, native search algorithm, memory navigator and SSD page accounting are retained. The final-core patch adds only PQ-scored routing starts and causal history; it also trains a directory from Starling's **own disjoint training traversals**. Code: \`patch_starling_final_core.py\`, \`generate_starling_final_core.py\`, \`summarize_starling_final_core.py\`; their historical source-patching prerequisites are preserved. Full native results on Coveo and BigANN are recorded separately; BigANN's native gains are close to zero.
+**Starling:** the original `zilliztech/starling` index, graph-page layout, native search algorithm, memory navigator and SSD page accounting are retained. The final-core patch adds only PQ-scored routing starts and causal history; it also trains a directory from Starling's **own disjoint training traversals**. Code: `patch_starling_final_core.py`, `generate_starling_final_core.py`, `summarize_starling_final_core.py`; their historical source-patching prerequisites are preserved. Full native results on Coveo and BigANN are recorded separately; BigANN's native gains are close to zero.
 
-**Caching/DiskANN++ controls:** \`prepare_diskannpp_qsev.py\`, \`patch_diskann_qsev.py\`, \`learn_hot_cache_ids.py\`, \`patch_diskann_hot_cache.py\` and the frozen competitor harness isolate specific navigation or record-caching mechanisms. They do not claim to reproduce the complete third-party indexing system.
+**Caching/DiskANN++ controls:** `prepare_diskannpp_qsev.py`, `patch_diskann_qsev.py`, `learn_hot_cache_ids.py`, `patch_diskann_hot_cache.py` and the frozen competitor harness isolate specific navigation or record-caching mechanisms. They do not claim to reproduce the complete third-party indexing system.
 
 ## Data flow
 
-\`\`\`text
+```text
 5K disjoint training requests
     -> ordinary graph traversal traces
     -> ranked junction IDs
@@ -73,6 +73,6 @@ Query q:
 Measured suffix:
     4K causal warmup / 1K measured (PubMed, Text2Image, BigANN)
     20K causal warmup / 5K measured (chronological Coveo)
-\`\`\`
+```
 
 All author-engine changes are made to isolated, pinned external checkouts by patch scripts and archived as diffs. No executable or output uses another experimental prototype silently. For commands, data prerequisites and artifact names see [REPRODUCIBILITY.md](REPRODUCIBILITY.md).
