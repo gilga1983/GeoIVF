@@ -1,0 +1,93 @@
+name: NavHints artifact-only paper reproduction
+
+on:
+  push:
+    branches:
+      - integrate/navhints-reproducible-main-20261011
+    paths:
+      - ".github/workflows/navhints-paper-artifact-reproduction.yml"
+      - "repro/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: navhints-paper-artifact-reproduction
+  cancel-in-progress: false
+
+jobs:
+  source-artifact-paper:
+    if: github.repository == 'gilga1983/GeoIVF'
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Fetch frozen paper source and check reproducibility prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/navhints-paper-repro
+          git clone --filter=blob:none --depth=1 \
+            https://github.com/gilga1983/DemmandAwareANN.git \
+            "$RUNNER_TEMP/navhints-paper-$GITHUB_RUN_ID"
+          git -C "$RUNNER_TEMP/navhints-paper-$GITHUB_RUN_ID" \
+            rev-parse HEAD > artifacts/navhints-paper-repro/paper-source-sha.txt
+          command -v gh
+          gh --version > artifacts/navhints-paper-repro/gh-version.txt
+          python3 repro/run.py list > artifacts/navhints-paper-repro/replay-catalog.txt
+      - name: Download and verify ten frozen successful NavHints artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 repro/run.py fetch all --execute \
+            > artifacts/navhints-paper-repro/fetch.log 2>&1
+          python3 repro/run.py verify all \
+            > artifacts/navhints-paper-repro/verify.log 2>&1
+      - name: Regenerate final-Core paper CSVs and test complete LaTeX
+        shell: bash
+        run: |
+          set -euo pipefail
+          PAPER="$RUNNER_TEMP/navhints-paper-$GITHUB_RUN_ID"
+          python3 repro/run.py paper --execute --paper-dir "$PAPER" \
+            > artifacts/navhints-paper-repro/paper.log 2>&1
+          find "$PAPER/figures/data" -name '*.csv' -maxdepth 1 \
+            -type f -print | sort \
+            > artifacts/navhints-paper-repro/figure-csv-list.txt
+      - name: Preserve reproducible paper snapshot, plots and compile diagnostics
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          PAPER="$RUNNER_TEMP/navhints-paper-$GITHUB_RUN_ID"
+          if [ -d "$PAPER" ]; then
+            if [ -d "$PAPER/figures/data" ]; then
+              mkdir -p artifacts/navhints-paper-repro/figure-data
+              cp -a "$PAPER/figures/data/." artifacts/navhints-paper-repro/figure-data/
+            fi
+            if [ -d "$PAPER/.latex-verify" ]; then
+              cp -a "$PAPER/.latex-verify" artifacts/navhints-paper-repro/latex-verification
+            fi
+            git -C "$PAPER" archive --format=zip \
+              --output="$GITHUB_WORKSPACE/artifacts/navhints-paper-repro/paper-source.zip" HEAD
+          fi
+          git rev-parse HEAD > artifacts/navhints-paper-repro/reproduction-code-sha.txt
+      - name: Upload audit-ready paper artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "navhints-paper-artifact-repro-${{ github.run_id }}"
+          path: artifacts/navhints-paper-repro/
+          retention-days: 14
+      - name: Clean only this reproduction job checkout
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/navhints-paper-$GITHUB_RUN_ID"
