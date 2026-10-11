@@ -45,7 +45,7 @@ sha256sum "$IVF" "$HINTS" > "$ART/final-core-state-sha256.txt"
 echo "FINAL_CORE: B=14464 C=2048 k=8 H=10 Sample2=1/2" > "$ART/controller-contract.txt"
 
 # Construct a manifest of the *same* frozen last 5000 queries.
-"$PYC" - "$ALLQ" "$GT" "$ART/final-pubmed-manifest.json" "$WORK/heldout5000.fbin" <<'PY'
+PYTHONPATH="$PWD/scripts" "$PYC" - "$ALLQ" "$GT" "$ART/final-pubmed-manifest.json" "$WORK/heldout5000.fbin" <<'PY'
 import json,sys
 from pathlib import Path
 from qualify_navhints_catapult_headtohead import shape,slice_fbin
