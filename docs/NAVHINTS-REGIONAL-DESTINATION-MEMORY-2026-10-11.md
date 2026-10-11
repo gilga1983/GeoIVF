@@ -41,3 +41,29 @@ This is a **single-replay exploratory mechanism pilot**, not a statistical resul
 Scientific working hypothesis: coarse graph routing regions are a better, *free* query-locality key than an independent random LSH projection, because their PQ scores are already computed. This is falsifiable; adjacent-cell retrieval, regional skew, and LRU eviction must earn their complexity empirically.
 
 **No edits to the approved PVLDB paper.**
+
+
+## Observed pilot results (verified completed run #38116221438)
+
+[Successful self-hosted regional-memory run](https://github.com/gilga1983/GeoIVF/actions/runs/38116221438), artifact `navhints-regional-history-pilot` #11693617781. Separate successful [starting-candidate-width run](https://github.com/gilga1983/GeoIVF/actions/runs/38115574578), artifact #11694300439, with one representative Catapult seed. Both run on the same pinned SSD graph and causal PubMed replay.
+
+**Original FIFO512, k=1 control is exactly unchanged** in native logical reads and Recall@10 at every measured L (40,160,320). Pilot read costs and recall:
+
+| Policy | L=40 recall/read | L=160 recall/read | L=320 recall/read |
+|---|---:|---:|---:|
+| Original global FIFO512, one start | 47.39% / 45.935 | 70.17% / 163.053 | 79.81% / 322.364 |
+| Global LRU512, one start | 47.52% / 45.916 | 70.22% / 163.013 | 79.84% / 322.358 |
+| Global LRU2048, one start | 47.44% / 45.612 | 70.16% / 162.889 | 79.71% / 322.206 |
+| Learned-region LRU2048, 4 queried cells, one start | 47.51% / 45.700 | 70.20% / 162.916 | 79.77% / 322.246 |
+| Learned-region LRU2048, 4 queried cells, four starts | **49.19% / 45.038** | **71.16% / 163.216** | **80.22% / 322.664** |
+| Learned-region LRU8192, 4 cells, four starts | 49.00% / 44.833 | 71.19% / 163.081 | 80.21% / 322.564 |
+
+The experiments show three distinct facts. (1) Enlarging the **global** cache beyond approximately 2K IDs adds little because fewer than 2.1K distinct winners are present in the 5K-query replay; 8K capacity remains mostly empty. (2) Changing global FIFO to LRU yields only minor fixed-L recall/read improvements. (3) **Combining region-conditioned memory with four starts** yields +1.80, +0.99 and +0.41 recall percentage points versus original Core, with nearly identical SSD reads. A *single* region-conditioned start alone has little advantage.
+
+In the independent candidate-width ablation, four starts from the **global FIFO512** produce 48.41%/46.822, 70.68%/164.390, 80.03%/323.664 at L=40/160/320. The regional-2048+four-start variant gives better recall *and* fewer reads at each of those widths, supporting (but not proving independently) that query-regional conditioning adds value beyond candidate width.
+
+**Crucial limitations:** Regional 2,048-ID *payload* is 8KB, compared with 2KB for original Core, increasing the accounted payload from 102,940 to 109,084 bytes. The prototype additionally holds a timestamp per regional record and hundreds of Vec/container headers; **real RAM and CPU overhead are not equal**. The region-8192 variant uses even more ID RAM but actually stores only roughly 2.5K (region, winner) records after warm-up and evaluation. Latency fluctuates strongly and the correctness-first oldest-record search is O(B); do not claim a latency improvement. These are single-stream exploratory findings, and high-L matched-recall claims require a denser L grid and repeated measurements. A cross-run comparison against original author-aligned Catapult (seed 1) suggests the regional 2048+4 configuration now meets or slightly exceeds its fixed-L recall while saving logical reads; do **not** treat this as an equal-RAM, repeated Catapult head-to-head.
+
+### Next isolation: matched capacity and matched candidate count
+
+A same-binary, same-trace [factorial run #38118536829](https://github.com/gilga1983/GeoIVF/actions/runs/38118536829), branch `experiment/navhints-regional-factorial-20261011`, was launched to compare global FIFO/LRU512/2048 versus region-local 512/2048 at **exactly the same injected start count (K=4)**. Also varies regional query selection (top-1 versus top-4) and checks high-L behavior. This will help distinguish candidate breadth, cache size and query-conditioning as separate effects. The run's status is not implied by this note.
