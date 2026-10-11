@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "project": "NavHints",
+  "paper_repository": "gilga1983/DemmandAwareANN",
+  "code_repository": "gilga1983/GeoIVF",
+  "engines": {
+    "diskann": {
+      "repository": "microsoft/DiskANN",
+      "commit": "fcf90534174cf29c78c9f13b4cccf1fcabff85f5",
+      "build": "cargo +1.97.1 build --release --locked -p diskann-benchmark --features disk-index"
+    },
+    "catapult": {
+      "repository": "original CatapultDB source",
+      "source_commit": "a16eddd34b4339db5ec86e292470ce7929179bc3",
+      "scope": "author-aligned hash/LRU routing adapted to pinned DiskANN SSD; not native whole-system comparison"
+    },
+    "starling": {
+      "repository": "zilliztech/starling",
+      "commit": "17dc3e8a011533a62374445f53963e951b72883a",
+      "scope": "native page search and memory navigator retained; final Core provides candidates"
+    }
+  },
+  "controller": {
+    "entry_budget": 14464,
+    "destination_capacity": 2048,
+    "ranked_extra_starts": 8,
+    "pq_top_candidates": 10,
+    "coarse_groups": 512,
+    "probed_groups": 8,
+    "persistent_exits_per_junction": 10,
+    "sampled_exit_denominator": 2,
+    "feedback": "after completion, one top-1 destination per query, globally unique FIFO, no duplicate refresh",
+    "payload_pubmed_bytes": 102940,
+    "payload_scope": "accounted IDs/group offsets/representative PQ; not total process RSS"
+  },
+  "runs": [
+    {
+      "id": "coveo",
+      "run_id": 38136319610,
+      "artifact_id": 11701308908,
+      "artifact_name": "navhints-final-core-coveo",
+      "data_member": "results/coveo-final-core.json",
+      "success": true,
+      "split": "5000/20000/5000",
+      "source_branch": "experiment/navhints-final-core-multidata-20261011"
+    },
+    {
+      "id": "pubmed",
+      "run_id": 38137049239,
+      "artifact_id": 11702879389,
+      "artifact_name": "navhints-final-core-pubmed",
+      "data_member": "results/public-final-core.json",
+      "success": true,
+      "split": "5000/4000/1000",
+      "source_branch": "experiment/navhints-final-core-multidata-20261011"
+    },
+    {
+      "id": "text2image",
+      "run_id": 38136365199,
+      "artifact_id": 11702522173,
+      "artifact_name": "final-core-text2image-10M",
+      "data_member": "results/public-final-core.json",
+      "success": true,
+      "split": "5000/4000/1000",
+      "source_branch": "experiment/navhints-final-core-multidata-20261011"
+    },
+    {
+      "id": "bigann",
+      "run_id": 38136365199,
+      "artifact_id": 11704362848,
+      "artifact_name": "final-core-bigann-10M",
+      "data_member": "results/public-final-core.json",
+      "success": true,
+      "split": "5000/4000/1000",
+      "source_branch": "experiment/navhints-final-core-multidata-20261011"
+    },
+    {
+      "id": "catapult",
+      "run_id": 38127358063,
+      "artifact_id": 11700450279,
+      "artifact_name": "navhints-optimal-core-vs-catapult",
+      "data_member": "results/navhints-optimal-core-vs-catapult.json",
+      "success": true,
+      "split": "5000/4000/1000",
+      "source_branch": "experiment/navhints-optimal-core-vs-catapult-20261011"
+    },
+    {
+      "id": "memory",
+      "run_id": 38120556463,
+      "artifact_id": 11696380166,
+      "artifact_name": "navhints-fixed-memory-tradeoff",
+      "data_member": "results/navhints-memory-tradeoff.json",
+      "success": true,
+      "split": "5000/4000/1000",
+      "source_branch": "experiment/navhints-fixed-memory-tradeoff-20261011"
+    },
+    {
+      "id": "starling-coveo",
+      "run_id": 38137155521,
+      "artifact_id": 11702922642,
+      "artifact_name": "native-starling-final-core-coveo",
+      "data_member": "diagnostic-summary.json",
+      "success": true,
+      "split": "5000/20000/5000",
+      "source_branch": "experiment/navhints-final-core-starling-20261011"
+    },
+    {
+      "id": "starling-bigann",
+      "run_id": 38137155521,
+      "artifact_id": 11705972486,
+      "artifact_name": "native-starling-final-core-bigann",
+      "data_member": "diagnostic-summary.json",
+      "success": true,
+      "split": "5000/4000/1000",
+      "source_branch": "experiment/navhints-final-core-starling-20261011"
+    },
+    {
+      "id": "sensitivity",
+      "run_id": 38137378869,
+      "artifact_id": 11707480968,
+      "artifact_name": "navhints-final-core-sensitivity",
+      "data_member": "warmup/final-core-warmup.json",
+      "additional_members": [
+        "locality/final-core-locality.json",
+        "shift/final-core-shift.json"
+      ],
+      "success": true,
+      "split": "varied disjoint training and causal windows",
+      "source_branch": "experiment/navhints-final-core-multidata-20261011"
+    },
+    {
+      "id": "persistence",
+      "run_id": 38137546048,
+      "artifact_id": 11703989015,
+      "artifact_name": "navhints-final-core-write-frontier",
+      "data_member": "results/final-core-write-sweep.json",
+      "success": true,
+      "split": "5000/4000/1000",
+      "source_branch": "experiment/navhints-final-core-multidata-20261011"
+    }
+  ],
+  "paths": {
+    "pubmed": [
+      "catapult-paper-pubmed1m/pubmed-medcpt-first1m.fbin",
+      "medrag-zipf-qwen3b-v1/medrag-zipf-10k-medcpt.fbin",
+      "medrag-zipf-qwen3b-v1/heldout5000-pubmed1m-top16-ip.gt",
+      "catapult-paper-pubmed1m-index-v1/diskann-index_disk.index",
+      "high-l-medoid-teacher-traces-v1/medoid-teacher.L4.jsonl",
+      "id-portal-pools-v1/portals-n512.bin"
+    ],
+    "coveo": [
+      "coveo-real-demand-v1/prepared/coveo-products-cosine.fbin",
+      "coveo-real-demand-v1/split/dataset.manifest.json",
+      "coveo-real-demand-v1/split/replay.gt",
+      "coveo-real-demand-v1/trace/teacher.jsonl",
+      "coveo-real-demand-v1/index/diskann-index.complete.json"
+    ],
+    "text2image": [
+      "public-eval/text2image-10M/data/dataset.manifest.json",
+      "public-eval/text2image-10M/index/diskann-index.complete.json"
+    ],
+    "bigann": [
+      "public-eval/bigann-10M/data/dataset.manifest.json",
+      "public-eval/bigann-10M/index/diskann-index.complete.json"
+    ]
+  },
+  "replay_commands": {
+    "coveo": [
+      "bash",
+      "scripts/run_final_core_coveo_ci.sh"
+    ],
+    "pubmed": [
+      "bash",
+      "scripts/run_final_core_pubmed_ci.sh"
+    ],
+    "text2image": [
+      "bash",
+      "scripts/run_final_core_public_one.sh",
+      "text2image-10M",
+      "artifacts/final-core-public-10m/text2image-10M"
+    ],
+    "bigann": [
+      "bash",
+      "scripts/run_final_core_public_one.sh",
+      "bigann-10M",
+      "artifacts/final-core-public-10m/bigann-10M"
+    ],
+    "catapult": [
+      "bash",
+      "scripts/run_navhints_optimal_vs_catapult_ci.sh"
+    ],
+    "memory": [
+      "bash",
+      "scripts/run_navhints_fixed_memory_tradeoff_ci.sh"
+    ],
+    "sensitivity": [
+      "bash",
+      "scripts/run_final_core_sensitivity_ci.sh"
+    ],
+    "persistence": [
+      "bash",
+      "scripts/run_final_core_write_sweep_ci.sh"
+    ],
+    "starling-coveo": [
+      "python3",
+      "scripts/generate_starling_final_core.py",
+      "coveo",
+      "--run"
+    ],
+    "starling-bigann": [
+      "python3",
+      "scripts/generate_starling_final_core.py",
+      "bigann",
+      "--run"
+    ]
+  },
+  "statistical_scope": "Same deterministic queries replayed across repetitions; average at mutually reachable recall anchors, no extrapolation or confidence intervals from independent query populations.",
+  "metric_scope": "DiskANN reported logical SSD reads; Starling native logical page counters; latency may omit post-query online feedback. Sampled persistence writes are logical update requests, not crash-consistent physical flash writes."
+}
