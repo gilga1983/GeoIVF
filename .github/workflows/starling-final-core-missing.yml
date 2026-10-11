@@ -1,11 +1,8 @@
 name: First-time native Starling Table 9 missing datasets
-# This workflow exists only to qualify PubMed and Text2Image; it never
+# The first automated launch has occurred. Future runs require manual dispatch.
+# This workflow qualifies only PubMed and Text2Image; it never
 # regenerates archived native Coveo or native BigANN comparisons.
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/starling-final-core-missing.yml"
   workflow_dispatch:
 permissions:
   contents: read
