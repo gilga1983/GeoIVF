@@ -1,0 +1,57 @@
+name: NavHints destination locality factorial
+
+on:
+  push:
+    branches: [experiment/navhints-regional-factorial-20261011]
+    paths:
+      - ".github/workflows/navhints-regional-factorial.yml"
+      - "scripts/patch_navhints_regional_history.py"
+      - "scripts/qualify_navhints_regional_history_pilot.py"
+      - "scripts/qualify_navhints_catapult_headtohead.py"
+      - "scripts/run_navhints_regional_history_pilot_ci.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: navhints-regional-factorial
+  cancel-in-progress: false
+
+jobs:
+  factorial-locality:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      RUSTFLAGS: "-C target-cpu=native"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate same-run matched-size factorial harness
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile             scripts/patch_navhints_regional_history.py             scripts/qualify_navhints_regional_history_pilot.py             scripts/qualify_navhints_catapult_headtohead.py
+          bash -n scripts/run_navhints_regional_history_pilot_ci.sh
+          grep -F 'region2048-n4-k4' scripts/qualify_navhints_regional_history_pilot.py
+          grep -F 'fifo2048-k4' scripts/qualify_navhints_regional_history_pilot.py
+      - name: Run region-vs-global same-payload, same-start-width diagnostics
+        shell: bash
+        run: bash scripts/run_navhints_regional_history_pilot_ci.sh
+      - name: Preserve raw causal I/O and recall observations and source changes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navhints-regional-factorial
+          path: artifacts/navhints-regional-factorial/
+          retention-days: 10
+      - name: Remove isolated temporary checkout
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/navhints-regional-factorial-$GITHUB_RUN_ID"
