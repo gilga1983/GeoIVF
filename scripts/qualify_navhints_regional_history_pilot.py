@@ -22,23 +22,24 @@ from qualify_navhints_catapult_headtohead import (
     run_one, shape, slice_fbin, TRAIN, WARM, MEASURE, DIM,
 )
 
-LS=(40,160,320)
+LS=(40,80,160,320)
 CONFIGS=(
+    # Baseline, isolates candidate width at original 512-ID state.
     ("fifo512-k1", "fifo", 512, 1, 1),
-    ("lru512-k1", "lru", 512, 1, 1),
-    ("region512-n1-k1", "region_lru", 512, 1, 1),
-    ("fifo2048-k1", "fifo", 2048, 1, 1),
-    ("lru2048-k1", "lru", 2048, 1, 1),
-    ("region2048-n1-k1", "region_lru", 2048, 1, 1),
+    ("fifo512-k4", "fifo", 512, 1, 4),
+    # Larger global state at exact matched destination-ID budget and K.
+    ("fifo2048-k4", "fifo", 2048, 1, 4),
+    ("lru2048-k4", "lru", 2048, 1, 4),
+    # Learned-region conditioning at original and larger ID budgets.
+    ("region512-n4-k4", "region_lru", 512, 4, 4),
+    ("region2048-n1-k4", "region_lru", 2048, 1, 4),
     ("region2048-n4-k1", "region_lru", 2048, 4, 1),
-    ("lru8192-k1", "lru", 8192, 1, 1),
-    ("region8192-n1-k1", "region_lru", 8192, 1, 1),
-    ("region8192-n4-k1", "region_lru", 8192, 4, 1),
     ("region2048-n4-k4", "region_lru", 2048, 4, 4),
     ("region8192-n4-k4", "region_lru", 8192, 4, 4),
 )
 REFERENCE={
     40:(47.39, 45.935),
+    80:(58.72, 84.021),
     160:(70.17,163.053),
     320:(79.81,322.364),
 }
@@ -162,7 +163,7 @@ def main():
         "scoring":"K=10, beam=8, real NVMe, native logical SSD reads, recall matched by interpolation where available",
         "memory_contract":"routing static bytes plus cache ID payload only. Regional prototype also stores per-ID timestamps and Vec metadata: real RAM is higher than 4B per destination.",
         "region_key":"nearest already-PQ-scored Hint-IVF coarse medoid; optionally top four query regions; globally budgeted demand-weighted LRU winner histories",
-        "pilot":"3 L widths, one deterministic heldout stream, no hash seeds or repetition for NavHints; preliminary findings only",
+        "pilot":"4 L widths and matched factorial cache ID capacities / start counts on one heldout stream; preliminary mechanism diagnosis, no independent query samples",
         "static_hint_bytes":index_bytes,
         "configs":[{"key":key,"mode":mode,"id_capacity":cap,"value_id_payload_bytes":cap*4,
                     "region_nprobe":nprobe,"additional_destination_starts":k}
@@ -171,8 +172,8 @@ def main():
         "comparison_against_original_fifo512":comparisons,
         "ivf_sha256":hashlib.sha256(args.ivf.read_bytes()).hexdigest(),
     }
-    save(args.out/"navhints-regional-history-pilot.json",summary)
-    print("NAVHINTS_REGIONAL_HISTORY_PILOT_COMPLETE",flush=True)
+    save(args.out/"navhints-regional-history-factorial.json",summary)
+    print("NAVHINTS_REGIONAL_HISTORY_FACTORIAL_COMPLETE",flush=True)
     for row in comparisons:
         print(f"L={row['control_L']} recall={row['control_recall']:.2f} control_io={row['control_reads']:.3f}",flush=True)
         for k,v in row["arms"].items():
