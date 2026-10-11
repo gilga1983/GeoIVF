@@ -1,0 +1,41 @@
+name: First-time Table 7 Coveo and Text2Image comparators
+# Trigger on introduction only; switch to manual-only to avoid future reruns.
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/table7-missing-workloads.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: table7-first-time-coveo-text2image
+  cancel-in-progress: false
+jobs:
+  missing-workloads:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 1440
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        dataset: [coveo, text2image-10M]
+    env:
+      CARGO_BUILD_JOBS: "2"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify scripts
+        run: |
+          python3 -m py_compile scripts/qualify_table7_missing_workloads.py
+          bash -n scripts/run_table7_missing_workload_ci.sh
+      - name: Measure missing competitor datasets
+        run: bash scripts/run_table7_missing_workload_ci.sh ${{ matrix.dataset }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: table7-new-${{ matrix.dataset }}
+          path: artifacts/table7-${{ matrix.dataset }}/
+          retention-days: 14
