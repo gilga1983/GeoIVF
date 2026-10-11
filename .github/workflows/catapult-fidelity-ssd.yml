@@ -1,8 +1,8 @@
-name: CatapultDB same-SSD source-fidelity sensitivity
+name: CatapultDB author-aligned equal-RAM sensitivity
 
 on:
   push:
-    branches: [experiment/catapult-fidelity-audit]
+    branches: [experiment/catapult-fidelity-equalram-20261011]
     paths:
       - '.github/workflows/catapult-fidelity-ssd.yml'
       - 'scripts/qualify_catapult_fidelity_ssd.py'
@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: geoivf-catapult-fidelity-ssd
+  group: geoivf-catapult-fidelity-equalram
   cancel-in-progress: false
 
 jobs:
@@ -51,9 +51,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: catapult-fidelity-ssd
+          name: catapult-fidelity-equalram
           path: artifacts/catapult-fidelity-ssd/
-          retention-days: 30
+          retention-days: 7
       - name: Clean only this test's isolated binaries and snapshots
         if: always()
         shell: bash
