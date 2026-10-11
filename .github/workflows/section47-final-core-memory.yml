@@ -1,11 +1,8 @@
 name: Section 4.7 final Core memory comparison
+# Paper results reuse frozen competitor measurements and only change the
+# selected Core reference curve. This expensive full rerun is intentionally
+# manual-only for explicit reproducibility work, not part of ordinary CI.
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/section47-final-core-memory.yml"
-      - "scripts/run_section47_final_core_ci.sh"
-      - "scripts/qualify_section47_final_core.py"
   workflow_dispatch:
 permissions:
   contents: read
