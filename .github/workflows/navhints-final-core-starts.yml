@@ -1,0 +1,40 @@
+name: Final Core starts versus locality
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/navhints-final-core-starts.yml"
+      - "scripts/qualify_final_core_starts.py"
+      - "scripts/run_final_core_starts_ci.sh"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: navhints-final-core-starts
+  cancel-in-progress: false
+jobs:
+  causal-starts-ablation:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 1440
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate source and environment
+        run: |
+          python3 -m py_compile scripts/qualify_final_core_starts.py
+          bash -n scripts/run_final_core_starts_ci.sh
+          grep -F 'junction_budget":14464' scripts/qualify_final_core_starts.py
+          grep -F 'recent_history":2048' scripts/qualify_final_core_starts.py
+      - name: Measure 0 1 2 4 8 starts under varied locality
+        run: bash scripts/run_final_core_starts_ci.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: final-core-starts-locality
+          path: artifacts/final-core-starts/
+          retention-days: 14
