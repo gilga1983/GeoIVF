@@ -1,0 +1,61 @@
+name: NavHints equal-budget junction vs destination tradeoff
+
+on:
+  push:
+    branches: [experiment/navhints-fixed-memory-tradeoff-20261011]
+    paths:
+      - ".github/workflows/navhints-fixed-memory-tradeoff.yml"
+      - "scripts/qualify_navhints_fixed_memory_tradeoff.py"
+      - "scripts/run_navhints_fixed_memory_tradeoff_ci.sh"
+      - "scripts/patch_navhints_regional_history.py"
+      - "scripts/qualify_navhints_catapult_headtohead.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: navhints-fixed-memory-tradeoff
+  cancel-in-progress: false
+
+jobs:
+  equal-budget-destination-history:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      RUSTFLAGS: "-C target-cpu=native"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate exact payload-budget workload specification
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile scripts/qualify_navhints_fixed_memory_tradeoff.py \
+            scripts/qualify_navhints_catapult_headtohead.py \
+            scripts/patch_navhints_regional_history.py \
+            scripts/build_hint_ivf.py \
+            scripts/learn_global_navigation_landmarks.py
+          bash -n scripts/run_navhints_fixed_memory_tradeoff_ci.sh
+          grep -F 'ALLOWED_PAYLOAD=102940' scripts/qualify_navhints_fixed_memory_tradeoff.py
+          grep -F 'equal-14464-2048-k4' scripts/qualify_navhints_fixed_memory_tradeoff.py
+      - name: Reallocate static and recent IDs at fixed total auxiliary payload on SSD
+        shell: bash
+        run: bash scripts/run_navhints_fixed_memory_tradeoff_ci.sh
+      - name: Preserve indexed layouts, hashes, exact payload accounting and recall curves
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navhints-fixed-memory-tradeoff
+          path: artifacts/navhints-fixed-memory-tradeoff/
+          retention-days: 14
+      - name: Clean experiment temporary checkout only
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/navhints-fixed-memory-$GITHUB_RUN_ID"

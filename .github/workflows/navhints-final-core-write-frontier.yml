@@ -1,0 +1,55 @@
+name: Final Core Sample1 Sample2 Sample4 Sample10 frontier
+
+on:
+  push:
+    branches: [experiment/navhints-final-core-multidata-20261011]
+    paths:
+      - ".github/workflows/navhints-final-core-write-frontier.yml"
+      - "scripts/qualify_final_core_write_sweep.py"
+      - "scripts/run_final_core_write_sweep_ci.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-final-core-write-frontier
+  cancel-in-progress: false
+
+jobs:
+  final-core-sampled-exits:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 1440
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      RUSTFLAGS: "-C target-cpu=native"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate fixed final Core and sampled controller sweep
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile scripts/qualify_final_core_write_sweep.py
+          bash -n scripts/run_final_core_write_sweep_ci.sh
+          grep -F 'DISKANN_LOCAL_RECENT_STARTS' scripts/qualify_final_core_public.py
+          grep -F 'sample10' scripts/qualify_final_core_write_sweep.py
+      - name: Measure Sample1 Sample2 Sample4 Sample10 and Core on original frozen SSD
+        shell: bash
+        run: bash scripts/run_final_core_write_sweep_ci.sh
+      - name: Archive matched-recall read cost and fixed-L logical page update rates
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navhints-final-core-write-frontier
+          path: artifacts/final-core-write-sweep/
+          retention-days: 14
+      - name: Clean isolated data and source only
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/final-core-write-sweep-$GITHUB_RUN_ID"

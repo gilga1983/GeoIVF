@@ -1,0 +1,61 @@
+name: Final NavHints Core warmup locality and shift
+
+on:
+  push:
+    branches: [experiment/navhints-final-core-multidata-20261011]
+    paths:
+      - ".github/workflows/navhints-final-core-sensitivity.yml"
+      - "scripts/run_final_core_sensitivity_ci.sh"
+      - "scripts/qualify_final_core_warmup.py"
+      - "scripts/qualify_final_core_locality.py"
+      - "scripts/qualify_final_core_shift.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-final-core-sensitivity
+  cancel-in-progress: false
+
+jobs:
+  causal-pubmed-sensitivity:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 1440
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      RUSTFLAGS: "-C target-cpu=native"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate identical static training and final Core configuration
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile \
+            scripts/qualify_final_core_warmup.py \
+            scripts/qualify_final_core_locality.py \
+            scripts/qualify_final_core_shift.py
+          bash -n scripts/run_final_core_sensitivity_ci.sh
+          grep -F 'DISKANN_LOCAL_RECENT_STARTS' scripts/qualify_final_core_warmup.py
+          grep -F 'DISKANN_LOCAL_RECENT_STARTS' scripts/qualify_final_core_locality.py
+          grep -F 'DISKANN_LOCAL_RECENT_STARTS' scripts/qualify_final_core_shift.py
+      - name: Measure final Core warmup locality and support shift on frozen real SSD
+        shell: bash
+        run: bash scripts/run_final_core_sensitivity_ci.sh
+      - name: Archive chronological sensitivity sweep provenance and raw results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navhints-final-core-sensitivity
+          path: artifacts/final-core-sensitivity/
+          retention-days: 14
+      - name: Clean isolated source checkout and temporary query slices
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/final-core-sensitivity-$GITHUB_RUN_ID"
