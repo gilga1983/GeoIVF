@@ -1,0 +1,56 @@
+name: Final NavHints Core plus Sample2 on PubMed SSD
+
+on:
+  push:
+    branches: [experiment/navhints-final-core-multidata-20261011]
+    paths:
+      - ".github/workflows/navhints-final-core-pubmed.yml"
+      - "scripts/run_final_core_pubmed_ci.sh"
+      - "scripts/qualify_final_core_public.py"
+      - "scripts/patch_navhints_regional_history.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-final-core-pubmed
+  cancel-in-progress: false
+
+jobs:
+  pubmed-final:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      RUSTFLAGS: "-C target-cpu=native"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify frozen PubMed and selected Core configuration
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile scripts/qualify_final_core_public.py
+          bash -n scripts/run_final_core_pubmed_ci.sh
+          grep -F 'DISKANN_LOCAL_RECENT_STARTS' scripts/qualify_final_core_public.py
+          grep -F 'DISKANN_EXPERIENCE_HUB_CAPACITY' scripts/qualify_final_core_public.py
+      - name: Replay selected Core and sampled exits on same pinned PubMed SSD
+        shell: bash
+        run: bash scripts/run_final_core_pubmed_ci.sh
+      - name: Preserve causal Core Full baseline and routing state evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navhints-final-core-pubmed
+          path: artifacts/final-core-pubmed/
+          retention-days: 14
+      - name: Remove only this test's source and replay scratch
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/final-core-pubmed-$GITHUB_RUN_ID"
