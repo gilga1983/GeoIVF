@@ -2,7 +2,7 @@
 
 **Reproducible code and experiment harness for the NavHints PVLDB/VLDB 2027 paper.** This is the code repository, historically named GeoIVF. The manuscript and figures live separately in [gilga1983/DemmandAwareANN](https://github.com/gilga1983/DemmandAwareANN).
 
-This \`main\` branch contains the **final** NavHints Core implementation, source-fidelity checks for competing methods, training scripts, four-dataset SSD replays, optional persistent-exit experiments, and an adapter for the **original** Starling library. Exploratory alternatives remain in their Git branches. The original page-oriented GeoIVF implementation is still present; its previous usage guide is [docs/LEGACY_GEOIVF.md](docs/LEGACY_GEOIVF.md). It is **not** the NavHints paper algorithm.
+This `main` branch contains the **final** NavHints Core implementation, source-fidelity checks for competing methods, training scripts, four-dataset SSD replays, optional persistent-exit experiments, and an adapter for the **original** Starling library. Exploratory alternatives remain in their Git branches. The original page-oriented GeoIVF implementation is still present; its previous usage guide is [docs/LEGACY_GEOIVF.md](docs/LEGACY_GEOIVF.md). It is **not** the NavHints paper algorithm.
 
 ## Final algorithm
 
@@ -12,9 +12,9 @@ An optional Sample2 persistent-exit extension records up to ten winners for sele
 
 ## Activate and reproduce
 
-Requires **Linux**, Python 3.10+ (tested with a Python 3.11 environment), Git, Rust/rustup with **1.97.1**, C/C++ build tools, and access to a **real NVMe SSD** for performance measurements. We use \`numpy==2.2.6\`, \`faiss-cpu>=1.9,<2\` where needed, DiskANN commit \`fcf90534174cf29c78c9f13b4cccf1fcabff85f5\`, and Starling commit \`17dc3e8a011533a62374445f53963e951b72883a\`. Third-party sources are cloned at their original pinned SHAs, not vendored or modified in this repository.
+Requires **Linux**, Python 3.10+ (tested with a Python 3.11 environment), Git, Rust/rustup with **1.97.1**, C/C++ build tools, and access to a **real NVMe SSD** for performance measurements. We use `numpy==2.2.6`, `faiss-cpu>=1.9,<2` where needed, DiskANN commit `fcf90534174cf29c78c9f13b4cccf1fcabff85f5`, and Starling commit `17dc3e8a011533a62374445f53963e951b72883a`. Third-party sources are cloned at their original pinned SHAs, not vendored or modified in this repository.
 
-\`\`\`bash
+```bash
 git clone https://github.com/gilga1983/GeoIVF.git
 cd GeoIVF
 source repro/activate.sh
@@ -23,52 +23,52 @@ navhints list                    # View every supported experiment
 navhints doctor --mode pubmed    # Check tools and frozen dataset files
 navhints run pubmed              # DRY RUN: prints exact command, no SSD work
 navhints run pubmed --execute    # HEAVY: pinned index, causal replays, real SSD
-\`\`\`
+```
 
-**No heavy run or dataset download is performed without \`--execute\`.** Each run archives raw queries/results logs, SHA-256 inputs and relevant source diffs. Experimental scripts use the verified dataset layout under \`$HOME/.cache/geoivf\`, and refuse missing required inputs rather than silently substituting a dataset. Original Coveo data are licensed: **provide your authorized private frozen source data locally** and do not commit or upload the raw records.
+**No heavy run or dataset download is performed without `--execute`.** Each run archives raw queries/results logs, SHA-256 inputs and relevant source diffs. Experimental scripts use the verified dataset layout under `$HOME/.cache/geoivf`, and refuse missing required inputs rather than silently substituting a dataset. Original Coveo data are licensed: **provide your authorized private frozen source data locally** and do not commit or upload the raw records.
 
 ### Available reproduction commands
 
 | Command | Evidence produced |
 | --- | --- |
-| \`navhints run pubmed --execute\` | DiskANN / junction-only / final RAM-only Core / Sample2 on PubMed1M |
-| \`navhints run coveo --execute\` | Identical causal stages on chronological Coveo demand |
-| \`navhints run text2image --execute\` | Frozen Text2Image-10M SSD index and four-arm replay |
-| \`navhints run bigann --execute\` | Frozen BigANN-10M SSD index and four-arm replay |
-| \`navhints run catapult --execute\` | Same-session source-aligned Catapult routing vs final Core |
-| \`navhints run memory --execute\` | Fixed **equal-accounted-payload** junction/destination budget ablation |
-| \`navhints run sensitivity --execute\` | Warm-up, controlled locality and training-support shift |
-| \`navhints run persistence --execute\` | Sample1/2/4/10 and empty-slot seeding; reads and logical writes |
-| \`navhints run starling-coveo --execute\` | Final Core in original native Starling on Coveo |
-| \`navhints run starling-bigann --execute\` | Same original Starling port on BigANN-10M |
+| `navhints run pubmed --execute` | DiskANN / junction-only / final RAM-only Core / Sample2 on PubMed1M |
+| `navhints run coveo --execute` | Identical causal stages on chronological Coveo demand |
+| `navhints run text2image --execute` | Frozen Text2Image-10M SSD index and four-arm replay |
+| `navhints run bigann --execute` | Frozen BigANN-10M SSD index and four-arm replay |
+| `navhints run catapult --execute` | Same-session source-aligned Catapult routing vs final Core |
+| `navhints run memory --execute` | Fixed **equal-accounted-payload** junction/destination budget ablation |
+| `navhints run sensitivity --execute` | Warm-up, controlled locality and training-support shift |
+| `navhints run persistence --execute` | Sample1/2/4/10 and empty-slot seeding; reads and logical writes |
+| `navhints run starling-coveo --execute` | Final Core in original native Starling on Coveo |
+| `navhints run starling-bigann --execute` | Same original Starling port on BigANN-10M |
 
-The original workflows are available in [\`.github/workflows/\`](.github/workflows/) with \`workflow_dispatch\`. They are **self-hosted only** (\`[self-hosted, linux, x64, geoivf]\`) and should not be run simultaneously against the same NVMe device. Use \`doctor\` first and confirm the correct host, authorized data and free storage. The full source/hardware/data contract is in [docs/REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md).
+The original workflows are available in [`.github/workflows/`](.github/workflows/) with `workflow_dispatch`. They are **self-hosted only** (`[self-hosted, linux, x64, geoivf]`) and should not be run simultaneously against the same NVMe device. Use `doctor` first and confirm the correct host, authorized data and free storage. The full source/hardware/data contract is in [docs/REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md).
 
 ### Rebuild paper figures directly from frozen results
 
 If you only need to **reproduce the published numbers and graphs**, you do **not** need to rerun hours of SSD benchmarks. Download the immutable successful GitHub Actions artifacts and regenerate the CSVs:
 
-\`\`\`bash
+```bash
 source repro/activate.sh
 navhints fetch all             # Preview the 10 run/artifact downloads
 navhints fetch all --execute   # Requires gh CLI and GitHub authentication
 navhints verify all           # Validate all ten ZIP contents and policy fields
 navhints_paper                 # Dry run: lists exact paper regeneration/build steps
 navhints_paper --execute       # Regenerates CSVs, then invokes make verify-latex
-\`\`\`
+```
 
-Clone [the paper repository](https://github.com/gilga1983/DemmandAwareANN) beside GeoIVF as \`../DemmandAwareANN\` before running the final command. To build its PDF, install its pinned PVLDB 2027 template and local pdfLaTeX/BibTeX tools. The paper regeneration scripts **refuse missing or mismatched artifacts**, never impute values and never extrapolate outside the common recall interval. The \`verify-latex\` target does not overwrite the tracked PDF; the actual source and plots should be reviewed before preparing a submission PDF.
+Clone [the paper repository](https://github.com/gilga1983/DemmandAwareANN) beside GeoIVF as `../DemmandAwareANN` before running the final command. To build its PDF, install its pinned PVLDB 2027 template and local pdfLaTeX/BibTeX tools. The paper regeneration scripts **refuse missing or mismatched artifacts**, never impute values and never extrapolate outside the common recall interval. The `verify-latex` target does not overwrite the tracked PDF; the actual source and plots should be reviewed before preparing a submission PDF.
 
 For a machine without access to large datasets, the ten artifact ZIPs are enough for the plotting and prose audit. Frozen original data/SSD graph binaries are **not** checked into Git. See [repro/manifest.json](repro/manifest.json) for engine SHAs, run IDs, artifact names, file layout and policy parameters.
 
 ## Directory map
 
-- [\`scripts/patch_diskann_hint_ivf_packed_direct.py\`](scripts/patch_diskann_hint_ivf_packed_direct.py), [\`scripts/patch_diskann_experience_core.py\`](scripts/patch_diskann_experience_core.py), [\`scripts/patch_navhints_regional_history.py\`](scripts/patch_navhints_regional_history.py): final DiskANN routing and online/persistent state patches, applied to the pinned Microsoft checkout.
-- [\`scripts/learn_global_navigation_landmarks.py\`](scripts/learn_global_navigation_landmarks.py), [\`scripts/learn_navhints_generic.py\`](scripts/learn_navhints_generic.py), [\`scripts/build_hint_ivf.py\`](scripts/build_hint_ivf.py), [\`scripts/build_hint_ivf_generic.py\`](scripts/build_hint_ivf_generic.py): workload-trained junctions and compact PQ-region layout.
-- [\`scripts/qualify_final_core_public.py\`](scripts/qualify_final_core_public.py), [\`scripts/qualify_final_core_coveo.py\`](scripts/qualify_final_core_coveo.py) and their \`run_final_core_*_ci.sh\` scripts: reproducible, four-arm, causal frozen evaluations.
-- [\`scripts/qualify_optimal_navhints_catapult.py\`](scripts/qualify_optimal_navhints_catapult.py): direct final-Core vs author-aligned Catapult comparison; audited original Catapult source semantics and common DiskANN graph.
-- [\`scripts/patch_starling_final_core.py\`](scripts/patch_starling_final_core.py), [\`scripts/generate_starling_final_core.py\`](scripts/generate_starling_final_core.py): original Starling source adapter, where its *native* memory navigator and SSD layout remain enabled.
-- [\`repro/run.py\`](repro/run.py), [\`repro/activate.sh\`](repro/activate.sh), [\`repro/manifest.json\`](repro/manifest.json): supported activation, preflight, replay, artifact retrieval and paper regeneration.
+- [`scripts/patch_diskann_hint_ivf_packed_direct.py`](scripts/patch_diskann_hint_ivf_packed_direct.py), [`scripts/patch_diskann_experience_core.py`](scripts/patch_diskann_experience_core.py), [`scripts/patch_navhints_regional_history.py`](scripts/patch_navhints_regional_history.py): final DiskANN routing and online/persistent state patches, applied to the pinned Microsoft checkout.
+- [`scripts/learn_global_navigation_landmarks.py`](scripts/learn_global_navigation_landmarks.py), [`scripts/learn_navhints_generic.py`](scripts/learn_navhints_generic.py), [`scripts/build_hint_ivf.py`](scripts/build_hint_ivf.py), [`scripts/build_hint_ivf_generic.py`](scripts/build_hint_ivf_generic.py): workload-trained junctions and compact PQ-region layout.
+- [`scripts/qualify_final_core_public.py`](scripts/qualify_final_core_public.py), [`scripts/qualify_final_core_coveo.py`](scripts/qualify_final_core_coveo.py) and their `run_final_core_*_ci.sh` scripts: reproducible, four-arm, causal frozen evaluations.
+- [`scripts/qualify_optimal_navhints_catapult.py`](scripts/qualify_optimal_navhints_catapult.py): direct final-Core vs author-aligned Catapult comparison; audited original Catapult source semantics and common DiskANN graph.
+- [`scripts/patch_starling_final_core.py`](scripts/patch_starling_final_core.py), [`scripts/generate_starling_final_core.py`](scripts/generate_starling_final_core.py): original Starling source adapter, where its *native* memory navigator and SSD layout remain enabled.
+- [`repro/run.py`](repro/run.py), [`repro/activate.sh`](repro/activate.sh), [`repro/manifest.json`](repro/manifest.json): supported activation, preflight, replay, artifact retrieval and paper regeneration.
 - [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), [docs/REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md), [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md): code decisions, exact dataset splits, verified runs and caveats.
 
 ## Reproduced headline evidence
@@ -79,4 +79,4 @@ All auxiliary-memory budgets exclude some container metadata; SSD read counts an
 
 ## Archival history
 
-This repository began as a page-oriented GeoIVF prototype. Its code (\`geoivf/\`, \`native/\`, \`tests/\`) and earlier workflows are preserved for historical reproducibility but are **not** the selected NavHints paper implementation. The original README is [archived without editing](docs/LEGACY_GEOIVF.md). Explore earlier NavHints alternatives on their named Git branches; \`main\` supports the selected final Core and the validated comparisons, not every prototype.
+This repository began as a page-oriented GeoIVF prototype. Its code (`geoivf/`, `native/`, `tests/`) and earlier workflows are preserved for historical reproducibility but are **not** the selected NavHints paper implementation. The original README is [archived without editing](docs/LEGACY_GEOIVF.md). Explore earlier NavHints alternatives on their named Git branches; `main` supports the selected final Core and the validated comparisons, not every prototype.
