@@ -5,7 +5,7 @@ Only B=14464,C=2048,k=8 is a NavHints reference; never replay retired Core.
 import argparse,fcntl,json,os,subprocess,struct
 from pathlib import Path
 import numpy as np
-from qualify_final_core_public import slice_xbin,slice_gt,result_rows,aggregate,CFG,LS
+from qualify_final_core_public import slice_xbin,slice_gt,result_rows,aggregate,LS
 
 def save(p,v):
  p.parent.mkdir(parents=True,exist_ok=True);p.write_text(json.dumps(v,indent=2)+"\n")
@@ -44,12 +44,25 @@ def main():
  if a.metric!="inner_product" and a.qsev_binary:raise ValueError("Existing QSEV patch implements inner product only")
  if not ivf.exists():raise FileNotFoundError(ivf)
  dim=struct.unpack("<II",q.open("rb").read(8))[1]
- if a.dataset=="pubmed":counts=(30,120,480);qcounts=(32,128,512)
- elif a.dataset=="bigann-10M":counts=(134,536,2144);qcounts=()
- else:raise ValueError("unsupported dataset")
- record_bytes=dim*4+64*4
- for n in counts:
-  if not (0<n*record_bytes<=102940*16+record_bytes):raise ValueError("unexpected RAM counts")
+ if a.dataset not in ("pubmed","bigann-10M"):raise ValueError("unsupported dataset")
+ if a.data_type not in ("float32","uint8"):raise ValueError("unsupported cached record type")
+ if a.dataset=="pubmed" and (dim,a.data_type,a.metric)!=(768,"float32","inner_product"):
+  raise ValueError("unexpected PubMed dimensions or metric")
+ if a.dataset=="bigann-10M" and (dim,a.data_type,a.metric)!=(128,"uint8","squared_l2"):
+  raise ValueError("unexpected BigANN dimensions or metric")
+ # Account for the same deployed Hint-IVF and destination-ID payload on both
+ # datasets, rather than counting uint8 BigANN vectors as float32.
+ budget_bytes=ivf.stat().st_size+512*(64+4)+2048*4
+ if budget_bytes!=102940:raise ValueError(f"final Core payload mismatch: {budget_bytes} bytes")
+ record_bytes=dim*(4 if a.data_type=="float32" else 1)+64*4
+ counts=tuple((budget_bytes*factor)//record_bytes for factor in (1,4,16))
+ qsev_record_bytes=dim*4+4
+ qcounts=tuple((budget_bytes*factor)//qsev_record_bytes for factor in (1,4,16)) if a.qsev_binary else ()
+ if any(x<=0 for x in counts+qcounts):raise ValueError("too little memory for comparator")
+ for factor,n in zip((1,4,16),counts):
+  if n*record_bytes>factor*budget_bytes:raise ValueError("graph-cache payload over budget")
+ for factor,n in zip((1,4,16),qcounts):
+  if 16+n*qsev_record_bytes>factor*budget_bytes:raise ValueError("QSEV payload over budget")
  methods=["core"]+["hot-"+str(x) for x in counts]+["bfs-"+str(x) for x in counts]
  if a.qsev_binary:methods+=["qsev-"+str(x) for x in qcounts]
  warm=out/"heldout5000.input";meas=out/"measured1000.input"
@@ -81,6 +94,6 @@ def main():
   common=[(r,interp(summary["core"],r),interp(summary[method],r)) for r in anchor]
   common=[x for x in common if None not in x[1:]]
   matched[method]={"count":len(common),"targets":[r for r,_,_ in common],"saving_pct":float(np.mean([100*(1-c/k) for _,c,k in common])) if common else None}
- save(out/"section47-final-core.json",{"dataset":a.dataset,"selected_core":{"B":14464,"C":2048,"k":8,"regions":512,"persistent":False},"method_budgets":{"hot_nodes":counts,"record_bytes_nominal":record_bytes,"qsev_entries":qcounts},"reps":a.reps,"summary":summary,"matched_core_anchor":matched,"note":"QSEV PubMed only; native BFS and hot-record budgets are nominal payload, not complete RSS. Repeated frozen replay, not independent workload confidence interval."})
+ save(out/"section47-final-core.json",{"dataset":a.dataset,"selected_core":{"B":14464,"C":2048,"k":8,"regions":512,"persistent":False},"method_budgets":{"core_payload_bytes":budget_bytes,"scales":[1,4,16],"hot_nodes":counts,"bfs_nodes":counts,"record_bytes_nominal":record_bytes,"qsev_entries":qcounts,"qsev_record_bytes":qsev_record_bytes,"qsev_file_header_bytes":16},"reps":a.reps,"summary":summary,"matched_core_anchor":matched,"note":"QSEV PubMed only; native BFS and hot-record budgets are nominal payload, not complete RSS. Repeated frozen replay, not independent workload confidence interval."})
  print("SECTION47_FINAL_CORE_PASS",a.dataset,flush=True)
 if __name__=="__main__":main()
