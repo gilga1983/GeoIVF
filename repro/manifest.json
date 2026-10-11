@@ -42,7 +42,8 @@
       "data_member": "results/coveo-final-core.json",
       "success": true,
       "split": "5000/20000/5000",
-      "source_branch": "experiment/navhints-final-core-multidata-20261011"
+      "source_branch": "experiment/navhints-final-core-multidata-20261011",
+      "source_sha": "1ad7d5eac942a8eb17e19108a0157b6097497a45"
     },
     {
       "id": "pubmed",
@@ -52,7 +53,8 @@
       "data_member": "results/public-final-core.json",
       "success": true,
       "split": "5000/4000/1000",
-      "source_branch": "experiment/navhints-final-core-multidata-20261011"
+      "source_branch": "experiment/navhints-final-core-multidata-20261011",
+      "source_sha": "8b4e03fc5145435a48c2f0d4e60ffbe9a6fec025"
     },
     {
       "id": "text2image",
@@ -62,7 +64,8 @@
       "data_member": "results/public-final-core.json",
       "success": true,
       "split": "5000/4000/1000",
-      "source_branch": "experiment/navhints-final-core-multidata-20261011"
+      "source_branch": "experiment/navhints-final-core-multidata-20261011",
+      "source_sha": "a2bfc00c1b3ecc2ab31e11ae6448970ba8b80ac6"
     },
     {
       "id": "bigann",
@@ -72,7 +75,8 @@
       "data_member": "results/public-final-core.json",
       "success": true,
       "split": "5000/4000/1000",
-      "source_branch": "experiment/navhints-final-core-multidata-20261011"
+      "source_branch": "experiment/navhints-final-core-multidata-20261011",
+      "source_sha": "a2bfc00c1b3ecc2ab31e11ae6448970ba8b80ac6"
     },
     {
       "id": "catapult",
@@ -82,7 +86,8 @@
       "data_member": "results/navhints-optimal-core-vs-catapult.json",
       "success": true,
       "split": "5000/4000/1000",
-      "source_branch": "experiment/navhints-optimal-core-vs-catapult-20261011"
+      "source_branch": "experiment/navhints-optimal-core-vs-catapult-20261011",
+      "source_sha": "dca0d4ef4b2a8efd66880440c03c0a3fba593eec"
     },
     {
       "id": "memory",
@@ -92,7 +97,8 @@
       "data_member": "results/navhints-memory-tradeoff.json",
       "success": true,
       "split": "5000/4000/1000",
-      "source_branch": "experiment/navhints-fixed-memory-tradeoff-20261011"
+      "source_branch": "experiment/navhints-fixed-memory-tradeoff-20261011",
+      "source_sha": "18b43f5237703ab54760a3e44302bd18a8cd630f"
     },
     {
       "id": "starling-coveo",
@@ -102,7 +108,8 @@
       "data_member": "diagnostic-summary.json",
       "success": true,
       "split": "5000/20000/5000",
-      "source_branch": "experiment/navhints-final-core-starling-20261011"
+      "source_branch": "experiment/navhints-final-core-starling-20261011",
+      "source_sha": "ce23e293f922a6e8287708934dac749b561bb941"
     },
     {
       "id": "starling-bigann",
@@ -112,7 +119,8 @@
       "data_member": "diagnostic-summary.json",
       "success": true,
       "split": "5000/4000/1000",
-      "source_branch": "experiment/navhints-final-core-starling-20261011"
+      "source_branch": "experiment/navhints-final-core-starling-20261011",
+      "source_sha": "ce23e293f922a6e8287708934dac749b561bb941"
     },
     {
       "id": "sensitivity",
@@ -126,7 +134,8 @@
       ],
       "success": true,
       "split": "varied disjoint training and causal windows",
-      "source_branch": "experiment/navhints-final-core-multidata-20261011"
+      "source_branch": "experiment/navhints-final-core-multidata-20261011",
+      "source_sha": "a7e20bd236eb0abd5394d4c91056e9f944b222a4"
     },
     {
       "id": "persistence",
@@ -136,7 +145,8 @@
       "data_member": "results/final-core-write-sweep.json",
       "success": true,
       "split": "5000/4000/1000",
-      "source_branch": "experiment/navhints-final-core-multidata-20261011"
+      "source_branch": "experiment/navhints-final-core-multidata-20261011",
+      "source_sha": "5fc0fb875cd4b645fbb904ac3db3d139df5423c7"
     }
   ],
   "paths": {
