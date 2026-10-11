@@ -1,0 +1,65 @@
+name: NavHints vs CatapultDB high-recall candidate diagnostics
+
+on:
+  push:
+    branches: [experiment/navhints-catapult-highrecall-diagnostics-20261011]
+    paths:
+      - ".github/workflows/navhints-catapult-selector-diagnostics.yml"
+      - "scripts/patch_navhints_catapult_start_diagnostics.py"
+      - "scripts/qualify_navhints_catapult_selector_diagnostics.py"
+      - "scripts/qualify_navhints_catapult_headtohead.py"
+      - "scripts/run_navhints_catapult_selector_diagnostics_ci.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-navhints-catapult-selector-diagnostics
+  cancel-in-progress: false
+
+jobs:
+  selector-width-diagnostics:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      RUSTFLAGS: "-C target-cpu=native"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check mechanism-only patches and compare harness
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile \
+            scripts/patch_navhints_catapult_start_diagnostics.py \
+            scripts/qualify_navhints_catapult_selector_diagnostics.py \
+            scripts/qualify_navhints_catapult_headtohead.py \
+            scripts/patch_catapult_author_causal_eval.py \
+            scripts/patch_diskann_catapult_snapshot.py \
+            scripts/align_catapult_author_semantics.py \
+            scripts/patch_diskann_hint_ivf_packed_direct.py \
+            scripts/patch_diskann_experience_core.py
+          bash -n scripts/run_navhints_catapult_selector_diagnostics_ci.sh
+          grep -F "DIAGNOSTIC_NAV_TOPK_PATCH_APPLIED" scripts/patch_navhints_catapult_start_diagnostics.py
+          grep -F "NAV_KS = " scripts/qualify_navhints_catapult_selector_diagnostics.py
+      - name: Ablate multiple starting candidates on the same SSD
+        shell: bash
+        run: bash scripts/run_navhints_catapult_selector_diagnostics_ci.sh
+      - name: Archive candidate-width curves, source diffs and partial results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navhints-catapult-selector-diagnostics
+          path: artifacts/navhints-catapult-selector-diagnostics/
+          retention-days: 7
+      - name: Remove only temporary checkout and query replay files
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/navhints-catapult-selector-$GITHUB_RUN_ID"
