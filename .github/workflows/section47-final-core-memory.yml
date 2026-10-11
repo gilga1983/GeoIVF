@@ -1,0 +1,57 @@
+name: Section 4.7 final Core memory comparison
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/section47-final-core-memory.yml"
+      - "scripts/run_section47_final_core_ci.sh"
+      - "scripts/qualify_section47_final_core.py"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: section47-final-core-memory
+  cancel-in-progress: false
+jobs:
+  check-source:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate runner
+        run: |
+          python3 -m py_compile scripts/qualify_section47_final_core.py
+          bash -n scripts/run_section47_final_core_ci.sh
+  final-core-pubmed:
+    needs: check-source
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 1440
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute SSD PubMed 1x 4x 16x final-Core comparators
+        run: bash scripts/run_section47_final_core_ci.sh pubmed
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: section47-final-core-pubmed
+          path: artifacts/section47-pubmed/
+          retention-days: 14
+  final-core-bigann:
+    needs: check-source
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 1440
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute SSD BigANN 1x 4x 16x cache comparisons
+        run: bash scripts/run_section47_final_core_ci.sh bigann-10M
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: section47-final-core-bigann
+          path: artifacts/section47-bigann-10M/
+          retention-days: 14
