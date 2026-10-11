@@ -1,10 +1,7 @@
 name: First-time Table 7 Coveo and Text2Image comparators
-# Trigger on introduction only; switch to manual-only to avoid future reruns.
+# First-time launch already triggered from its initial commit.
+# Keep all subsequent executions manual-only. An existing run is unaffected.
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/table7-missing-workloads.yml"
   workflow_dispatch:
 permissions:
   contents: read
