@@ -1,0 +1,62 @@
+name: NavHints macro-region conditional cache vs global Core
+
+on:
+  push:
+    branches: [experiment/navhints-macroregion-cache-20261011]
+    paths:
+      - ".github/workflows/navhints-macroregion-diagnostic.yml"
+      - "scripts/build_navhints_macroregions.py"
+      - "scripts/patch_navhints_macroregions.py"
+      - "scripts/qualify_navhints_macroregion_diagnostic.py"
+      - "scripts/run_navhints_macroregion_ci.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: navhints-macroregion-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  same-ssd-coarse-locality:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      RUSTFLAGS: "-C target-cpu=native"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check macro grouping uses only original frozen router
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile \
+            scripts/build_navhints_macroregions.py \
+            scripts/patch_navhints_macroregions.py \
+            scripts/qualify_navhints_macroregion_diagnostic.py \
+            scripts/patch_navhints_regional_history.py \
+            scripts/qualify_navhints_catapult_headtohead.py
+          bash -n scripts/run_navhints_macroregion_ci.sh
+          grep -F 'GHMAC001' scripts/build_navhints_macroregions.py
+          grep -F 'GHMAC001' scripts/patch_navhints_macroregions.py
+      - name: Compare coarse query-conditioned histories with global 2K cache
+        shell: bash
+        run: bash scripts/run_navhints_macroregion_ci.sh
+      - name: Archive macro maps, source changes, CPU and recall/I/O frontiers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navhints-macroregion-diagnostic
+          path: artifacts/navhints-macroregion-diagnostic/
+          retention-days: 14
+      - name: Remove only isolated temporary experiment
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/navhints-macroregion-$GITHUB_RUN_ID"
