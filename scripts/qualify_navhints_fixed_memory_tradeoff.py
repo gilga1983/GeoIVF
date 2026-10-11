@@ -109,8 +109,9 @@ def main():
         if tag.startswith("equal-") or tag.startswith("original-"):
             if total!=ALLOWED_PAYLOAD:
                 raise ValueError(f"{tag}: unequal payload total={total} instead of {ALLOWED_PAYLOAD}")
-        elif tag.startswith("extra-") and total<=ALLOWED_PAYLOAD:
-            raise ValueError(f"{tag}: missing extra budget")
+        elif tag.startswith("extra-"):
+            if total<=ALLOWED_PAYLOAD:
+                raise ValueError(f"{tag}: missing extra budget")
         else:
             raise ValueError(f"invalid arm name {tag}")
         configs[tag]={"B":B,"C":C,"K":K,
