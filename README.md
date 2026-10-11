@@ -1,188 +1,82 @@
-# GeoIVF
+# NavHints: Demand-Aware Navigation for Disk-Resident Vector Search
 
-Research infrastructure for page-oriented execution of disk-resident IVF.
+**Reproducible code and experiment harness for the NavHints PVLDB/VLDB 2027 paper.** This is the code repository, historically named GeoIVF. The manuscript and figures live separately in [gilga1983/DemmandAwareANN](https://github.com/gilga1983/DemmandAwareANN).
 
-```
-Faiss training and coarse routing
-    -> input / radial / geometric within-list layout
-    -> staged conservative page planner
-    -> coalesced byte extents
-    -> memory replay | buffered pread | native pread/O_DIRECT | liburing
-                              |
-                              +-> dependency-bearing JSONL -> MQSim open-loop export
-```
+This \`main\` branch contains the **final** NavHints Core implementation, source-fidelity checks for competing methods, training scripts, four-dataset SSD replays, optional persistent-exit experiments, and an adapter for the **original** Starling library. Exploratory alternatives remain in their Git branches. The original page-oriented GeoIVF implementation is still present; its previous usage guide is [docs/LEGACY_GEOIVF.md](docs/LEGACY_GEOIVF.md). It is **not** the NavHints paper algorithm.
 
-FP32 payload vectors remain unchanged in the page file. Only the RAM summaries
-are quantized. The native adapter uses POSIX and upstream liburing; this project
-does not implement an SSD model. MQSim is an external, commit-pinned dependency.
+## Final algorithm
 
-## Status and scope
+On PubMed1M, Core uses **14,464 learned routing-junction IDs** grouped into 512 PQ-scored regions, a **2,048-ID global unique-FIFO history of successful destinations**, and **up to eight** PQ-scored recent destinations offered as additional starts alongside one learned junction. Training is disjoint; online history is updated **only after each query completes**. Existing DiskANN graph edges, beam, frontier and termination are untouched. Our selector keeps the top ten PQ candidates and admits at most eight to the frontier. The published **102,940-byte** auxiliary-memory figure is the explicitly accounted routing payload, **not total RSS**. Coveo has fewer than 14,464 eligible junctions; the actual learned budget is capped accordingly.
 
-This is an executable evaluation foundation, not a performance result or a
-production search engine. The coordinator and exact distance loop currently
-run in Python/NumPy. Native readers include buffer allocation/copying costs.
-CLIP/HIVF-CLIP, large-scale canonical datasets, PCA projection, multi-query
-scheduling, and calibrated NVMe measurements are not integrated yet.
+An optional Sample2 persistent-exit extension records up to ten winners for selected junctions, with one-half admission probability and fill-only-empty-slot seeding from the global history. **RAM-only Core is the primary algorithm.** Sample2 is measured separately; logical update counts are not physical write amplification or crash-recovery evidence.
 
-The `radial` filter is the deterministic reverse-triangle inequality over a
-page's centroid-distance interval. It is NOT CLIP's learned angular bound and
-must never be labeled CLIP in a results table. `geopack` is currently balanced
-recursive coordinate partitioning within existing IVF lists, not a claim of a
-new clustering algorithm.
+## Activate and reproduce
 
-Initial local validation: 30 tests passed with direct-I/O tests enabled. Faiss
-and io_uring execution were skipped because their dependencies were unavailable
-in the isolated development container. The integration workflow requires Faiss
-and runs upstream MQSim on a small synthetic fixture. Check its actual status
-before treating either integration as validated.
+Requires **Linux**, Python 3.10+ (tested with a Python 3.11 environment), Git, Rust/rustup with **1.97.1**, C/C++ build tools, and access to a **real NVMe SSD** for performance measurements. We use \`numpy==2.2.6\`, \`faiss-cpu>=1.9,<2\` where needed, DiskANN commit \`fcf90534174cf29c78c9f13b4cccf1fcabff85f5\`, and Starling commit \`17dc3e8a011533a62374445f53963e951b72883a\`. Third-party sources are cloned at their original pinned SHAs, not vendored or modified in this repository.
 
-## Setup
+\`\`\`bash
+git clone https://github.com/gilga1983/GeoIVF.git
+cd GeoIVF
+source repro/activate.sh
 
-Linux, Python 3.10+, a C++17 compiler, and `make`:
+navhints list                    # View every supported experiment
+navhints doctor --mode pubmed    # Check tools and frozen dataset files
+navhints run pubmed              # DRY RUN: prints exact command, no SSD work
+navhints run pubmed --execute    # HEAVY: pinned index, causal replays, real SSD
+\`\`\`
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-make
-GEOIVF_TEST_DIRECT=1 python -m pytest -q
-python scripts/smoke.py --out artifacts/smoke
-```
+**No heavy run or dataset download is performed without \`--execute\`.** Each run archives raw queries/results logs, SHA-256 inputs and relevant source diffs. Experimental scripts use the verified dataset layout under \`$HOME/.cache/geoivf\`, and refuse missing required inputs rather than silently substituting a dataset. Original Coveo data are licensed: **provide your authorized private frozen source data locally** and do not commit or upload the raw records.
 
-Dependencies have bounded compatible ranges. Every CI run archives `pip freeze`
-and its Git commit. Freeze those resolved versions before a performance campaign.
+### Available reproduction commands
 
-For the optional asynchronous backend, install the distribution's `liburing-dev`
-package, then explicitly rebuild and validate it:
+| Command | Evidence produced |
+| --- | --- |
+| \`navhints run pubmed --execute\` | DiskANN / junction-only / final RAM-only Core / Sample2 on PubMed1M |
+| \`navhints run coveo --execute\` | Identical causal stages on chronological Coveo demand |
+| \`navhints run text2image --execute\` | Frozen Text2Image-10M SSD index and four-arm replay |
+| \`navhints run bigann --execute\` | Frozen BigANN-10M SSD index and four-arm replay |
+| \`navhints run catapult --execute\` | Same-session source-aligned Catapult routing vs final Core |
+| \`navhints run memory --execute\` | Fixed **equal-accounted-payload** junction/destination budget ablation |
+| \`navhints run sensitivity --execute\` | Warm-up, controlled locality and training-support shift |
+| \`navhints run persistence --execute\` | Sample1/2/4/10 and empty-slot seeding; reads and logical writes |
+| \`navhints run starling-coveo --execute\` | Final Core in original native Starling on Coveo |
+| \`navhints run starling-bigann --execute\` | Same original Starling port on BigANN-10M |
 
-```bash
-make clean
-make URING=1
-GEOIVF_TEST_DIRECT=1 GEOIVF_TEST_URING=1 python -m pytest -q
-```
+The original workflows are available in [\`.github/workflows/\`](.github/workflows/) with \`workflow_dispatch\`. They are **self-hosted only** (\`[self-hosted, linux, x64, geoivf]\`) and should not be run simultaneously against the same NVMe device. Use \`doctor\` first and confirm the correct host, authorized data and free storage. The full source/hardware/data contract is in [docs/REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md).
 
-A disabled kernel interface, missing dependency, alignment failure, or failed
-read causes an error. No backend silently falls back from direct to cached I/O
-or from io_uring to synchronous reads.
+### Rebuild paper figures directly from frozen results
 
-## Build and search
+If you only need to **reproduce the published numbers and graphs**, you do **not** need to rerun hours of SSD benchmarks. Download the immutable successful GitHub Actions artifacts and regenerate the CSVs:
 
-Input: finite float32 `.npy` or `.fvecs`, L2 metric, vector magnitudes <= 1e10.
-Construction currently requires the base dataset in memory.
+\`\`\`bash
+source repro/activate.sh
+navhints fetch all             # Preview the 10 run/artifact downloads
+navhints fetch all --execute   # Requires gh CLI and GitHub authentication
+navhints verify all           # Validate all ten ZIP contents and policy fields
+navhints_paper                 # Dry run: lists exact paper regeneration/build steps
+navhints_paper --execute       # Regenerates CSVs, then invokes make verify-latex
+\`\`\`
 
-```bash
-python -m geoivf build --base data/base.fvecs --out data/geopack \
-  --nlist 1024 --layout geopack --dims 16 --balls 8
+Clone [the paper repository](https://github.com/gilga1983/DemmandAwareANN) beside GeoIVF as \`../DemmandAwareANN\` before running the final command. To build its PDF, install its pinned PVLDB 2027 template and local pdfLaTeX/BibTeX tools. The paper regeneration scripts **refuse missing or mismatched artifacts**, never impute values and never extrapolate outside the common recall interval. The \`verify-latex\` target does not overwrite the tracked PDF; the actual source and plots should be reviewed before preparing a submission PDF.
 
-# Strong contiguous-list baseline on this same physical layout:
-python -m geoivf search --index data/geopack --queries data/query.fvecs \
-  --out artifacts/baseline --backend native --direct --filter none \
-  --nprobe 32 --window-pages 0 --max-extent-pages 256 --trace
+For a machine without access to large datasets, the ten artifact ZIPs are enough for the plotting and prose audit. Frozen original data/SSD graph binaries are **not** checked into Git. See [repro/manifest.json](repro/manifest.json) for engine SHAs, run IDs, artifact names, file layout and policy parameters.
 
-# Same coarse candidate lists, with completion-driven page filtering:
-python -m geoivf search --index data/geopack --queries data/query.fvecs \
-  --out artifacts/filtered --backend native --direct --filter combined \
-  --nprobe 32 --window-pages 64 --max-extent-pages 256 --trace
-```
+## Directory map
 
-Use `--backend uring --direct --queue-depth 16` after the optional build.
-`--gap-pages 1` permits reading one unnecessary page to join adjacent extents;
-all such extra bytes and distances are counted. `--max-extent-pages` caps a
-request's size. `--window-pages 0` means one whole-list planning window (subject
-to the explicit seed reads used by filtered search).
+- [\`scripts/patch_diskann_hint_ivf_packed_direct.py\`](scripts/patch_diskann_hint_ivf_packed_direct.py), [\`scripts/patch_diskann_experience_core.py\`](scripts/patch_diskann_experience_core.py), [\`scripts/patch_navhints_regional_history.py\`](scripts/patch_navhints_regional_history.py): final DiskANN routing and online/persistent state patches, applied to the pinned Microsoft checkout.
+- [\`scripts/learn_global_navigation_landmarks.py\`](scripts/learn_global_navigation_landmarks.py), [\`scripts/learn_navhints_generic.py\`](scripts/learn_navhints_generic.py), [\`scripts/build_hint_ivf.py\`](scripts/build_hint_ivf.py), [\`scripts/build_hint_ivf_generic.py\`](scripts/build_hint_ivf_generic.py): workload-trained junctions and compact PQ-region layout.
+- [\`scripts/qualify_final_core_public.py\`](scripts/qualify_final_core_public.py), [\`scripts/qualify_final_core_coveo.py\`](scripts/qualify_final_core_coveo.py) and their \`run_final_core_*_ci.sh\` scripts: reproducible, four-arm, causal frozen evaluations.
+- [\`scripts/qualify_optimal_navhints_catapult.py\`](scripts/qualify_optimal_navhints_catapult.py): direct final-Core vs author-aligned Catapult comparison; audited original Catapult source semantics and common DiskANN graph.
+- [\`scripts/patch_starling_final_core.py\`](scripts/patch_starling_final_core.py), [\`scripts/generate_starling_final_core.py\`](scripts/generate_starling_final_core.py): original Starling source adapter, where its *native* memory navigator and SSD layout remain enabled.
+- [\`repro/run.py\`](repro/run.py), [\`repro/activate.sh\`](repro/activate.sh), [\`repro/manifest.json\`](repro/manifest.json): supported activation, preflight, replay, artifact retrieval and paper regeneration.
+- [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), [docs/REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md), [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md): code decisions, exact dataset splits, verified runs and caveats.
 
-New output/index directories must be empty. Results include `neighbors.npy`,
-`queries.csv`, `run.json`, and optional `requests.jsonl`. Compare neighbor IDs
-as well as recall against ground truth. The common kernel computes L2 in FP64
-on unchanged FP32 payloads and breaks equal-distance ties by ID; Faiss can choose
-a different ordering at floating-point ties. The Faiss integration test checks
-untied fixtures; production comparisons must document their tie policy.
+## Reproduced headline evidence
 
-## Correctness and memory accounting
+All source references are listed in [the frozen manifest](repro/manifest.json). Real-SSD final-Core+Sample2 matched-recall logical-read savings versus unmodified DiskANN are **80.69% Coveo**, **44.23% PubMed**, **34.53% Text2Image-10M**, and **21.01% BigANN-10M** on each run's jointly reachable recall targets; targets differ by workload. On PubMed, RAM-only Core saves **13.28% logical SSD reads** compared with an **author-aligned Catapult hash/LRU routing mechanism on the same pinned DiskANN SSD engine** across 11 common recall anchors, not the author's complete original in-memory system. The Starling port is tested in the **original** author search engine: substantial benefits on Coveo, near break-even logical I/O on BigANN. The repeated query sequences are fixed, so do not infer confidence intervals from independent samples.
 
-The first representation uses a variance-ranked subset of original coordinates.
-This selection is a Euclidean contraction without estimating a PCA operator
-norm. Each page has 1..capacity enclosing balls. Centers use shared-scale uint8
-coordinates; radii use outward-rounded FP32. The radius is recomputed against
-the original projected points AFTER center quantization. Query bounds are
-computed in FP64 with a conservative numerical guard. This is an engineering
-implementation of the covering invariant, not a formally verified floating-point
-library. Boundary and containment tests accompany it.
+All auxiliary-memory budgets exclude some container metadata; SSD read counts and optional logical writes must not be relabeled physical NVMe block operations. Reproducing the paper means reproducing the **evaluation protocol and its limitations**, not merely matching its reported percentages.
 
-The threshold starts at infinity and changes only after fetching and evaluating
-actual vectors. No exact-neighbor oracle supplies the online threshold. Pages
-are rejected only for `lower_bound > current_kth_distance`, retaining ties.
-Candidate lists are fixed before filtering. Completion batches are processed in
-canonical request order so backend completion order cannot change subsequent
-read decisions. The current coordinator waits for a whole stage before planning
-the next one; it is not a fully pipelined concurrent query engine.
+## Archival history
 
-For `b` balls and `m` retained coordinates, summary arrays cost `b*(m+4)` bytes per
-page, not `b*(m+1)`: one-byte radii have NOT been implemented. The radial interval
-adds 8 bytes/page. IDs, valid counts, list ranges, quantization scales and coarse
-centroids also consume RAM. `manifest.json` separates summary bytes from the
-complete NumPy directory size. Faiss routing makes an additional centroid copy;
-Python/runtime and transient decoded arrays must be included in RSS measurements.
-Do not call summary bytes the total index RAM budget.
-
-## MQSim
-
-```bash
-bash scripts/setup_mqsim.sh
-python scripts/mqsim_smoke.py --trace artifacts/smoke/geopack-combined.jsonl
-```
-
-This clones and builds upstream MQSim at commit
-`51f0f2d3fed92d88ef4a0fa61a38024b07bf9d16`. It preserves the upstream license and
-records the revision with the output. The smoke configuration is deliberately
-small and is NOT calibrated to the host's NVMe drive.
-
-For a device-sensitivity experiment with an explicitly chosen arrival policy:
-
-```bash
-python -m geoivf export-mqsim --trace artifacts/filtered/requests.jsonl \
-  --out artifacts/device-test --ssd-config third_party/MQSim/ssdconfig.xml \
-  --request-gap-ns 100000
-third_party/MQSim/MQSim -i third_party/MQSim/ssdconfig.xml \
-  -w artifacts/device-test/workload.xml
-```
-
-The exporter writes MQSim's five fields: arrival time, device, starting LBA,
-length in 512-byte sectors, and opcode (`1` means read). It derives resource IDs
-from the supplied device configuration and rejects out-of-capacity addresses
-rather than silently wrapping them.
-
-**Critical limitation:** JSONL retains query IDs and read-stage dependencies,
-but MQSim's ordinary trace format cannot express those dependencies. The exporter
-uses explicitly synthetic fixed-spacing arrivals and marks the output
-`open-loop-device-only`, `query_latency_valid=false`. This is useful for device
-service/traffic sensitivity, not for reporting end-to-end ANN latency or QPS.
-Changing SSD timings can change when a later stage may be issued. A future
-closed-loop bridge or a real backend must enforce those completions. Never sum
-MQSim I/O latencies to derive query latency, or relabel IOPS as ANN QPS.
-
-## Execution discipline
-
-The integration workflow runs only trusted pushes to `main` or manual main-branch
-runs on the repository's `geoivf` runners. It does not run public pull requests on
-self-hosted machines. It launches one integration job, limits thread counts and
-build parallelism, and archives logs/results. No root operations or system cache
-flushing are performed. Ten runners on one laptop are not ten independent SSDs:
-use them for offline sweeps, not simultaneous latency benchmarks on one device.
-
-Logical requested pages/extents are not necessarily physical NVMe commands.
-Buffered reads may hit the OS cache; direct I/O still includes the kernel/device
-stack and controller caching. Actual block-layer traffic and queueing must be
-measured during the controlled real-NVMe evaluation. Keep trace collection separate
-from final timing runs and report filter, routing, I/O, distance and total costs.
-
-## Primary references
-
-- Faiss IVFFlat and preassigned candidate semantics:
-  https://faiss.ai/cpp_api/struct/structfaiss_1_1IndexIVFFlat.html
-- Upstream MQSim, FAST 2018, trace format and device parameters:
-  https://github.com/CMU-SAFARI/MQSim
-- liburing read interface:
-  https://man7.org/linux/man-pages/man3/io_uring_prep_read.3.html
-- Direct-I/O alignment and filesystem limitations:
-  https://man7.org/linux/man-pages/man2/open.2.html
+This repository began as a page-oriented GeoIVF prototype. Its code (\`geoivf/\`, \`native/\`, \`tests/\`) and earlier workflows are preserved for historical reproducibility but are **not** the selected NavHints paper implementation. The original README is [archived without editing](docs/LEGACY_GEOIVF.md). Explore earlier NavHints alternatives on their named Git branches; \`main\` supports the selected final Core and the validated comparisons, not every prototype.
