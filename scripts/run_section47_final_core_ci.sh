@@ -116,4 +116,4 @@ ARGS=(--dataset "$DATASET" --index-prefix "$INDEX" --queries "$QUERIES" --gt "$G
 if [[ "$DATASET" == pubmed ]];then ARGS+=(--qsev-binary "$WORK/diskann-qsev/target/release/diskann-benchmark" --qsev-dir "$WORK");fi
 "$PYC" scripts/qualify_section47_final_core.py "${ARGS[@]}" > "$ART/eval.log" 2>&1
 test -s "$ART/results/section47-final-core.json"
-echo "SECTION47_$DATASET_SUCCESS"
+echo "SECTION47_${DATASET}_SUCCESS"

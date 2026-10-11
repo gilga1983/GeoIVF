@@ -103,10 +103,13 @@ def patch_factory(path: Path) -> None:
                         "static cache ID outside graph range",
                     ));
                 }
-                self.cache = Some(Arc::new(self.build_cache_from_ids(
-                    &ids,
-                    graph_metadata.dims,
-                )?));
+                let built_cache = self.build_cache_from_ids(&ids, graph_metadata.dims)?;
+                eprintln!(
+                    "NAVHINTS_CACHE_READY mode=static_ids requested={} loaded={}",
+                    ids.len(),
+                    built_cache.len()
+                );
+                self.cache = Some(Arc::new(built_cache));
             }
             CachingStrategy::None => {}
         }
@@ -206,14 +209,112 @@ def patch_benchmark(path: Path) -> None:
     new = """    let caching_strategy = if let Some(path) =
         std::env::var_os("DISKANN_STATIC_CACHE_IDS_FILE")
     {
+        eprintln!("NAVHINTS_CACHE_MODE=static_ids path={}", path.to_string_lossy());
         CachingStrategy::StaticCacheWithIdFile(path.to_string_lossy().into_owned())
     } else if let Some(num_nodes) = search_params.num_nodes_to_cache {
+        eprintln!("NAVHINTS_CACHE_MODE=native_bfs count={}", num_nodes);
         CachingStrategy::StaticCacheWithBfsNodes(num_nodes)
     } else {
+        eprintln!("NAVHINTS_CACHE_MODE=none");
         CachingStrategy::None
     };
 """
     s = once(s, old, new, "benchmark cache strategy")
+    path.write_text(s)
+
+
+
+def patch_cache_io_accounting(path: Path) -> None:
+    """Count physical graph-record reads separately from requested expansions.
+
+    Pinned DiskANN increments IOTracker by ids.len() after every expansion, even
+    when CachedDiskVertexProvider served some or all IDs from RAM. It also sets
+    total_vertices_loaded = io_count(), making Cache Hit % identically zero.
+    The underlying provider already tracks actual uncached reads; use its delta
+    per load. Retain the number of requested expansion IDs as a distinct counter.
+    Uncached runs retain exactly the original reported I/O counts.
+    """
+    s = path.read_text()
+    s = once(
+        s,
+        """struct IOTracker {
+    io_time_us: AtomicU64,
+    preprocess_time_us: AtomicU64,
+    io_count: AtomicUsize,
+}""",
+        """struct IOTracker {
+    io_time_us: AtomicU64,
+    preprocess_time_us: AtomicU64,
+    io_count: AtomicUsize,
+    vertices_requested: AtomicUsize,
+}""",
+        "track requested expansions separately",
+    )
+    s = once(
+        s,
+        """            preprocess_time_us: AtomicU64::new(0),
+            io_count: AtomicUsize::new(0),
+""",
+        """            preprocess_time_us: AtomicU64::new(0),
+            io_count: AtomicUsize::new(0),
+            vertices_requested: AtomicUsize::new(0),
+""",
+        "initialize requested expansion counter",
+    )
+    s = once(
+        s,
+        """    fn io_count(&self) -> usize {
+        self.io_count.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}""",
+        """    fn io_count(&self) -> usize {
+        self.io_count.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn add_vertices_requested(&self, count: usize) {
+        self.vertices_requested
+            .fetch_add(count, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn vertices_requested(&self) -> usize {
+        self.vertices_requested
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+}""",
+        "report the attempted expansions",
+    )
+    s = once(
+        s,
+        """        ensure_vertex_loaded(&mut scratch.vertex_provider, ids)?;
+        IOTracker::add_time(
+            &self.io_tracker.io_time_us,
+            timer.elapsed().as_micros() as u64,
+        );
+        self.io_tracker.add_io_count(ids.len());
+        for id in ids {""",
+        """        let before_reads = scratch.vertex_provider.io_operations();
+        ensure_vertex_loaded(&mut scratch.vertex_provider, ids)?;
+        let after_reads = scratch.vertex_provider.io_operations();
+        let actual_reads = after_reads.checked_sub(before_reads).ok_or_else(|| {
+            diskann_error!(ErrorKind::IndexError, "graph read counter regressed")
+        })?;
+        IOTracker::add_time(
+            &self.io_tracker.io_time_us,
+            timer.elapsed().as_micros() as u64,
+        );
+        self.io_tracker.add_io_count(actual_reads as usize);
+        self.io_tracker.add_vertices_requested(ids.len());
+        for id in ids {""",
+        "count actual provider reads rather than cache hits",
+    )
+    s = once(
+        s,
+        """        query_stats.total_io_operations = io_tracker.io_count() as u32;
+        query_stats.total_vertices_loaded = io_tracker.io_count() as u32;""",
+        """        query_stats.total_io_operations = io_tracker.io_count() as u32;
+        query_stats.total_vertices_loaded = io_tracker.vertices_requested() as u32;""",
+        "fix cache hit statistics",
+    )
     path.write_text(s)
 
 
@@ -225,14 +326,16 @@ def main() -> None:
     cache = root / "diskann-disk/src/data_model/cache.rs"
     factory = root / "diskann-disk/src/search/provider/disk_vertex_provider_factory.rs"
     benchmark = root / "diskann-benchmark/src/disk_index/search.rs"
-    for path in (cache, factory, benchmark):
+    disk_provider = root / "diskann-disk/src/search/provider/disk_provider.rs"
+    for path in (cache, factory, benchmark, disk_provider):
         if not path.is_file():
             raise SystemExit(f"unexpected DiskANN checkout: missing {path}")
 
     patch_cache_enum(cache)
     patch_factory(factory)
     patch_benchmark(benchmark)
-    print("patched DiskANN with workload-selected full-node static cache")
+    patch_cache_io_accounting(disk_provider)
+    print("patched DiskANN: static full-node cache with actual-SSD-read accounting")
 
 
 if __name__ == "__main__":

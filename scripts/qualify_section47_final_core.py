@@ -86,6 +86,20 @@ def main():
     qsev=Path(a.qsev_dir)/("qsev-"+method.split("-")[1]+".bin") if kind=="qsev" else None
     capacity=int(method.split("-")[1]) if kind=="bfs" else 0
     rr=run(binary,a.index_prefix,x,y,out,"r%d-%s"%(rep,method),a.data_type,a.metric,kind,ivf,cache,qsev,capacity)
+    if kind in ("hot","bfs"):
+     # Upstream DiskANN's raw IOTracker counts expansions, including cache
+     # hits. The cache patch must count *actual uncached provider reads*.
+     # Reject the old all-zero "Cache Hit %" symptom immediately.
+     hit_values=[float(row["cache_hit_percentage"]) for row in rr]
+     if not any(x>0 for x in hit_values):
+      raise RuntimeError(
+       f"{method} rep {rep}: no cache hits in any search width; "
+       "cache I/O instrumentation not enabled or cache not populated"
+      )
+     for row in rr:
+      physical=float(row["mean_ios"]); attempted=float(row["mean_hops"])
+      if physical<0 or physical>attempted+1e-5:
+       raise RuntimeError(f"{method}: invalid actual SSD-read count: {row}")
     results[method].append(rr);save(out/"partial-raw.json",results)
  summary={m:aggregate(reps) for m,reps in results.items()}
  anchor=[float(v["recall_percent"]) for v in summary["core"].values()]
