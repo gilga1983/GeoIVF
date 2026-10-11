@@ -83,7 +83,7 @@ def rows_of(o):
 
 
 def run_one(binary, label, queries, gt, index, L, out, *,
-            mode, seed=None, snapshot_load=None, snapshot_dump=None, train=False, ivf=None):
+            mode, seed=None, snapshot_load=None, snapshot_dump=None, train=False, ivf=None, extra_env=None):
     phase = {
         "queries": str(queries),
         "groundtruth": str(gt),
@@ -153,6 +153,8 @@ def run_one(binary, label, queries, gt, index, L, out, *,
     else:
         raise ValueError(f"unknown method {mode}")
 
+    if extra_env is not None:
+        env.update({str(k): str(v) for k, v in extra_env.items()})
     started = time.monotonic()
     with log.open("w") as lf:
         subprocess.run(
