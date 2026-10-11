@@ -43,7 +43,7 @@ else
  MANIFEST="$DATA/dataset.manifest.json"
  test -s "$MANIFEST"
  BASE="$("$PYC" -c 'import json,sys;print(json.load(open(sys.argv[1]))["files"]["base"])' "$MANIFEST")"
- QUERIES="$("$PYC" -c 'import json,sys;print(json.load(open(sys.argv[1]))["files"]["queries"])' "$MANIFEST")"
+ QUERIES="$("$PYC" -c 'import json,sys;print(json.load(open(sys.argv[1]))["files"]["heldout5000"])' "$MANIFEST")"
  GT="$("$PYC" -c 'import json,sys;print(json.load(open(sys.argv[1]))["files"]["heldout5000_gt"])' "$MANIFEST")"
  INDEX="$PUBLIC/index/diskann-index"
  TRACE="$PUBLIC/trace/teacher.jsonl"
