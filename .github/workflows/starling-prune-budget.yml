@@ -1,0 +1,94 @@
+name: Native Starling NavHints prune and budget study
+
+on:
+  push:
+    branches: [experiment/starling-prune-budget-20261012]
+    paths:
+      - ".github/workflows/starling-prune-budget.yml"
+      - "scripts/patch_starling_prune_budget.py"
+      - "scripts/generate_starling_prune_budget.py"
+      - "scripts/summarize_starling_prune_budget.py"
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "components or compact"
+        required: true
+        type: choice
+        options: [components, compact]
+        default: components
+
+permissions:
+  contents: read
+
+concurrency:
+  group: starling-native-prune-budget
+  cancel-in-progress: false
+
+jobs:
+  source-check:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check Python source, native replay generation, and Bash syntax
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile \
+            scripts/patch_starling_prune_budget.py \
+            scripts/generate_starling_prune_budget.py \
+            scripts/summarize_starling_prune_budget.py
+          for dataset in coveo bigann pubmed text2image; do
+            python3 scripts/generate_starling_prune_budget.py "$dataset" --stage components
+            python3 scripts/generate_starling_prune_budget.py "$dataset" --stage compact
+            for stage in components compact; do
+              shell="scripts/run_starling_prune_budget_${dataset}_${stage}.generated.sh"
+              bash -n "$shell"
+              grep -Fq 'patch_starling_prune_budget.py' "$shell"
+              grep -Fq 'summarize_starling_prune_budget.py' "$shell"
+            done
+          done
+          echo STARLING_PRUNE_BUDGET_SOURCE_CHECK_PASS
+
+  native-pilot:
+    needs: source-check
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 1440
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        dataset: [coveo, bigann]
+    env:
+      OMP_NUM_THREADS: "4"
+      OPENBLAS_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "1"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Original native Starling component pruning and matched recall
+        shell: bash
+        env:
+          PRUNE_STAGE: ${{ github.event.inputs.stage || 'components' }}
+        run: |
+          set -euxo pipefail
+          python3 scripts/generate_starling_prune_budget.py \
+            "${{ matrix.dataset }}" --stage "$PRUNE_STAGE" --run
+      - name: Preserve source diff, native search logs, per-query diagnostics and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "starling-prune-${{ matrix.dataset }}-${{ github.event.inputs.stage || 'components' }}"
+          path: "artifacts/starling-prune-budget-${{ matrix.dataset }}-${{ github.event.inputs.stage || 'components' }}/"
+          retention-days: 14
+      - name: Remove only isolated native Starling scratch space
+        if: always()
+        shell: bash
+        env:
+          PRUNE_STAGE: ${{ github.event.inputs.stage || 'components' }}
+        run: |
+          rm -rf "$RUNNER_TEMP/starling-prune-budget-${{ matrix.dataset }}-${PRUNE_STAGE}-$GITHUB_RUN_ID"
