@@ -70,6 +70,16 @@ jobs:
       - name: Benchmark full query scope on pinned SSD (exclusive device lock)
         shell: bash
         run: bash scripts/run_navhints_service_latency_ci.sh
+      - name: Explain native compilation or evaluation failures
+        if: failure()
+        shell: bash
+        run: |
+          for file in artifacts/navhints-complete-service-pubmed/{navhints-build,catapult-build,evaluation,ivf-build,pip,rustup}.log; do
+            if [ -s "$file" ]; then
+              echo "======== $file ========"
+              tail -n 150 "$file"
+            fi
+          done
       - name: Archive source patches, per-query raw data, and aggregate report
         if: always()
         uses: actions/upload-artifact@v4
