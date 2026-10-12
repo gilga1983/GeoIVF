@@ -81,6 +81,8 @@ def profile_code(measured_start: str, engine: str, indent: str) -> str:
 
 
 def patch_nav(source: str) -> str:
+    if "struct CompleteRequestTimer" in source:
+        raise RuntimeError("complete-service timer already installed in NavHints source")
     s = once(source, "// Simplified internal structures to reduce parameter count\n",
              GUARD + "// Simplified internal structures to reduce parameter count\n",
              "NavHints service-scope guard")
@@ -140,6 +142,8 @@ def patch_nav(source: str) -> str:
 
 
 def patch_catapult(source: str) -> str:
+    if "struct CompleteRequestTimer" in source:
+        raise RuntimeError("complete-service timer already installed in Catapult source")
     s = once(source, "// Simplified internal structures to reduce parameter count\n",
              GUARD + "// Simplified internal structures to reduce parameter count\n",
              "Catapult service-scope guard")
