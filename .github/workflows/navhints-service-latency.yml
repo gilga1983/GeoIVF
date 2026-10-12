@@ -49,14 +49,14 @@ jobs:
           test "$(grep -c 'DISKANN_EXPERIENCE_CACHE_CAPACITY' scripts/qualify_navhints_service_latency.py)" -ge 1
 
   native-ssd-service:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[service-smoke]')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[service-smoke]') || contains(github.event.head_commit.message, '[service-full]')
     needs: static-service-tests
     runs-on: [self-hosted, linux, x64, geoivf]
     timeout-minutes: 720
     env:
-      SERVICE_WIDTHS: ${{ (github.event_name == 'workflow_dispatch' && inputs.suite == 'full') && '10,12,20,24,40,80,120,160,200,240,280,320' || '40,80,160' }}
-      SERVICE_REPS: ${{ (github.event_name == 'workflow_dispatch' && inputs.suite == 'full') && '3' || '1' }}
-      SERVICE_CAT_SEEDS: ${{ (github.event_name == 'workflow_dispatch' && inputs.suite == 'full') && '0,1,2' || '0' }}
+      SERVICE_WIDTHS: ${{ ((github.event_name == 'workflow_dispatch' && inputs.suite == 'full') || contains(github.event.head_commit.message, '[service-full]')) && '10,12,20,24,40,80,120,160,200,240,280,320' || '40,80,160' }}
+      SERVICE_REPS: ${{ ((github.event_name == 'workflow_dispatch' && inputs.suite == 'full') || contains(github.event.head_commit.message, '[service-full]')) && '3' || '1' }}
+      SERVICE_CAT_SEEDS: ${{ ((github.event_name == 'workflow_dispatch' && inputs.suite == 'full') || contains(github.event.head_commit.message, '[service-full]')) && '0,1,2' || '0' }}
       CARGO_BUILD_JOBS: "4"
       CMAKE_BUILD_PARALLEL_LEVEL: "4"
       OMP_NUM_THREADS: "1"
