@@ -73,7 +73,7 @@ jobs:
       - name: Original native Starling component pruning and matched recall
         shell: bash
         env:
-          PRUNE_STAGE: ${{ github.event.inputs.stage || 'components' }}
+          PRUNE_STAGE: ${{ github.event.inputs.stage || 'compact' }}
         run: |
           set -euxo pipefail
           python3 scripts/generate_starling_prune_budget.py \
@@ -82,13 +82,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: "starling-prune-${{ matrix.dataset }}-${{ github.event.inputs.stage || 'components' }}"
-          path: "artifacts/starling-prune-budget-${{ matrix.dataset }}-${{ github.event.inputs.stage || 'components' }}/"
+          name: "starling-prune-${{ matrix.dataset }}-${{ github.event.inputs.stage || 'compact' }}"
+          path: "artifacts/starling-prune-budget-${{ matrix.dataset }}-${{ github.event.inputs.stage || 'compact' }}/"
           retention-days: 14
       - name: Remove only isolated native Starling scratch space
         if: always()
         shell: bash
         env:
-          PRUNE_STAGE: ${{ github.event.inputs.stage || 'components' }}
+          PRUNE_STAGE: ${{ github.event.inputs.stage || 'compact' }}
         run: |
           rm -rf "$RUNNER_TEMP/starling-prune-budget-${{ matrix.dataset }}-${PRUNE_STAGE}-$GITHUB_RUN_ID"
