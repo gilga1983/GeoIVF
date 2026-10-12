@@ -1,0 +1,82 @@
+name: NavHints complete service latency (PubMed)
+
+on:
+  push:
+    branches: [experiment/navhints-service-latency-20261012]
+    paths:
+      - ".github/workflows/navhints-service-latency.yml"
+      - "scripts/patch_diskann_full_service.py"
+      - "scripts/qualify_navhints_service_latency.py"
+      - "scripts/run_navhints_service_latency_ci.sh"
+      - "tests/test_navhints_service_latency.py"
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "Smoke validates instrumentation; full runs three rotations and Catapult seeds"
+        type: choice
+        required: true
+        default: smoke
+        options:
+          - smoke
+          - full
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-complete-service-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  static-service-tests:
+    if: github.repository == 'gilga1983/GeoIVF'
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify patching and percentile/matched-recall contracts
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile \
+            scripts/patch_diskann_full_service.py \
+            scripts/qualify_navhints_service_latency.py
+          bash -n scripts/run_navhints_service_latency_ci.sh
+          python3 -m unittest discover -s tests -p 'test_navhints_service_latency.py' -v
+          test "$(grep -c 'DISKANN_EXPERIENCE_CACHE_CAPACITY' scripts/qualify_navhints_service_latency.py)" -ge 1
+
+  native-ssd-service:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[service-smoke]')
+    needs: static-service-tests
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      SERVICE_WIDTHS: ${{ (github.event_name == 'workflow_dispatch' && inputs.suite == 'full') && '10,12,20,24,40,80,120,160,200,240,280,320' || '40,80,160' }}
+      SERVICE_REPS: ${{ (github.event_name == 'workflow_dispatch' && inputs.suite == 'full') && '3' || '1' }}
+      SERVICE_CAT_SEEDS: ${{ (github.event_name == 'workflow_dispatch' && inputs.suite == 'full') && '0,1,2' || '0' }}
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      RUSTFLAGS: "-C target-cpu=native"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Benchmark full query scope on pinned SSD (exclusive device lock)
+        shell: bash
+        run: bash scripts/run_navhints_service_latency_ci.sh
+      - name: Archive source patches, per-query raw data, and aggregate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navhints-complete-service-pubmed-${{ github.run_id }}
+          path: artifacts/navhints-complete-service-pubmed/
+          retention-days: 14
+      - name: Clean only this workflow's unique source and replay scratch
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/navhints-complete-service-$GITHUB_RUN_ID"
