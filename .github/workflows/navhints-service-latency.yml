@@ -9,6 +9,7 @@ on:
       - "scripts/qualify_navhints_service_latency.py"
       - "scripts/run_navhints_service_latency_ci.sh"
       - "tests/test_navhints_service_latency.py"
+      - "docs/NAVHINTS-COMPLETE-SERVICE-2026-10-12.md"
   workflow_dispatch:
     inputs:
       suite:
