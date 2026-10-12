@@ -42,6 +42,8 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_navhints_service_multidata.py' -v
           python3 -m unittest discover -s tests -p 'test_navhints_service_latency.py' -v
 
+  # Publication candidate: full pushes use 6 L values, 3 rotations, 3 seeds.
+  # SSD locking and max-parallel=1 serialize competing jobs on the Legion.
   per-workload:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[service-multi-smoke]') || contains(github.event.head_commit.message, '[service-multi-full]')
     needs: contracts
