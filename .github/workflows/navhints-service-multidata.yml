@@ -1,0 +1,93 @@
+name: NavHints complete-service latency all remaining workloads
+
+on:
+  push:
+    branches: [experiment/navhints-service-multidata-20261012]
+    paths:
+      - ".github/workflows/navhints-service-multidata.yml"
+      - "scripts/qualify_navhints_service_multidata.py"
+      - "scripts/run_navhints_service_multidata_ci.sh"
+      - "tests/test_navhints_service_multidata.py"
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "Smoke tests source adapters; full evaluates three independent rotations and three Catapult seeds"
+        type: choice
+        required: true
+        default: smoke
+        options: [smoke, full]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-service-multidata-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contracts:
+    if: github.repository == 'gilga1983/GeoIVF'
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify frozen configurations and service profiling tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile scripts/qualify_navhints_service_multidata.py
+          bash -n scripts/run_navhints_service_multidata_ci.sh
+          python3 -m unittest discover -s tests -p 'test_navhints_service_multidata.py' -v
+          python3 -m unittest discover -s tests -p 'test_navhints_service_latency.py' -v
+
+  per-workload:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[service-multi-smoke]') || contains(github.event.head_commit.message, '[service-multi-full]')
+    needs: contracts
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        dataset: [coveo, text2image-10M, bigann-10M]
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      SERVICE_WIDTHS: ${{ ((github.event_name == 'workflow_dispatch' && inputs.suite == 'full') || contains(github.event.head_commit.message, '[service-multi-full]')) && '10,20,40,80,160,320' || '40,160' }}
+      SERVICE_REPS: ${{ ((github.event_name == 'workflow_dispatch' && inputs.suite == 'full') || contains(github.event.head_commit.message, '[service-multi-full]')) && '3' || '1' }}
+      SERVICE_CAT_SEEDS: ${{ ((github.event_name == 'workflow_dispatch' && inputs.suite == 'full') || contains(github.event.head_commit.message, '[service-multi-full]')) && '0,1,2' || '0' }}
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      RUSTFLAGS: "-C target-cpu=native"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Measure complete native query service on frozen SSD index
+        shell: bash
+        run: bash scripts/run_navhints_service_multidata_ci.sh "${{ matrix.dataset }}"
+      - name: Show diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          ART="artifacts/navhints-complete-service-${{ matrix.dataset }}"
+          for file in "$ART"/{nav,catapult}-build.log "$ART"/evaluation.log; do
+            if [ -s "$file" ]; then
+              echo "====== $file ======"
+              tail -n 130 "$file"
+            fi
+          done
+      - name: Preserve source/data hashes and complete raw request timings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navhints-complete-service-${{ matrix.dataset }}-${{ github.run_id }}
+          path: artifacts/navhints-complete-service-${{ matrix.dataset }}/
+          retention-days: 14
+      - name: Remove only workflow-owned temporary checkouts and query scratch
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/navhints-service-multidata-${{ matrix.dataset }}-$GITHUB_RUN_ID"
