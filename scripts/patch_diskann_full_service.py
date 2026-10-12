@@ -120,6 +120,13 @@ def patch_nav(source: str) -> str:
     ).replace("                    )?;\n", "                    )?\n") + "                };\n"
     replacement = '''                let (search_result, selected_hub, selected_region, cache_top) =
                     if service_mode == "baseline" {
+                        // The original parallel benchmark constructs SearchMode
+                        // inside its closure. Do the same for the causal arm.
+                        let mode: SearchMode<'_> = search_params.search_mode.search_mode(
+                            search_params.vector_filters_file.is_some(),
+                            &vector_filters[qi],
+                            search_params.post_processor.as_ref(),
+                        );
                         (searcher.search(
                             q, search_params.recall_at, l,
                             Some(search_params.beam_width), mode,
