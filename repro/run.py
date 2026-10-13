@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -31,6 +32,8 @@ MANIFEST_PATH = ROOT / "repro" / "manifest.json"
 DATA_ROOT = Path.home() / ".cache" / "geoivf"
 REPRO_RUNS = ("coveo","pubmed","text2image","bigann","catapult","memory",
               "sensitivity","persistence","starling-coveo","starling-bigann")
+SERVICE_ARCHIVES = ("service-pubmed","service-coveo","service-text2image","service-bigann")
+ARCHIVE_IDS = REPRO_RUNS + SERVICE_ARCHIVES
 REQUIRED_TOOLS = ("bash","git","python3","flock","sha256sum","cargo","rustup")
 
 
@@ -40,6 +43,13 @@ def manifest() -> dict:
         raise RuntimeError("Unknown reproducibility manifest version")
     if len(m["runs"]) != len({x["id"] for x in m["runs"]}):
         raise ValueError("Duplicate run IDs in manifest")
+    if set(x["id"] for x in m["runs"]) != set(ARCHIVE_IDS):
+        raise ValueError("Frozen evidence inventory does not cover all fourteen artifacts")
+    for x in m["runs"]:
+        if len(x["source_sha"]) != 40 or len(x["original_artifact_sha256"]) != 64 \
+                or any(ch not in "0123456789abcdef" for ch in
+                       x["source_sha"] + x["original_artifact_sha256"]):
+            raise ValueError(x["id"] + ": invalid provenance hash")
     if set(m["replay_commands"]) != set(REPRO_RUNS):
         raise ValueError("Missing or unknown final-Core experiment commands")
     if m["controller"]["entry_budget"] != 14464 \
@@ -79,6 +89,10 @@ def run_list(m: dict) -> int:
         a = next((e for e in m["runs"] if e["id"] == name), None)
         status = f"verified run #{a['run_id']} artifact #{a['artifact_id']}" if a else "no artifact"
         print(f"{name:18} {' '.join(m['replay_commands'][name]):68} {status}")
+    print("\nEvidence-only complete-service latency archives (no automatic SSD replay):")
+    for name in SERVICE_ARCHIVES:
+        a = next(x for x in m["runs"] if x["id"] == name)
+        print(f"{name:18} run #{a['run_id']} artifact #{a['artifact_id']}")
     return 0
 
 
@@ -193,11 +207,46 @@ def check_artifact(path: Path, record: dict) -> None:
                     "landmarks", "recent_ids_capacity", "injected_starts", "payload_bytes"))
                 if observed != (14464, 2048, 8, 102940):
                     raise ValueError("Catapult/Core allocation mismatch: " + str(observed))
+            if record["id"] in SERVICE_ARCHIVES:
+                if record["id"] == "service-pubmed":
+                    control = data.get("controller", {})
+                    budget = control.get("junctions")
+                    capacity, starts = control.get("recent"), control.get("starts")
+                    reps, seeds = data.get("repetitions"), data.get("catapult_seeds")
+                    widths = data.get("widths", [])
+                else:
+                    expected_dataset = {
+                        "service-coveo": "coveo",
+                        "service-text2image": "text2image-10M",
+                        "service-bigann": "bigann-10M",
+                    }[record["id"]]
+                    if data.get("dataset") != expected_dataset:
+                        raise ValueError(record["id"] + ": wrong service workload")
+                    control = data.get("core", {})
+                    budget = control.get("actual_junctions")
+                    capacity, starts = control.get("recent"), control.get("starts")
+                    protocol = data.get("protocol", {})
+                    reps, seeds = protocol.get("rotated_repetitions"), data.get("catapult", {}).get("seeds")
+                    widths = protocol.get("widths", [])
+                    if protocol.get("in_flight_queries") != 1:
+                        raise ValueError(record["id"] + ": non-causal service replay")
+                    if data.get("catapult", {}).get("accounted_payload_bytes", -1) < control.get("accounted_payload_bytes", 0):
+                        raise ValueError(record["id"] + ": Catapult memory below NavHints")
+                if (data.get("diagnostic") or not isinstance(budget, int)
+                        or not 0 < budget <= 14464 or (capacity, starts) != (2048, 8)
+                        or reps != 3 or sorted(seeds or []) != [0, 1, 2] or not widths):
+                    raise ValueError(record["id"] + ": wrong final-Core service protocol")
+                observations = data.get("measurements", {})
+                for rep in range(3):
+                    for arm in ("baseline", "navhints", "catapult-s0", "catapult-s1", "catapult-s2"):
+                        if f"r{rep}-L{widths[0]}-{arm}" not in observations:
+                            raise ValueError(record["id"] + ": missing service arm " + arm)
 
 
         # Check the producing source snapshot, not only the JSON payload.
-        source_name = ("geoivf-revision.txt" if record["id"].startswith("starling-")
-                       else "geoivf-commit.txt")
+        source_name = record.get("source_member",
+            "geoivf-revision.txt" if record["id"].startswith("starling-")
+            else "geoivf-commit.txt")
         source_members = [n for n in z.namelist()
                           if n == source_name or n.endswith("/" + source_name)]
         if len(source_members) != 1:
@@ -207,14 +256,25 @@ def check_artifact(path: Path, record: dict) -> None:
             raise ValueError(record["id"] + ": wrong source SHA " + observed_sha)
 
 
-def verify(m: dict, target: str, dest: Path) -> int:
+def original_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def verify(m: dict, target: str, dest: Path, original_zip: bool = False) -> int:
     cases = m["runs"] if target == "all" else [next(x for x in m["runs"] if x["id"] == target)]
     failed = []
     for case in cases:
         file = dest / (case["id"] + ".zip")
         try:
             check_artifact(file, case)
-            print(f"PASS {case['id']} run={case['run_id']} artifact={case['artifact_id']} ({file})")
+            if original_zip and original_sha256(file) != case["original_artifact_sha256"]:
+                raise ValueError("original GitHub Actions ZIP SHA-256 mismatch")
+            suffix = " original ZIP digest confirmed" if original_zip else " content verified"
+            print(f"PASS {case['id']} run={case['run_id']} artifact={case['artifact_id']} ({file})" + suffix)
         except (OSError, ValueError, zipfile.BadZipFile, KeyError) as exc:
             print(f"FAIL {case['id']} ({file}): {exc}")
             failed.append(case["id"])
@@ -223,58 +283,78 @@ def verify(m: dict, target: str, dest: Path) -> int:
 
 def fetch(m: dict, target: str, dest: Path, execute: bool, replace: bool) -> int:
     cases = m["runs"] if target == "all" else [next(x for x in m["runs"] if x["id"] == target)]
-    dest.mkdir(parents=True, exist_ok=True)
+    if execute:
+        dest.mkdir(parents=True, exist_ok=True)
     for case in cases:
         destzip = dest / (case["id"] + ".zip")
-        if destzip.exists() and not replace:
-            print(f"Already present: {destzip}; refusing replacement without --replace")
-            continue
-        command = ["gh","run","download",str(case["run_id"]),
-                   "--repo",m["code_repository"],
-                   "--name",case["artifact_name"]]
+        command = ["gh", "run", "download", str(case["run_id"]),
+                   "--repo", m["code_repository"], "--name", case["artifact_name"]]
         if not execute:
             print(f"Dry run: {' '.join(command)} -> {destzip}")
+            continue
+        if destzip.exists() and not replace:
+            check_artifact(destzip, case)
+            print(f"Already verified: {destzip}; refusing replacement without --replace")
             continue
         if not shutil.which("gh"):
             raise RuntimeError("Install and authenticate GitHub CLI (gh auth login)")
         with tempfile.TemporaryDirectory(prefix="navhints-gh-") as tmp:
-            command.extend(["--dir",tmp])
-            subprocess.run(command,check=True)
-            sources=[p for p in Path(tmp).rglob("*") if p.is_file()]
+            command.extend(["--dir", tmp])
+            subprocess.run(command, check=True)
+            sources = [p for p in Path(tmp).rglob("*") if p.is_file()]
             if not sources:
                 raise RuntimeError(f"Empty GitHub artifact {case['artifact_id']}")
-            with zipfile.ZipFile(destzip,"w",zipfile.ZIP_DEFLATED,compresslevel=6) as z:
-                for f in sorted(sources):
-                    z.write(f,f.relative_to(tmp).as_posix())
-        check_artifact(destzip,case)
-        print("Fetched and validated:",destzip)
+            with tempfile.NamedTemporaryFile(
+                prefix=f".{case['id']}-", suffix=".zip", dir=dest, delete=False
+            ) as staged_stream:
+                staged = Path(staged_stream.name)
+            try:
+                with zipfile.ZipFile(staged, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+                    for f in sorted(sources):
+                        z.write(f, f.relative_to(tmp).as_posix())
+                check_artifact(staged, case)
+                staged.replace(destzip)
+            finally:
+                staged.unlink(missing_ok=True)
+        print("Fetched and validated:", destzip)
     return 0
 
 
 def paper(m: dict, paper_dir: Path, archives: Path, execute: bool) -> int:
     paper_dir = paper_dir.resolve()
-    primary = [archives / (n+".zip") for n in ("coveo","pubmed","text2image","bigann")]
-    sensitivity = [archives / (n+".zip") for n in ("sensitivity","persistence")]
-    cmd1 = ["python3","scripts/derive_final_core_eval.py",
-            "--coveo",str(primary[0]),"--pubmed",str(primary[1]),
-            "--text2image",str(primary[2]),"--bigann",str(primary[3])]
-    cmd2 = ["python3","scripts/derive_final_core_sensitivity.py",
-            "--warmup",str(sensitivity[0]),"--locality",str(sensitivity[0]),
-            "--shift",str(sensitivity[0]),"--writes",str(sensitivity[1])]
-    for command in (cmd1,cmd2,["make","verify-latex"]):
+    primary = [archives / (n + ".zip") for n in ("coveo", "pubmed", "text2image", "bigann")]
+    sensitivity = [archives / (n + ".zip") for n in ("sensitivity", "persistence")]
+    service = [archives / ("service-" + n + ".zip")
+               for n in ("coveo", "pubmed", "text2image", "bigann")]
+    cmd1 = ["python3", "scripts/derive_final_core_eval.py",
+            "--coveo", str(primary[0]), "--pubmed", str(primary[1]),
+            "--text2image", str(primary[2]), "--bigann", str(primary[3])]
+    cmd2 = ["python3", "scripts/derive_final_core_sensitivity.py",
+            "--warmup", str(sensitivity[0]), "--locality", str(sensitivity[0]),
+            "--shift", str(sensitivity[0]), "--writes", str(sensitivity[1])]
+    cmd3 = ["python3", "scripts/derive_service_latency.py",
+            "--coveo", str(service[0]), "--pubmed", str(service[1]),
+            "--text2image", str(service[2]), "--bigann", str(service[3]),
+            "--out-data", "figures/data",
+            "--out-table", "tables/eval_service_latency_table.tex",
+            "--out-summary", str(ROOT / "artifacts" / "service-reproduction-summary.json")]
+    for command in (cmd1, cmd2, cmd3, ["make", "verify-latex"]):
         print("Paper:", " ".join(command))
     if not execute:
         print("Dry run only. Run with --execute after reviewing the source artifacts.")
         return 0
+    required = {"coveo", "pubmed", "text2image", "bigann",
+                "sensitivity", "persistence", *SERVICE_ARCHIVES}
     for case in m["runs"]:
-        if case["id"] in ("coveo","pubmed","text2image","bigann","sensitivity","persistence"):
-            check_artifact(archives/(case["id"]+".zip"),case)
-    if not (paper_dir/"main.tex").is_file():
+        if case["id"] in required:
+            check_artifact(archives / (case["id"] + ".zip"), case)
+    if not (paper_dir / "main.tex").is_file():
         raise FileNotFoundError(f"Not a paper checkout: {paper_dir}")
-    for command in (cmd1,cmd2,["make","verify-latex"]):
-        subprocess.run(command,cwd=paper_dir,check=True)
-    print("Paper sources regenerated and clean build attempted. "
-          "Inspect .latex-verify/result.json and review plot layout.")
+    (ROOT / "artifacts").mkdir(exist_ok=True)
+    for command in (cmd1, cmd2, cmd3, ["make", "verify-latex"]):
+        subprocess.run(command, cwd=paper_dir, check=True)
+    print("Paper data regenerated and clean build attempted; inspect the new results "
+          "and .latex-verify/result.json before publication.")
     return 0
 
 
@@ -290,13 +370,14 @@ def main() -> int:
     rn.add_argument("--allow-public-download",action="store_true")
     rn.add_argument("--overwrite",action="store_true")
     ft = sub.add_parser("fetch")
-    ft.add_argument("target", choices=("all", *REPRO_RUNS), nargs="?", default="all")
+    ft.add_argument("target", choices=("all", *ARCHIVE_IDS), nargs="?", default="all")
     ft.add_argument("--execute",action="store_true")
     ft.add_argument("--replace",action="store_true")
     ft.add_argument("--dir",type=Path,default=ROOT/"artifacts"/"frozen")
     vf = sub.add_parser("verify")
-    vf.add_argument("target",choices=("all", "coveo","pubmed","text2image","bigann","catapult","memory",
-                     "starling-coveo","starling-bigann","sensitivity","persistence"))
+    vf.add_argument("target", choices=("all", *ARCHIVE_IDS))
+    vf.add_argument("--original-zip", action="store_true",
+                    help="Require exact archived GitHub Actions ZIP digest, not a gh-repacked ZIP")
     vf.add_argument("--dir",type=Path,default=ROOT/"artifacts"/"frozen")
     pdf = sub.add_parser("paper")
     pdf.add_argument("--paper-dir",type=Path,default=ROOT.parent/"DemmandAwareANN")
@@ -308,7 +389,7 @@ def main() -> int:
     if a.action=="doctor":return doctor(m,a.mode)
     if a.action=="run":return run_experiment(m,a.mode,a.execute,a.allow_public_download,a.overwrite)
     if a.action=="fetch":return fetch(m,a.target,a.dir.resolve(),a.execute,a.replace)
-    if a.action=="verify":return verify(m,a.target,a.dir.resolve())
+    if a.action=="verify":return verify(m,a.target,a.dir.resolve(),a.original_zip)
     if a.action=="paper":return paper(m,a.paper_dir,a.archives.resolve(),a.execute)
     raise AssertionError("unreachable")
 
