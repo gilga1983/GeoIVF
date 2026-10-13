@@ -28,14 +28,14 @@ jobs:
       - name: Run only missing BigANN native BFS L640 measurement
         shell: bash
         env:
-          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euxo pipefail
           ROOT="$HOME/.cache/geoivf"
           PUBLIC="$ROOT/public-eval/bigann-10M"
           DATA="$PUBLIC/data"
           OUT="$GITHUB_WORKSPACE/artifacts/bigann-bfs-l640"
-          WORK="$RUNNER_TEMP/bigann-bfs-tail-\${GITHUB_RUN_ID}"
+          WORK="$RUNNER_TEMP/bigann-bfs-tail-${GITHUB_RUN_ID}"
           mkdir -p "$OUT" "$WORK"
           trap 'rm -rf "$WORK"' EXIT
           export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
@@ -60,7 +60,7 @@ jobs:
           INDEX="$PUBLIC/index/diskann-index"
           IVF="$PUBLIC/navhints/hints-b14464-nlist512.bin"
           test -s "$IVF"
-          test -s "\${INDEX}_disk.index"
+          test -s "${INDEX}_disk.index"
           sha256sum "$IVF" | tee "$OUT/ivf-sha256.txt"
           curl -fSL --retry 3 --connect-timeout 30 \
             -H "Authorization: Bearer $GH_TOKEN" \
