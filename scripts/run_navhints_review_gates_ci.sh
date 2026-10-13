@@ -37,6 +37,8 @@ python3 -m venv "$WORK/venv"
 PY="$WORK/venv/bin/python"
 "$PY" -m pip install --disable-pip-version-check "numpy==2.2.6" "faiss-cpu>=1.9,<2" \
     > "$ART/pip.log" 2>&1
+"$PY" -m unittest discover -s tests -p "test_navhints_review_gates.py" -v \
+    > "$ART/unit-tests.log" 2>&1
 
 # Important validation: the control learner MUST emit the identical
 # position-sum landmark IDs used by the current paper.
