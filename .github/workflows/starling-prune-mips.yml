@@ -1,7 +1,7 @@
-name: Native Starling NavHints component pruning on MIPS workloads
+name: Native Starling NavHints compact budgets on MIPS workloads
 
 # Separate from the successful Coveo/BigANN experiment.
-# First run compares independent component ablations for PubMed/Text2Image-10M.
+# Following completed component ablations, compare compact budgets on PubMed/Text2Image-10M.
 on:
   push:
     branches: [experiment/starling-prune-budget-20261012]
@@ -33,12 +33,12 @@ jobs:
             scripts/generate_starling_prune_budget.py \
             scripts/summarize_starling_prune_budget.py
           for dataset in pubmed text2image; do
-            python3 scripts/generate_starling_prune_budget.py "$dataset" --stage components
-            bash -n "scripts/run_starling_prune_budget_${dataset}_components.generated.sh"
+            python3 scripts/generate_starling_prune_budget.py "$dataset" --stage compact
+            bash -n "scripts/run_starling_prune_budget_${dataset}_compact.generated.sh"
             grep -Fq 'DIST_FN=mips' \
-              "scripts/run_starling_prune_budget_${dataset}_components.generated.sh"
+              "scripts/run_starling_prune_budget_${dataset}_compact.generated.sh"
             grep -Fq 'DATA_TYPE=float' \
-              "scripts/run_starling_prune_budget_${dataset}_components.generated.sh"
+              "scripts/run_starling_prune_budget_${dataset}_compact.generated.sh"
           done
           echo STARLING_PRUNE_NATIVE_MIPS_SOURCE_CHECK_PASS
 
@@ -65,16 +65,16 @@ jobs:
         run: |
           set -euxo pipefail
           python3 scripts/generate_starling_prune_budget.py \
-            "${{ matrix.dataset }}" --stage components --run
+            "${{ matrix.dataset }}" --stage compact --run
       - name: Archive per-query native results and patch provenance
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: starling-prune-${{ matrix.dataset }}-components-mips
-          path: artifacts/starling-prune-budget-${{ matrix.dataset }}-components/
+          name: starling-prune-${{ matrix.dataset }}-compact-mips
+          path: artifacts/starling-prune-budget-${{ matrix.dataset }}-compact/
           retention-days: 14
       - name: Remove isolated temporary original Starling native checkout
         if: always()
         shell: bash
         run: |
-          rm -rf "$RUNNER_TEMP/starling-prune-budget-${{ matrix.dataset }}-components-$GITHUB_RUN_ID"
+          rm -rf "$RUNNER_TEMP/starling-prune-budget-${{ matrix.dataset }}-compact-$GITHUB_RUN_ID"
