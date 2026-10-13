@@ -43,7 +43,8 @@
       "success": true,
       "split": "5000/20000/5000",
       "source_branch": "experiment/navhints-final-core-multidata-20261011",
-      "source_sha": "1ad7d5eac942a8eb17e19108a0157b6097497a45"
+      "source_sha": "1ad7d5eac942a8eb17e19108a0157b6097497a45",
+      "original_artifact_sha256": "ddeadf98f8709c5ddafd0a3a6a3eb4e47dd8a50f0268e0fa0775f7658073ba86"
     },
     {
       "id": "pubmed",
@@ -54,7 +55,8 @@
       "success": true,
       "split": "5000/4000/1000",
       "source_branch": "experiment/navhints-final-core-multidata-20261011",
-      "source_sha": "8b4e03fc5145435a48c2f0d4e60ffbe9a6fec025"
+      "source_sha": "8b4e03fc5145435a48c2f0d4e60ffbe9a6fec025",
+      "original_artifact_sha256": "1d0b20ed39ecd13da0b983044215d40023fc91fd30c62fbd272b1deb01892173"
     },
     {
       "id": "text2image",
@@ -65,7 +67,8 @@
       "success": true,
       "split": "5000/4000/1000",
       "source_branch": "experiment/navhints-final-core-multidata-20261011",
-      "source_sha": "a2bfc00c1b3ecc2ab31e11ae6448970ba8b80ac6"
+      "source_sha": "a2bfc00c1b3ecc2ab31e11ae6448970ba8b80ac6",
+      "original_artifact_sha256": "54f44d9b34005ef25fad0af8c98e7101a35ebcbdbf52ece6dcebbae1fa71448e"
     },
     {
       "id": "bigann",
@@ -76,7 +79,8 @@
       "success": true,
       "split": "5000/4000/1000",
       "source_branch": "experiment/navhints-final-core-multidata-20261011",
-      "source_sha": "a2bfc00c1b3ecc2ab31e11ae6448970ba8b80ac6"
+      "source_sha": "a2bfc00c1b3ecc2ab31e11ae6448970ba8b80ac6",
+      "original_artifact_sha256": "3feee5921a9bea1d736e03a3150597567d3d448bacb193b1787f20b59bfe33dc"
     },
     {
       "id": "catapult",
@@ -87,7 +91,8 @@
       "success": true,
       "split": "5000/4000/1000",
       "source_branch": "experiment/navhints-optimal-core-vs-catapult-20261011",
-      "source_sha": "dca0d4ef4b2a8efd66880440c03c0a3fba593eec"
+      "source_sha": "dca0d4ef4b2a8efd66880440c03c0a3fba593eec",
+      "original_artifact_sha256": "79c7b98ef9c0bd2a1b3ac2b2e404d3bb99239cc2dea80a45036f50d16007f761"
     },
     {
       "id": "memory",
@@ -98,7 +103,8 @@
       "success": true,
       "split": "5000/4000/1000",
       "source_branch": "experiment/navhints-fixed-memory-tradeoff-20261011",
-      "source_sha": "18b43f5237703ab54760a3e44302bd18a8cd630f"
+      "source_sha": "18b43f5237703ab54760a3e44302bd18a8cd630f",
+      "original_artifact_sha256": "79f1deb80c358d16d68ffc79bfeb79617b8ffb0783aaa0ff5d6b8d6b313f3a8d"
     },
     {
       "id": "starling-coveo",
@@ -109,7 +115,8 @@
       "success": true,
       "split": "5000/20000/5000",
       "source_branch": "experiment/navhints-final-core-starling-20261011",
-      "source_sha": "ce23e293f922a6e8287708934dac749b561bb941"
+      "source_sha": "ce23e293f922a6e8287708934dac749b561bb941",
+      "original_artifact_sha256": "cc4c4582001ad8f17fc3ef7a27b059e444b3f8d9882291e10da3de58f441b455"
     },
     {
       "id": "starling-bigann",
@@ -120,7 +127,8 @@
       "success": true,
       "split": "5000/4000/1000",
       "source_branch": "experiment/navhints-final-core-starling-20261011",
-      "source_sha": "ce23e293f922a6e8287708934dac749b561bb941"
+      "source_sha": "ce23e293f922a6e8287708934dac749b561bb941",
+      "original_artifact_sha256": "144de5abc102c2e794fefee8987b426f38a18e8c9ae4f7ba99c540de0face034"
     },
     {
       "id": "sensitivity",
@@ -135,7 +143,8 @@
       "success": true,
       "split": "varied disjoint training and causal windows",
       "source_branch": "experiment/navhints-final-core-multidata-20261011",
-      "source_sha": "a7e20bd236eb0abd5394d4c91056e9f944b222a4"
+      "source_sha": "a7e20bd236eb0abd5394d4c91056e9f944b222a4",
+      "original_artifact_sha256": "b9bbec742e1e117dff19d901d634b708a263e035bf5f0823a88bec6d212b3a27"
     },
     {
       "id": "persistence",
@@ -146,7 +155,47 @@
       "success": true,
       "split": "5000/4000/1000",
       "source_branch": "experiment/navhints-final-core-multidata-20261011",
-      "source_sha": "5fc0fb875cd4b645fbb904ac3db3d139df5423c7"
+      "source_sha": "5fc0fb875cd4b645fbb904ac3db3d139df5423c7",
+      "original_artifact_sha256": "e6fdeff66a98caecc50b59d60601f33d468ee8249f38586ee6bea833f5aed7e1"
+    },
+    {
+      "id": "service-pubmed",
+      "run_id": 38259064842,
+      "artifact_id": 11756292555,
+      "artifact_name": "navhints-complete-service-pubmed-38259064842",
+      "source_sha": "2676793fcbf2e3a18be3dae99d23b5da673943f7",
+      "data_member": "results/complete-service-pubmed.json",
+      "original_artifact_sha256": "126e7cdbf97a25904658d5232d7b1fc84856bf4de4f9f18d7e43e542d9d3d3fb"
+    },
+    {
+      "id": "service-coveo",
+      "run_id": 38273561420,
+      "artifact_id": 11768943552,
+      "artifact_name": "navhints-complete-service-coveo-38273561420",
+      "source_sha": "9037366a2409d9af17545457efb3e00ddb39490f",
+      "source_member": "geoivf-source-sha.txt",
+      "data_member": "results/complete-service-coveo.json",
+      "original_artifact_sha256": "c551fa14820b1e0f32d8497d350dd8f6f4a35b2371e997972f13c66d858dc37d"
+    },
+    {
+      "id": "service-text2image",
+      "run_id": 38273561420,
+      "artifact_id": 11774381198,
+      "artifact_name": "navhints-complete-service-text2image-10M-38273561420",
+      "source_sha": "9037366a2409d9af17545457efb3e00ddb39490f",
+      "source_member": "geoivf-source-sha.txt",
+      "data_member": "results/complete-service-text2image-10M.json",
+      "original_artifact_sha256": "e78b943917eb531e04c6b4829060815cbe043b044ac2afc012d2295c7e755d1f"
+    },
+    {
+      "id": "service-bigann",
+      "run_id": 38273561420,
+      "artifact_id": 11778631189,
+      "artifact_name": "navhints-complete-service-bigann-10M-38273561420",
+      "source_sha": "9037366a2409d9af17545457efb3e00ddb39490f",
+      "source_member": "geoivf-source-sha.txt",
+      "data_member": "results/complete-service-bigann-10M.json",
+      "original_artifact_sha256": "917fffcaccd29cbef0d4300b75ee4058ffb4d523aa67b425f5a8202eb0859c3a"
     }
   ],
   "paths": {
