@@ -5,14 +5,24 @@ on:
     branches:
       - integrate/navhints-reproducible-main-20261011
       - main
+      - "artifact/**"
     paths:
       - "repro/**"
+      - "README.md"
+      - "docs/ARTIFACT_REVIEW.md"
       - "docs/IMPLEMENTATION.md"
       - "docs/REPRODUCIBILITY.md"
       - "docs/EXPERIMENTS.md"
       - "tests/test_navhints_repro.py"
       - "scripts/*final_core*"
       - "scripts/*navhints*"
+      - ".github/workflows/navhints-repro-smoke.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "repro/**"
+      - "tests/test_navhints_repro.py"
+      - "docs/ARTIFACT_REVIEW.md"
       - ".github/workflows/navhints-repro-smoke.yml"
   workflow_dispatch:
 
@@ -65,7 +75,9 @@ jobs:
           python3 repro/run.py list > artifacts/navhints-repro-smoke/available.txt
           python3 repro/run.py run pubmed > artifacts/navhints-repro-smoke/dryrun.txt
           python3 repro/run.py fetch all > artifacts/navhints-repro-smoke/fetch-preview.txt
+          grep -q "service-bigann" artifacts/navhints-repro-smoke/fetch-preview.txt
           python3 repro/run.py paper > artifacts/navhints-repro-smoke/paper-preview.txt
+          grep -q "derive_service_latency.py" artifacts/navhints-repro-smoke/paper-preview.txt
           git rev-parse HEAD > artifacts/navhints-repro-smoke/source-sha.txt
           git archive --format=zip --output=artifacts/navhints-repro-smoke/source.zip HEAD
       - name: Preserve static test evidence and exact source archive
