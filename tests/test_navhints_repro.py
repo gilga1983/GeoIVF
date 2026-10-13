@@ -30,11 +30,12 @@ class ManifestContract(unittest.TestCase):
         core = self.m["controller"]
         self.assertEqual((core["entry_budget"],core["destination_capacity"],
                           core["ranked_extra_starts"]), (14464, 2048, 8))
-        self.assertEqual(len(self.m["runs"]), 10)
-        self.assertEqual(set(x["id"] for x in self.m["runs"]),set(repro.REPRO_RUNS))
+        self.assertEqual(len(self.m["runs"]), 14)
+        self.assertEqual(set(x["id"] for x in self.m["runs"]), set(repro.ARCHIVE_IDS))
         for record in self.m["runs"]:
             self.assertRegex(record["source_sha"],r"^[a-f0-9]{40}$")
             self.assertTrue(record["data_member"].endswith(".json"))
+            self.assertRegex(record["original_artifact_sha256"], r"^[a-f0-9]{64}$")
 
     def test_source_dependencies_present(self):
         repro.check_mode_sources(self.m, "all")
@@ -51,11 +52,12 @@ class ManifestContract(unittest.TestCase):
 
     def test_fetch_preview_has_no_gh_calls(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with mock.patch.object(repro.subprocess,"run",
+            target = Path(tmp) / "not-created"
+            with mock.patch.object(repro.subprocess, "run",
                 side_effect=AssertionError("A preview attempted a download.")):
                 with contextlib.redirect_stdout(io.StringIO()):
-                    self.assertEqual(repro.fetch(self.m,"all",Path(tmp),False,False),0)
-            self.assertFalse(any(Path(tmp).iterdir()))
+                    self.assertEqual(repro.fetch(self.m, "all", target, False, False), 0)
+            self.assertFalse(target.exists(), "A dry-run must not create an archive directory")
 
     def test_paper_preview_is_safe(self):
         with mock.patch.object(repro.subprocess,"run",
@@ -76,8 +78,9 @@ class ArtifactValidation(unittest.TestCase):
         d=tempfile.TemporaryDirectory()
         path=Path(d.name)/"test.zip"
         sha=sha or record["source_sha"]
-        source=("geoivf-revision.txt" if record["id"].startswith("starling-")
-                else "geoivf-commit.txt")
+        source=record.get("source_member",
+            "geoivf-revision.txt" if record["id"].startswith("starling-")
+            else "geoivf-commit.txt")
         with zipfile.ZipFile(path,"w") as z:
             z.writestr(record["data_member"],json.dumps(main_payload))
             for k,v in (extra or {}).items():
@@ -126,6 +129,55 @@ class ArtifactValidation(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"Catapult/Core allocation mismatch"):
                 repro.check_artifact(path,rec)
         finally:d.cleanup()
+
+    def test_service_latencies_are_archived_and_causal(self):
+        for name in repro.SERVICE_ARCHIVES:
+            record = self.recs[name]
+            if name == "service-pubmed":
+                payload = {
+                    "controller": {"junctions": 14464, "recent": 2048, "starts": 8},
+                    "repetitions": 3, "catapult_seeds": [0, 1, 2],
+                    "widths": [10], "diagnostic": False,
+                }
+            else:
+                payload = {
+                    "dataset": {"service-coveo": "coveo",
+                                "service-text2image": "text2image-10M",
+                                "service-bigann": "bigann-10M"}[name],
+                    "core": {"actual_junctions": 12169 if name == "service-coveo" else 14464,
+                             "recent": 2048, "starts": 8, "accounted_payload_bytes": 102940},
+                    "catapult": {"seeds": [0, 1, 2], "accounted_payload_bytes": 102940},
+                    "protocol": {"rotated_repetitions": 3, "in_flight_queries": 1,
+                                 "widths": [10]},
+                    "diagnostic": False,
+                }
+            payload["measurements"] = {
+                f"r{rep}-L10-{arm}": {"recall": 50.0, "mean_service_us": 100.0}
+                for rep in range(3)
+                for arm in ("baseline", "navhints", "catapult-s0", "catapult-s1", "catapult-s2")
+            }
+            d, path = self.make_artifact(record, payload)
+            try:
+                repro.check_artifact(path, record)
+                payload["diagnostic"] = True
+                with zipfile.ZipFile(path, "w") as z:
+                    z.writestr(record["data_member"], json.dumps(payload))
+                    z.writestr(record.get("source_member", "geoivf-commit.txt"),
+                               record["source_sha"] + "\n")
+                with self.assertRaisesRegex(ValueError, "wrong final-Core service protocol"):
+                    repro.check_artifact(path, record)
+            finally:
+                d.cleanup()
+
+    def test_original_zip_digest_check_is_separate_from_content_validation(self):
+        record = self.recs["persistence"]
+        payload = {"controller": {"B": 14464, "C": 2048, "k": 8}, "comparison": {}}
+        d, path = self.make_artifact(record, payload)
+        try:
+            repro.check_artifact(path, record)
+            self.assertNotEqual(repro.original_sha256(path), record["original_artifact_sha256"])
+        finally:
+            d.cleanup()
 
     def test_final_four_arm_requires_exact_config(self):
         rec=self.recs["pubmed"]
