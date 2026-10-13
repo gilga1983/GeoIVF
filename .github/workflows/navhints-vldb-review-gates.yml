@@ -1,0 +1,61 @@
+name: NavHints VLDB reviewer controls (1-3)
+on:
+  push:
+    branches: [experiment/navhints-vldb-final-checks-20261013]
+    paths:
+      - ".github/workflows/navhints-vldb-review-gates.yml"
+      - "scripts/prepare_navhints_score_controls.py"
+      - "scripts/qualify_navhints_review_gates.py"
+      - "scripts/qualify_navhints_concurrency.py"
+      - "scripts/run_navhints_review_gates_ci.sh"
+      - "tests/test_navhints_review_gates.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-navhints-vldb-review-gates
+  cancel-in-progress: false
+
+jobs:
+  real-ssd-review-gates:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 1440
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      RUSTFLAGS: "-C target-cpu=native"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check experiment and regression-test syntax
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile \
+            scripts/prepare_navhints_score_controls.py \
+            scripts/qualify_navhints_review_gates.py \
+            scripts/qualify_navhints_concurrency.py \
+            tests/test_navhints_review_gates.py
+          bash -n scripts/run_navhints_review_gates_ci.sh
+          grep -F 'BUDGET_BYTES = 102940' scripts/qualify_navhints_review_gates.py
+          grep -F '"reference-k8", 14464, 2048, 8' scripts/qualify_navhints_review_gates.py
+          grep -F 'LEVELS = (1, 2, 4)' scripts/qualify_navhints_concurrency.py
+      - name: Frozen real-SSD junction score, same-k allocations, and concurrency
+        shell: bash
+        run: bash scripts/run_navhints_review_gates_ci.sh
+      - name: Preserve evidence even if a gate fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: navhints-vldb-review-gates-20261013
+          path: artifacts/navhints-review-gates-20261013/
+          retention-days: 21
+      - name: Delete only the experiment's isolated scratch checkout
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/navhints-review-gates-$GITHUB_RUN_ID"
