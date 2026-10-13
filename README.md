@@ -2,6 +2,8 @@
 
 **Reproducible code and experiment harness for the NavHints PVLDB/VLDB 2027 paper.** This is the code repository, historically named GeoIVF. The manuscript and figures live separately in [gilga1983/DemmandAwareANN](https://github.com/gilga1983/DemmandAwareANN).
 
+**For artifact evaluators:** start with [docs/ARTIFACT_REVIEW.md](docs/ARTIFACT_REVIEW.md). It separates offline checks, frozen-result reproduction and a full real-SSD rerun. Fourteen original result archives, including the complete-request latency study, are listed with SHA-256 digests in [repro/manifest.json](repro/manifest.json). The original GitHub Actions ZIPs expire October 25–27, 2026; a permanent release URL is still required.
+
 This `main` branch contains the **final** NavHints Core implementation, source-fidelity checks for competing methods, training scripts, four-dataset SSD replays, optional persistent-exit experiments, and an adapter for the **original** Starling library. Exploratory alternatives remain in their Git branches. The original page-oriented GeoIVF implementation is still present; its previous usage guide is [docs/LEGACY_GEOIVF.md](docs/LEGACY_GEOIVF.md). It is **not** the NavHints paper algorithm.
 
 ## Final algorithm
@@ -50,16 +52,16 @@ If you only need to **reproduce the published numbers and graphs**, you do **not
 
 ```bash
 source repro/activate.sh
-navhints fetch all             # Preview the 10 run/artifact downloads
+navhints fetch all             # Preview all 14 evidence downloads
 navhints fetch all --execute   # Requires gh CLI and GitHub authentication
-navhints verify all           # Validate all ten ZIP contents and policy fields
+navhints verify all           # Validate all 14 ZIP contents and policy fields
 navhints_paper                 # Dry run: lists exact paper regeneration/build steps
-navhints_paper --execute       # Regenerates CSVs, then invokes make verify-latex
+navhints_paper --execute       # Regenerates read/latency CSVs and tables, then checks LaTeX
 ```
 
 Clone [the paper repository](https://github.com/gilga1983/DemmandAwareANN) beside GeoIVF as `../DemmandAwareANN` before running the final command. To build its PDF, install its pinned PVLDB 2027 template and local pdfLaTeX/BibTeX tools. The paper regeneration scripts **refuse missing or mismatched artifacts**, never impute values and never extrapolate outside the common recall interval. The `verify-latex` target does not overwrite the tracked PDF; the actual source and plots should be reviewed before preparing a submission PDF.
 
-For a machine without access to large datasets, the ten artifact ZIPs are enough for the plotting and prose audit. Frozen original data/SSD graph binaries are **not** checked into Git. See [repro/manifest.json](repro/manifest.json) for engine SHAs, run IDs, artifact names, file layout and policy parameters.
+For a machine without access to large datasets, the fourteen artifact ZIPs are enough for the plotting and prose audit, including the four-dataset complete-request latency subsection. With unmodified original Actions ZIPs, `navhints verify all --original-zip` additionally checks recorded SHA-256 hashes. Frozen original data/SSD graph binaries are **not** checked into Git. See [repro/manifest.json](repro/manifest.json) for engine SHAs, run IDs, artifact names, file layout and policy parameters.
 
 ## Directory map
 
