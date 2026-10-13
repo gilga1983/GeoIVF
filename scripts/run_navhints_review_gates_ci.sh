@@ -2,6 +2,7 @@
 # Paired reviewer controls: score selection and equal-payload k=8 allocations.
 # Runs ONLY on the geoivf self-hosted machine; lock protects SSD and CPU.
 set -euxo pipefail
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 
 ROOT="$HOME/.cache/geoivf"
 REV=fcf90534174cf29c78c9f13b4cccf1fcabff85f5
@@ -119,3 +120,15 @@ sha256sum "$BIN" > "$ART/search-binary-sha256.txt"
     > "$ART/evaluation.log" 2>&1
 grep -F "NAVHINTS_REVIEW_GATES_1_AND_2_PASS" "$ART/evaluation.log"
 printf 'REVIEW_GATES_1_AND_2_VALIDATED\n' > "$ART/status.txt"
+
+
+# Bounded external-client load (4- versus 8-start NavHints) on the same
+# frozen PubMed index. This is NOT a shared-history multi-query engine.
+"$PY" scripts/qualify_navhints_concurrency.py \
+    --nav-bin "$BIN" --queries "$ALLQ" \
+    --heldout-gt "$GT" --index-prefix "$INDEX" \
+    --ivf "$ALLOC/hints-b14464-nlist512-spherical.bin" \
+    --work "$WORK/concurrency" --out "$ART/concurrency" \
+    --repetitions 2 > "$ART/concurrency.log" 2>&1
+grep -F "NAVHINTS_MULTI_CLIENT_STRESS_PASS" "$ART/concurrency.log"
+printf 'REVIEW_GATE_3_MULTI_CLIENT_VALIDATED\n' >> "$ART/status.txt"
