@@ -26,6 +26,7 @@ text2image)
   ;;
 coveo)
   CACHE="$ROOT/coveo-real-demand-v1"
+  BASE="$CACHE/prepared/coveo-products-cosine.fbin"
   DATA_MANIFEST="$CACHE/split/dataset.manifest.json"
   REPLAY_GT="$CACHE/split/replay.gt"
   INDEX="$CACHE/index/diskann-index"
@@ -45,12 +46,14 @@ done
 test -s "$INDEX.complete.json" || { echo "MISSING_FROZEN_INDEX: $INDEX" >&2; exit 11; }
 if [ "$DATASET" = coveo ]; then test -s "$REPLAY_GT"; fi
 
-BASE="$(python3 - "$DATA_MANIFEST" <<'PY'
+if [ "$DATASET" != coveo ]; then
+  BASE="$(python3 - "$DATA_MANIFEST" <<'PY'
 import json,sys
 d=json.load(open(sys.argv[1]))
 print(d["files"]["base"])
 PY
 )"
+fi
 # Coveo manifest's base path and public dataset's base path are both
 # canonical frozen embeddings, not reconstructed or approximate copies.
 test -s "$BASE"
