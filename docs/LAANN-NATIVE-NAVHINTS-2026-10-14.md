@@ -23,3 +23,24 @@ The `qualify_native.sh` script builds the unmodified authors' source plus an iso
 Run on an authorized, configured self-hosted machine through the GitHub Actions workflow. The build requires LAANN's original CMake dependencies (Boost, MKL, libaio, etc.); the workflow does not install system packages automatically. Generated artifacts include upstream SHA, patch, compile logs, native page trace, learned region directory, per-query CSVs, process-memory/time logs, and matched-recall JSON. A compile failure or absent matched-recall overlap is a failed gate, **not** a positive result.
 
 The active manuscript [RQ4](https://github.com/gilga1983/DemmandAwareANN/blob/main/sections/04-evaluation-starling.tex) is deliberately left unchanged until successful results can be reviewed.
+
+## Validated SIFT1M pilot results (October 14, 2026)
+
+[Successful native-LAANN GitHub Actions run #38514613418](https://github.com/gilga1983/GeoIVF/actions/runs/38514613418), workflow artifact ID **11872010730** (`native-laann-navhints-20261014`), source SHA `1d4ed97f0d1b2baaade2a88c76f19d4e431baf20`. `status.txt` contains `NH_LAANN_REAL_SSD_PASS`; all 21 independent (7 widths by 3 methods) per-query CSVs and native indexing/training logs are present. The source patch preserves LAANN's native page graph, in-memory PQ array, sampled-page navigator, native cache and look-ahead/I/O pipeline.
+
+**Correction to the archived analysis JSON:** the successful run's initial summary counts seven anchors because two search widths give *the same* 99.84% Recall@10. This duplicates a recall target and slightly biases its descriptive mean. The later `scripts/laann_navhints/derive_results.py` fix at commit `1bbe5ed0769bebfd49494b65bb22b6484ee42598` deduplicates recall targets before averaging. Do not quote the old seven-anchor summary without this correction.
+
+After deduplicating the six jointly reachable Core-achieved targets (98.93, 99.43, 99.63, 99.80, 99.84, 99.88% Recall@10), averaging independent percentage differences by *recall target*:
+
+| Native LAANN metric | LAANN+NavHints versus baseline | LAANN+NavHints versus junction-only |
+| --- | ---: | ---: |
+| Mean matched-recall logical SSD page reads | **0.94% fewer** | **0.027% fewer** |
+| Mean matched-recall complete-request latency | **28.35% slower** | **10.84% slower** |
+
+The native baseline already achieves 98.92% Recall@10 at L=20 on SIFT1M. At the highest jointly reachable 99.88% target, LAANN+NavHints actually requires **16.19% more logical page reads** after recall matching, although other anchors show positive read savings. These are descriptive measurements from one deterministic request population, not a robustness or statistical significance result.
+
+**Where the overhead occurs:** the authors' own measured navigation-phase timer rises by approximately **195.8 μs per query** on average across the seven fixed-L tests. About 54.9 μs comes from scoring learned junctions, and a further 140.9 μs from the global 2,048-ID PQ-history scan and candidate insertion. This diagnostic is from equal-L native timing fields, **not** another matched-recall percentage. Additional per-request latency includes native search-path variation and SSD effects.
+
+**Interpretation:** native LAANN integration and causal measurement are validated; the SIFT1M performance case is weak. The page-level in-memory nav graph is already effective at the tested high recall and leaves little room for historical destination seeds. The combined configuration is **not appropriate as a positive RQ4 performance claim**. A meaningful further paper evaluation should use a demand-structured dataset (e.g. PubMed or Coveo) and/or a stronger low-to-mid recall range while retaining both the native navigator and fully accounted PQ-scoring overhead. Do not tune only the NavHints arm or compare different native LAANN index builds across arms.
+
+The paper repository and current RQ4 text remain unchanged.
