@@ -24,8 +24,32 @@ git -C "$SRC" diff -- src/pq_flash_index_laann.cpp apps/search_disk_index.cpp > 
 sha256sum "$SRC/src/nh_laann_state.h" >> "$ART/provenance.txt"
 printf 'Native LAANN nav/page graph and look-ahead pipeline enabled in all arms\n' >> "$ART/provenance.txt"
 
+# Build liburing in the private scratch directory if the self-hosted machine
+# lacks development headers. Never apt-install system packages on the Legion.
+# Exact upstream release tag has Git SHA 7a7b035470175b3ecf071384274d7859885ece32.
+URING_PREFIX="$WORK/liburing-private-install"
+if ! printf '#include <liburing.h>\n' | c++ -x c++ -fsyntax-only - >/dev/null 2>&1; then
+  git clone --filter=blob:none https://github.com/axboe/liburing.git "$WORK/liburing" \
+    > "$ART/liburing-clone.log" 2>&1
+  git -C "$WORK/liburing" checkout --detach 7a7b035470175b3ecf071384274d7859885ece32 \
+    >> "$ART/liburing-clone.log" 2>&1
+  (
+    cd "$WORK/liburing"
+    ./configure --prefix="$URING_PREFIX" --libdir="$URING_PREFIX/lib"
+    nice -n 10 make -j2
+    make install
+  ) > "$ART/liburing-build.log" 2>&1
+  test -s "$URING_PREFIX/include/liburing.h"
+  test -s "$URING_PREFIX/lib/liburing.a"
+  export CPATH="$URING_PREFIX/include:${CPATH:-\}"
+  export LIBRARY_PATH="$URING_PREFIX/lib:${LIBRARY_PATH:-\}"
+  export LD_LIBRARY_PATH="$URING_PREFIX/lib:${LD_LIBRARY_PATH:-\}"
+  printf 'PRIVATE_LIBURING_SHA=%s\n' 7a7b035470175b3ecf071384274d7859885ece32 >> "$ART/provenance.txt"
+fi
 # Author build scripts and exact pinned source, no installation of system packages.
-cmake -S "$SRC" -B "$SRC/build" -DCMAKE_BUILD_TYPE=Release > "$ART/cmake.log" 2>&1
+cmake -S "$SRC" -B "$SRC/build" -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INCLUDE_PATH="$URING_PREFIX/include" \
+  -DCMAKE_LIBRARY_PATH="$URING_PREFIX/lib" > "$ART/cmake.log" 2>&1
 nice -n 10 cmake --build "$SRC/build" --parallel 2 > "$ART/build.log" 2>&1
 BIN="$SRC/build/apps/search_disk_index"
 test -x "$BIN"
