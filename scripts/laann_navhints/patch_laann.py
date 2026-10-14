@@ -139,6 +139,12 @@ def main():
     if dest_header.exists():
         raise RuntimeError("Integration already patched; refusing reapplication")
     index_old, cli_old = idx.read_text(), cli.read_text()
+    # Upstream uses uint32_t without including <cstdint>: compiler-only fix.
+    distance = root / "include" / "distance.h"
+    distance_old = distance.read_text()
+    distance_new = once(distance_old, '#include <cstring>\n',
+                        '#include <cstring>\n#include <cstdint>\n',
+                        'fixed-width integer header')
     index_new = patch_index(index_old)
     cli_new = patch_cli(cli_old)
     if index_new == index_old or cli_new == cli_old:
@@ -146,6 +152,7 @@ def main():
     # Write only after both original-source anchors validate.
     idx.write_text(index_new)
     cli.write_text(cli_new)
+    distance.write_text(distance_new)
     dest_header.write_text(src_header.read_text())
     print("NH_LAANN_PINNED_PATCH_PASS", str(root))
 
