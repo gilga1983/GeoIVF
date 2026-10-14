@@ -43,7 +43,7 @@ def read_manifest(path):
     m = json.loads(path.read_text())
     if m.get("split", {}).get("training_queries", m.get("split", {}).get("static_train_rows")) not in (None, 5000):
         raise ValueError("Incorrect offline training prefix")
-    if m["data_type"] not in ("float32", "uint8") or m["metric"] not in ("inner_product", "l2"):
+    if m["data_type"] not in ("float32", "uint8") or m["metric"] not in ("inner_product", "squared_l2", "l2"):
         raise ValueError("Unexpected distance metric")
     for field in ("heldout5000", "heldout5000_gt"):
         if field not in m["files"] or not Path(m["files"][field]).is_file():
