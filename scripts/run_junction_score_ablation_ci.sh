@@ -71,6 +71,17 @@ fi
 python3 -m venv "$WORK/venv"
 PYC="$WORK/venv/bin/python"
 "$PYC" -m pip install numpy==2.2.6 > "$ART/pip.log" 2>&1
+if [ "$DATASET" = bigann ]; then
+  python3 - "$ART/system-numpy.txt" <<'PY'
+import sys, numpy as np
+from pathlib import Path
+Path(sys.argv[1]).write_text(
+    f"python={sys.version}\nnumpy={np.__version__}\n"
+    f"numpy_path={np.__file__}\n"
+    + str(np.show_config(mode="dicts")) + "\n"
+)
+PY
+fi
 "$PYC" scripts/learn_junction_score_variants.py \
  --trace "$TRACE" --reference-sum "$REFERENCE" --out "$ART/selection" \
  > "$ART/selection/learn.log" 2>&1
@@ -84,7 +95,11 @@ for mode in sum count mean; do
       --nlist 512 --iterations 5 --batch 2048 --seed 20261005 \
       > "$ART/ivf/$mode.log" 2>&1
   else
-    "$PYC" scripts/build_hint_ivf_generic.py \
+    # The frozen BigANN IVF was originally constructed with system Python,
+    # not this workflow's private numpy==2.2.6 virtual environment.
+    # Keep the exact builder source, seed, inputs and numeric stack before
+    # comparing against the original frozen directory byte-for-byte.
+    python3 scripts/build_hint_ivf_generic.py \
       --base "$BASE" --base-data-type uint8 --hints "$HINTS" \
       --out "$IVF" --partition l2 \
       --nlist 512 --iterations 5 --batch 1024 --seed 20261005 \
@@ -95,6 +110,11 @@ for mode in sum count mean; do
 done
 # Original algorithm must be reproduced exactly, including regional geometry.
 cmp "$REFERENCE" "$ART/selection/landmarks-b14464-sum.bin"
+if [ "$DATASET" = bigann ]; then
+  # SHA from the published frozen BigANN run #38136365199, artifact 11704362848.
+  echo "76149d8cdeda5ed78d952d62a247589fd88e8439c9c018ab5199020084a1716e  $REF_IVF" \
+    | sha256sum -c -
+fi
 cmp "$REF_IVF" "$ART/ivf/ivf-sum.bin"
 echo SELECTED_NAVHINTS_ORIGINAL_REPRODUCED > "$ART/repro.status"
 
