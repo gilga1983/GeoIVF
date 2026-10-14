@@ -1,0 +1,57 @@
+name: NavHints junction-score ablation on native SSD
+on:
+  push:
+    branches: [experiment/junction-score-ablation-20261014]
+    paths:
+      - ".github/workflows/navhints-junction-scores.yml"
+      - "scripts/learn_junction_score_variants.py"
+      - "scripts/qualify_junction_score_ablation.py"
+      - "scripts/run_junction_score_ablation_ci.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-junction-score-study
+  cancel-in-progress: false
+
+jobs:
+  junction-score:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        dataset: [pubmed, bigann]
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 360
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify isolated score ablation harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/learn_junction_score_variants.py scripts/qualify_junction_score_ablation.py
+          bash -n scripts/run_junction_score_ablation_ci.sh
+          grep -F 'MODES = ("sum", "count", "mean")' scripts/learn_junction_score_variants.py
+          grep -F 'cmp "$REF_IVF" "$ART/ivf/ivf-sum.bin"' scripts/run_junction_score_ablation_ci.sh
+      - name: Compare score-only NavHints variants at matched recall
+        shell: bash
+        run: |
+          mkdir -p "artifacts/junction-score-ablation/${{ matrix.dataset }}"
+          bash scripts/run_junction_score_ablation_ci.sh "${{ matrix.dataset }}"
+      - name: Archive frozen input hashes, ranking overlap and real SSD results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "junction-scores-${{ matrix.dataset }}"
+          path: "artifacts/junction-score-ablation/${{ matrix.dataset }}/"
+          retention-days: 14
