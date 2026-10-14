@@ -112,6 +112,25 @@ unsupported recall interpolation. The generated values can be compared against
 `tables/eval_service_latency_table.tex` in the paper checkout. This command
 runs on a normal CPU; it does not rerun the SSD experiment.
 
+## 3a. Supplemental evidence added to the current manuscript
+
+The original 14-archive inventory predates later approved experiments. The
+additional evidence is now inventoried, with exact run IDs, artifact IDs and
+observed original-ZIP SHA-256 digests, in
+[the October 14 supplemental manifest](../repro/supplemental-manifest-20261014.json).
+
+It includes both four-curve Figure 8 studies, all four junction-ranking
+comparisons, the fixed-k memory controls, and the original native Starling
+PubMed and Text2Image experiments. In particular, the original native
+Starling runs must **not** be confused with later pruning experiments.
+
+The existing `navhints verify all` command intentionally covers only the
+original 14-package inventory. This new manifest is additional evidence;
+it is **not** automatically fetched or verified by that original command.
+Do not tell reviewers the old 14-package command alone reproduces the
+current paper's new sensitivity table. The supplemental ZIPs must be included
+and checked in the eventual permanent review bundle.
+
 ## 4. Re-run the actual SSD measurements
 
 See [REPRODUCIBILITY.md](REPRODUCIBILITY.md) for data acquisition, pinned
