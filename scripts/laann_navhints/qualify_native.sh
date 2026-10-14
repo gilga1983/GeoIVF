@@ -41,9 +41,9 @@ if ! printf '#include <liburing.h>\n' | c++ -x c++ -fsyntax-only - >/dev/null 2>
   ) > "$ART/liburing-build.log" 2>&1
   test -s "$URING_PREFIX/include/liburing.h"
   test -s "$URING_PREFIX/lib/liburing.a"
-  export CPATH="$URING_PREFIX/include:${CPATH:-\}"
-  export LIBRARY_PATH="$URING_PREFIX/lib:${LIBRARY_PATH:-\}"
-  export LD_LIBRARY_PATH="$URING_PREFIX/lib:${LD_LIBRARY_PATH:-\}"
+  export CPATH="$URING_PREFIX/include:${CPATH:-}"
+  export LIBRARY_PATH="$URING_PREFIX/lib:${LIBRARY_PATH:-}"
+  export LD_LIBRARY_PATH="$URING_PREFIX/lib:${LD_LIBRARY_PATH:-}"
   printf 'PRIVATE_LIBURING_SHA=%s\n' 7a7b035470175b3ecf071384274d7859885ece32 >> "$ART/provenance.txt"
 fi
 # Author build scripts and exact pinned source, no installation of system packages.
