@@ -1,0 +1,58 @@
+name: NavHints junction scores on Coveo and Text2Image
+
+on:
+  push:
+    branches: [experiment/junction-score-four-workloads-20261014]
+    paths:
+      - ".github/workflows/navhints-junction-scores-remaining.yml"
+      - "scripts/run_junction_score_remaining_ci.sh"
+      - "scripts/qualify_junction_score_coveo.py"
+      - "scripts/learn_junction_score_variants.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoivf-junction-score-remaining
+  cancel-in-progress: false
+
+jobs:
+  junction-scores:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        dataset: [coveo, text2image]
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 360
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate immutable reference and controlled score variants
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/learn_junction_score_variants.py scripts/qualify_junction_score_ablation.py scripts/qualify_junction_score_coveo.py
+          bash -n scripts/run_junction_score_remaining_ci.sh
+          grep -F 'MODES = ("sum", "count", "mean")' scripts/learn_junction_score_variants.py
+          grep -F 'cmp "$REF_IVF" "$ART/ivf/ivf-sum.bin"' scripts/run_junction_score_remaining_ci.sh
+      - name: Run score-only matching on frozen native SSD index
+        shell: bash
+        run: |
+          mkdir -p "artifacts/junction-score-remaining/${{ matrix.dataset }}"
+          bash scripts/run_junction_score_remaining_ci.sh "${{ matrix.dataset }}"
+      - name: Preserve provenance, frozen reference checks and raw runs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "junction-scores-${{ matrix.dataset }}"
+          path: "artifacts/junction-score-remaining/${{ matrix.dataset }}/"
+          retention-days: 14
