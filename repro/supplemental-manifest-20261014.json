@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-14",
+  "scope": "Supplemental experimental evidence approved after the original 14-archive frozen package. This file does not change repro/manifest.json or its strict 14-run validator.",
+  "security": "Hashes are of original GitHub Actions artifact ZIP bytes; do not publish raw ZIPs before licensed-data/privacy review.",
+  "archive_status": "Original GH artifacts are temporary. Permanent independent archive and license still required.",
+  "runs": [
+    {
+      "id": "figure8-warmup-starts",
+      "run_id": 38516776145,
+      "artifact_id": 11873220542,
+      "sha256": "04c4376251dea1e3a1e1e5807547e08eb861cde0f4615ec322a5186e4a379486"
+    },
+    {
+      "id": "figure8-locality-starts",
+      "run_id": 38164539106,
+      "artifact_id": 11712384153,
+      "sha256": "8bc393fe0d3d5a0300dd9f59a8e4192a10ff94d43b2663e6291ae04f1b12745d"
+    },
+    {
+      "id": "junction-score-coveo",
+      "run_id": 38533263735,
+      "artifact_id": 11882657623,
+      "sha256": "37de42193056d3f6cb3e79aeff955dd0a694c032e7aa656102eb6cfbd3c5d2ef",
+      "budget": 8192
+    },
+    {
+      "id": "junction-score-pubmed",
+      "run_id": 38525797031,
+      "artifact_id": 11875829581,
+      "sha256": "bfab8711314f3b7452ae6ac78019663ab785d3ef0b47d07a336e5add9f4a756e",
+      "budget": 14464
+    },
+    {
+      "id": "junction-score-text2image",
+      "run_id": 38533263735,
+      "artifact_id": 11883762091,
+      "sha256": "ffc51310db54ea149d33f6911d58be4eab8d9096e11e3de8d265e003fd749e03",
+      "budget": 14464
+    },
+    {
+      "id": "junction-score-bigann",
+      "run_id": 38529130742,
+      "artifact_id": 11878486519,
+      "sha256": "d54d4888680e0cfe1c3cf72ecffd1d87cc20fab3a2905532d6310da372e006db",
+      "budget": 14464
+    },
+    {
+      "id": "fixed-k-memory-and-review-gates",
+      "run_id": 38443774566,
+      "artifact_id": 11841752198,
+      "sha256": "78771456cb9adf6b952e18cd6856c0460a493308bdf291f1a1d5881c177c6eb6"
+    },
+    {
+      "id": "native-starling-pubmed",
+      "run_id": 38186111308,
+      "artifact_id": 11721096058,
+      "sha256": "60f1b6557b679bbb38bc48eadfc0cda10144c275b493c5d933475bbadeae9c9f"
+    },
+    {
+      "id": "native-starling-text2image",
+      "run_id": 38186111308,
+      "artifact_id": 11722683829,
+      "sha256": "fbd046f749620eea6a862c7d3d99b1a873ac43ba0ef5689da413b80d136d4e22"
+    }
+  ]
+}
