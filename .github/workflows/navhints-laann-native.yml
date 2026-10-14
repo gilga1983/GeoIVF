@@ -1,0 +1,50 @@
+name: NavHints on native LAANN (PageANN authors' implementation)
+
+on:
+  push:
+    branches:
+      - experiment/navhints-laann-native-20261014
+    paths:
+      - ".github/workflows/navhints-laann-native.yml"
+      - "scripts/laann_navhints/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: navhints-laann-native-legion
+  cancel-in-progress: false
+
+jobs:
+  native-laann:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 360
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: "2"
+      CARGO_BUILD_JOBS: "2"
+      OMP_NUM_THREADS: "2"
+      OPENBLAS_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      # Canonical SIFT1M downloads into the existing GeoIVF content-addressed
+      # research cache only if it is not already present.
+      NH_LAANN_FETCH_DATA: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate patcher and reproducibility scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/laann_navhints/*.py
+          bash -n scripts/laann_navhints/qualify_native.sh
+          grep -F '58fe40feb58d0ca1a168816b36c4d4b22d3eb29c' scripts/laann_navhints/patch_laann.py
+          grep -F 'NHLAANN1' scripts/laann_navhints/build_directory.py
+      - name: Build author LAANN and measure native SSD replays
+        shell: bash
+        run: bash scripts/laann_navhints/qualify_native.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-laann-navhints-20261014
+          path: artifacts/navhints-laann-native/
+          retention-days: 14
