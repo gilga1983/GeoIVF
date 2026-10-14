@@ -65,8 +65,8 @@ def main():
     p.add_argument("--budget", type=int, default=14464)
     p.add_argument("--queries", type=int, default=5000)
     a = p.parse_args()
-    if a.budget != 14464 or a.queries != 5000:
-        raise ValueError("Paper ablation requires B=14464 and 5K training queries")
+    if a.budget not in (8192, 14464) or a.queries != 5000:
+        raise ValueError("Ablation permits B=8192 (Coveo sensitivity) or B=14464 and 5K training queries")
     support, position = collections.Counter(), collections.Counter()
     records = 0
     with a.trace.open() as f:
@@ -106,7 +106,17 @@ def main():
     original = a.reference_sum
     if not original.is_file():
         raise FileNotFoundError(original)
-    if (a.out / f"landmarks-b{a.budget}-sum.bin").read_bytes() != original.read_bytes():
+    # At the selected Coveo budget all 12,169 eligible vertices are kept.
+    # Its 8,192-ID sensitivity experiment must reproduce the FIRST 8,192
+    # frozen original sum-ranked IDs, not silently change the reference.
+    frozen = original.read_bytes()
+    if frozen[:8] != MAGIC or len(frozen) < 16:
+        raise ValueError("Invalid frozen landmark file format")
+    n, reserved = struct.unpack("<II", frozen[8:16])
+    if reserved != 0 or len(frozen) != 16 + 4 * n or n < a.budget:
+        raise ValueError("Frozen reference lacks required ranked prefix")
+    desired = MAGIC + struct.pack("<II", a.budget, 0) + frozen[16:16 + a.budget * 4]
+    if (a.out / f"landmarks-b{a.budget}-sum.bin").read_bytes() != desired:
         raise ValueError(
             "The paper's existing sum-position selection could not be reproduced "
             "byte-for-byte from the frozen trace. Do not compare incompatible scores."
@@ -119,6 +129,8 @@ def main():
         "trace": str(a.trace), "trace_sha256": digest(a.trace),
         "queries": records, "eligible": len(support), "budget": a.budget,
         "reference_sum_sha256": digest(original),
+        "reference_is_full_selected_core": n == a.budget,
+        "ranking_prefix_reproduced": True,
         "configuration": "one shared trace, score-only comparison, fixed B,C,k",
         "definitions": {
             "sum": "sum first expansion positions; ties by support, ID",
