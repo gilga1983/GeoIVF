@@ -1,0 +1,47 @@
+name: NavHints fixed-Core warm-up by historical start count
+
+on:
+  push:
+    branches: [experiment/navhints-warmup-k-sweep-20261014]
+    paths:
+      - ".github/workflows/navhints-warmup-starts.yml"
+      - "scripts/qualify_final_core_warmup_starts.py"
+      - "scripts/run_final_core_warmup_starts_ci.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: navhints-final-core-warmup-starts
+  cancel-in-progress: false
+
+jobs:
+  real-ssd:
+    runs-on: [self-hosted, linux, x64, geoivf]
+    timeout-minutes: 720
+    env:
+      CARGO_BUILD_JOBS: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate frozen warm-up experiment harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/qualify_final_core_warmup.py scripts/qualify_final_core_warmup_starts.py
+          bash -n scripts/run_final_core_warmup_starts_ci.sh
+          grep -F 'STARTS = (1, 2, 4, 8)' scripts/qualify_final_core_warmup_starts.py
+          grep -F 'DISKANN_EXPERIENCE_HUB_CAPACITY": "0"' scripts/qualify_final_core_warmup_starts.py
+      - name: Measure fixed-Core k curves on same PubMed history windows
+        shell: bash
+        run: bash scripts/run_final_core_warmup_starts_ci.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: final-core-warmup-k-1-2-4-8
+          path: artifacts/final-core-warmup-starts/
+          retention-days: 14
