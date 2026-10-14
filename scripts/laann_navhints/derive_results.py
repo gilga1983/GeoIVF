@@ -99,8 +99,14 @@ def main():
     # Reference anchors are ACTUAL native LAANN+NavHints achieved recalls,
     # never synthesized grid points or extrapolated regions.
     anchors=[]
+    seen_recalls=[]
     for item in arms["core"]:
         recall=item["recall"]
+        # Multiple L settings can achieve exactly the same recall. A matched
+        # recall value is ONE target, not one vote for every redundant L.
+        # Keep the first (lowest-L) occurrence on a plateau.
+        if any(abs(recall - x) < 1e-7 for x in seen_recalls):
+            continue
         at={name:{
             metric:interpolate(points,recall,metric)
             for metric in ("reads","service_us")}
@@ -109,6 +115,7 @@ def main():
             continue
         if at["baseline"]["reads"] <= 0 or at["junction"]["reads"] <= 0:
             continue
+        seen_recalls.append(recall)
         anchors.append({
             "recall":recall,
             "L_core":item["L"],
