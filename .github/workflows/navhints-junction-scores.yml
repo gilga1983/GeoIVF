@@ -22,7 +22,8 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        dataset: [pubmed, bigann]
+        # PubMed succeeded in run 38525797031. Retry only the failed BigANN arm.
+        dataset: [bigann]
     runs-on: [self-hosted, linux, x64, geoivf]
     timeout-minutes: 360
     env:
