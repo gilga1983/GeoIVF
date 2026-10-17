@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "status": "public aggregate summary, not a replacement for original complete experiment archives",
+  "paper": "NavHints: Demand-Aware Navigation for Disk-Resident Vector Search",
+  "date": "2026-10-17",
+  "artifacts": {
+    "original14": "repro/manifest.json",
+    "supplemental": "repro/supplemental-manifest-20261014.json",
+    "reviewer_guide": "docs/ARTIFACT_REVIEW.md"
+  },
+  "metric_scope": "logical SSD page reads; complete request latency separately includes routing and online updates in DiskANN; source-aligned Catapult routing is a policy port, not native whole system",
+  "headline_results": [
+    {
+      "dataset": "Coveo",
+      "read_savings_pct": 80.1504,
+      "junction_only_pct": 27.0733,
+      "service_latency_vs_diskann_pct": 68.32,
+      "service_latency_vs_catapult_routing_pct": 51.19
+    },
+    {
+      "dataset": "PubMed1M/MedCPT",
+      "read_savings_pct": 44.1277,
+      "junction_only_pct": 30.5393,
+      "service_latency_vs_diskann_pct": 28.85,
+      "service_latency_vs_catapult_routing_pct": 9.56
+    },
+    {
+      "dataset": "Text2Image-10M",
+      "read_savings_pct": 34.5673,
+      "junction_only_pct": 24.7145,
+      "service_latency_vs_diskann_pct": 20.46,
+      "service_latency_vs_catapult_routing_pct": 18.77
+    },
+    {
+      "dataset": "BigANN-10M",
+      "read_savings_pct": 21.026,
+      "junction_only_pct": 20.6798,
+      "service_latency_vs_diskann_pct": 16.08,
+      "service_latency_vs_catapult_routing_pct": 12.81
+    }
+  ],
+  "figure8": {
+    "dataset": "PubMed1M/MedCPT",
+    "reference": "junction-only",
+    "metric": "mean matched-recall SSD-read savings percentage",
+    "history_queries": [
+      0,
+      250,
+      500,
+      1000,
+      2000,
+      3000,
+      4000
+    ],
+    "warmup": {
+      "k1": [
+        2.558839,
+        4.2072,
+        4.527739,
+        5.533073,
+        5.787353,
+        6.045438,
+        5.430095
+      ],
+      "k2": [
+        3.2697,
+        5.756396,
+        6.254807,
+        9.167361,
+        9.64341,
+        9.136685,
+        9.316569
+      ],
+      "k4": [
+        1.759581,
+        5.875227,
+        6.905642,
+        12.110791,
+        12.223647,
+        12.852294,
+        13.351567
+      ],
+      "k8": [
+        -1.9178668787707427,
+        2.6127400238778447,
+        3.8869417978492042,
+        9.76822963318846,
+        10.968714876849491,
+        11.62093290859702,
+        13.356648765794276
+      ]
+    },
+    "replay_counts": [
+      1,
+      2.5,
+      5,
+      10,
+      50
+    ],
+    "locality": {
+      "k1": [
+        6.246593,
+        6.670986,
+        5.621721,
+        5.280065,
+        3.230391
+      ],
+      "k2": [
+        11.042924,
+        10.772038,
+        8.571476,
+        8.56166,
+        4.135603
+      ],
+      "k4": [
+        14.975069,
+        13.092647,
+        10.323515,
+        8.216272,
+        2.484824
+      ],
+      "k8": [
+        15.468681,
+        11.239149,
+        8.02373,
+        5.153053,
+        -1.787739
+      ]
+    },
+    "provenance": {
+      "warmup_run": 38516776145,
+      "locality_run": 38164539106
+    }
+  },
+  "junction_scoring": {
+    "baseline": "sum of first expansion positions",
+    "comparison": "positive percentage means sum score saves reads versus alternative at jointly supported recall",
+    "workloads": [
+      {
+        "dataset": "Coveo",
+        "budget": 8192,
+        "common_targets": 6,
+        "vs_visit_frequency_pct": 1.05,
+        "vs_mean_position_pct": 0.89,
+        "role": "separate binding-budget sensitivity; selected design has all 12169 eligible junctions"
+      },
+      {
+        "dataset": "PubMed",
+        "budget": 14464,
+        "common_targets": 4,
+        "vs_visit_frequency_pct": -0.09,
+        "vs_mean_position_pct": -0.03
+      },
+      {
+        "dataset": "Text2Image-10M",
+        "budget": 14464,
+        "common_targets": 5,
+        "vs_visit_frequency_pct": 0.52,
+        "vs_mean_position_pct": 0.14
+      },
+      {
+        "dataset": "BigANN-10M",
+        "budget": 14464,
+        "common_targets": 5,
+        "vs_visit_frequency_pct": 0.28,
+        "vs_mean_position_pct": 1.07
+      }
+    ],
+    "provenance": {
+      "coveo_run": 38533263735,
+      "pubmed_run": 38525797031,
+      "text2image_run": 38533263735,
+      "bigann_run": 38529130742
+    }
+  },
+  "caution": "Rounded descriptive percentages may differ in last digit from full source JSON; re-evaluate from original frozen archives for verification and do not infer IID confidence intervals from rotated technical runs."
+}
