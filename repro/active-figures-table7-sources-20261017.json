@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-17",
+  "scope": "Additional original GitHub Actions ZIPs supporting the current NavHints paper's motivation figures and RQ3 auxiliary-memory comparator table. Complements, and does not replace, the original 14-run manifest.",
+  "private_backup": "The original ZIPs were SHA-256 verified and privately preserved before their Actions artifact expiration; redistribution and data-rights review pending.",
+  "runs": [
+    {
+      "id": "motivation-junction-concentration",
+      "run_id": 37748550632,
+      "artifact_id": 11537011822,
+      "sha256": "ccd873ff3859fb6d47620f2e9ae0c2b2ec5958321f9b617347c67ef86060172f"
+    },
+    {
+      "id": "motivation-destination-reuse",
+      "run_id": 37753634954,
+      "artifact_id": 11538907314,
+      "sha256": "552385e2762c892121e03c63c51584ca50cfa3ef01191e95446439e4ecb7c79b"
+    },
+    {
+      "id": "rq3-memory-coveo",
+      "run_id": 38170063494,
+      "artifact_id": 11716660620,
+      "sha256": "be91753baa7789fa98bf891fe47ed2c4b93d90442ca4189b80038e8b689ad9d3"
+    },
+    {
+      "id": "rq3-memory-text2image",
+      "run_id": 38170063494,
+      "artifact_id": 11718600970,
+      "sha256": "ee5e2aca931afdbc16eca6bd4597f70483bae125c6a01bd05cba3c0ddef80cb0"
+    },
+    {
+      "id": "rq3-bfs-pubmed",
+      "run_id": 38164299742,
+      "artifact_id": 11712883936,
+      "sha256": "63fcac2f439a9b4d1f6ff6f5d601167611f245bbbfa5465f797eeaec76c2bf65"
+    },
+    {
+      "id": "rq3-bfs-bigann",
+      "run_id": 38164299742,
+      "artifact_id": 11711862390,
+      "sha256": "d0ec210747b1b48877e813d8d9c1b6c49873dc1f1f8937a9d1efb234f4ebbe5d"
+    },
+    {
+      "id": "rq3-bigann-hot-qsev",
+      "run_id": 37983319473,
+      "artifact_id": 11645367589,
+      "sha256": "903749a47231d8d47b0ad3c041d2d7c78541becc6cad160b62c7be1526af23b2"
+    }
+  ],
+  "notes": [
+    "Do not infer source/workload equivalence across campaigns from identical labels alone.",
+    "The original BigANN hot/QSEV workflow's postprocessing failed, but the relevant method arms were independently checked; see manuscript notes for qualification.",
+    "These SHA-256 values authenticate the original GitHub artifact ZIP bytes, not a recompressed or sanitized derivative.",
+    "There is no approved public release of these original archives."
+  ]
+}
