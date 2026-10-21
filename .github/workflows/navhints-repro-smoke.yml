@@ -14,6 +14,10 @@ on:
       - "docs/REPRODUCIBILITY.md"
       - "docs/EXPERIMENTS.md"
       - "tests/test_navhints_repro.py"
+      - "tests/test_navhints_artifact.py"
+      - "docs/ARTIFACT_QUICKSTART.md"
+      - "docs/ARTIFACT_MAP.md"
+      - "CITATION.cff"
       - "scripts/*final_core*"
       - "scripts/*navhints*"
       - ".github/workflows/navhints-repro-smoke.yml"
@@ -22,6 +26,10 @@ on:
     paths:
       - "repro/**"
       - "tests/test_navhints_repro.py"
+      - "tests/test_navhints_artifact.py"
+      - "docs/ARTIFACT_QUICKSTART.md"
+      - "docs/ARTIFACT_MAP.md"
+      - "CITATION.cff"
       - "docs/ARTIFACT_REVIEW.md"
       - ".github/workflows/navhints-repro-smoke.yml"
   workflow_dispatch:
@@ -52,6 +60,7 @@ jobs:
           set -euxo pipefail
           mkdir -p artifacts/navhints-repro-smoke
           python3 -m compileall -q repro
+          python3 -m py_compile repro/verify_review_bundle.py
           python3 -m py_compile \
             scripts/qualify_final_core_coveo.py \
             scripts/qualify_final_core_public.py \
@@ -72,6 +81,10 @@ jobs:
           done
           python3 -m unittest discover -s tests -p 'test_navhints_repro.py' -v \
               2>&1 | tee artifacts/navhints-repro-smoke/unittests.log
+          python3 -m unittest discover -s tests -p 'test_navhints_artifact.py' -v \
+              2>&1 | tee artifacts/navhints-repro-smoke/artifact-tests.log
+          python3 repro/run.py review > artifacts/navhints-repro-smoke/offline-manifests.txt
+          grep -q '30 original archive checksums' artifacts/navhints-repro-smoke/offline-manifests.txt
           python3 repro/run.py list > artifacts/navhints-repro-smoke/available.txt
           python3 repro/run.py run pubmed > artifacts/navhints-repro-smoke/dryrun.txt
           python3 repro/run.py fetch all > artifacts/navhints-repro-smoke/fetch-preview.txt
