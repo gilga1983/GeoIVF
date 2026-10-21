@@ -2,7 +2,7 @@
 
 **Reproducible code and experiment harness for the NavHints PVLDB/VLDB 2027 paper.** This is the code repository, historically named GeoIVF. The manuscript and figures live separately in [gilga1983/DemmandAwareANN](https://github.com/gilga1983/DemmandAwareANN).
 
-**For artifact evaluators:** start with [docs/ARTIFACT_REVIEW.md](docs/ARTIFACT_REVIEW.md). It separates offline checks, frozen-result reproduction and a full real-SSD rerun. Fourteen original result archives, including the complete-request latency study, are listed with SHA-256 digests in [repro/manifest.json](repro/manifest.json). The original GitHub Actions ZIPs expire October 25–27, 2026; a permanent release URL is still required. New Figure 8, junction-scoring, fixed-k memory, and native Starling evidence is cataloged in [the supplemental October 14 manifest](repro/supplemental-manifest-20261014.json).
+**For artifact reviewers:** start with [ARTIFACT_QUICKSTART.md](docs/ARTIFACT_QUICKSTART.md) and the [paper-to-evidence map](docs/ARTIFACT_MAP.md). This public repository includes the selected RAM-only algorithm, source-fidelity tests, causal SSD replays and immutable evidence provenance. A lightweight, data-minimized numerical reviewer package has been prepared separately but awaits redistribution approval and durable public hosting. The original GitHub Actions artifacts will expire; their SHA-256-verified original bytes have been preserved privately. See [release readiness](docs/RELEASE-READINESS-2026-10-17.md).
 
 This `main` branch contains the **final** NavHints Core implementation, source-fidelity checks for competing methods, training scripts, four-dataset SSD replays, optional persistent-exit experiments, and an adapter for the **original** Starling library. Exploratory alternatives remain in their Git branches. The original page-oriented GeoIVF implementation is still present; its previous usage guide is [docs/LEGACY_GEOIVF.md](docs/LEGACY_GEOIVF.md). It is **not** the NavHints paper algorithm.
 
@@ -11,6 +11,26 @@ This `main` branch contains the **final** NavHints Core implementation, source-f
 On PubMed1M, Core uses **14,464 learned routing-junction IDs** grouped into 512 PQ-scored regions, a **2,048-ID global unique-FIFO history of successful destinations**, and **up to eight** PQ-scored recent destinations offered as additional starts alongside one learned junction. Training is disjoint; online history is updated **only after each query completes**. Existing DiskANN graph edges, beam, frontier and termination are untouched. Our selector keeps the top ten PQ candidates and admits at most eight to the frontier. The published **102,940-byte** auxiliary-memory figure is the explicitly accounted routing payload, **not total RSS**. Coveo has fewer than 14,464 eligible junctions; the actual learned budget is capped accordingly.
 
 An optional Sample2 persistent-exit extension records up to ten winners for selected junctions, with one-half admission probability and fill-only-empty-slot seeding from the global history. **RAM-only Core is the primary algorithm.** Sample2 is measured separately; logical update counts are not physical write amplification or crash-recovery evidence.
+
+## Two-minute reviewer preflight (Python standard library only)
+
+```bash
+git clone https://github.com/gilga1983/GeoIVF.git
+cd GeoIVF
+python3 -m unittest discover -s tests -p 'test_navhints_repro.py' -v
+python3 -m unittest discover -s tests -p 'test_navhints_artifact.py' -v
+python3 repro/run.py review
+# If you have the separate, approved sanitized reviewer ZIP:
+python3 repro/run.py review --bundle /path/to/NavHints-reviewer-bundle.zip
+```
+
+The manifest-only command verifies 30 original experiment provenance records;
+the bundle command checks each aggregate JSON's SHA-256 and independently
+recomputes the headline read savings, full-request latency, Figure 8 and
+junction-scoring results at the original matched-recall grids. **Neither
+command downloads datasets, invokes a simulator, compiles DiskANN, or touches
+the SSD.** It does not claim the numerical ZIP has already been publicly
+archived. The complete experiment, hardware and data requirements are below.
 
 ## Activate and reproduce
 
@@ -48,7 +68,7 @@ The original workflows are available in [`.github/workflows/`](.github/workflows
 
 ### Rebuild paper figures directly from frozen results
 
-If you only need to **reproduce the published numbers and graphs**, you do **not** need to rerun hours of SSD benchmarks. Download the immutable successful GitHub Actions artifacts and regenerate the CSVs:
+To regenerate the **paper-specific TeX plots and tables** from original unmodified experiment archives, rather than only validate numerical results, obtain the checksum-verified original ZIPs from the approved archive or from GitHub Actions while available. The paper-specific scripts require an authorized checkout of the separate manuscript repository:
 
 ```bash
 source repro/activate.sh
@@ -75,7 +95,7 @@ For a machine without access to large datasets, the fourteen artifact ZIPs are e
 
 ## Reproduced headline evidence
 
-All source references are listed in [the frozen manifest](repro/manifest.json). Real-SSD final-Core+Sample2 matched-recall logical-read savings versus unmodified DiskANN are **80.69% Coveo**, **44.23% PubMed**, **34.53% Text2Image-10M**, and **21.01% BigANN-10M** on each run's jointly reachable recall targets; targets differ by workload. On PubMed, RAM-only Core saves **13.28% logical SSD reads** compared with an **author-aligned Catapult hash/LRU routing mechanism on the same pinned DiskANN SSD engine** across 11 common recall anchors, not the author's complete original in-memory system. The Starling port is tested in the **original** author search engine: substantial benefits on Coveo, near break-even logical I/O on BigANN. The repeated query sequences are fixed, so do not infer confidence intervals from independent samples.
+For the **RAM-only NavHints Core presented in the paper**, mean matched-recall logical SSD-read savings versus unmodified DiskANN are **80.15% Coveo, 44.13% PubMed, 34.57% Text2Image-10M, and 21.03% BigANN-10M**. The distinct target grids contain 4/5/5/4 points. The **optional Sample2 persistent-exit** arm has *different* Full-anchored summary results (80.69%, 44.23%, 34.53%, and 21.01%); these are not the main paper's Core figures and should not be substituted for them. The original records are in [the frozen manifest](repro/manifest.json), and the current summary is in [repro/current-paper-summary-20261017.json](repro/current-paper-summary-20261017.json). On PubMed, RAM-only Core saves **13.28% logical SSD reads** compared with an **author-aligned Catapult hash/LRU routing mechanism on the same pinned DiskANN SSD engine** across 11 common recall anchors, not the author's complete original in-memory system. The Starling port is tested in the **original** author search engine: substantial benefits on Coveo, near break-even logical I/O on BigANN. The repeated query sequences are fixed, so do not infer confidence intervals from independent samples.
 
 All auxiliary-memory budgets exclude some container metadata; SSD read counts and optional logical writes must not be relabeled physical NVMe block operations. Reproducing the paper means reproducing the **evaluation protocol and its limitations**, not merely matching its reported percentages.
 
