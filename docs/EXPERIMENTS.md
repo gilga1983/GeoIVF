@@ -1,6 +1,12 @@
 # Final NavHints Core experiment inventory (frozen evidence)
 
-All ten campaigns below **completed successfully on a self-hosted real-SSD runner**, except where an individual workflow has more than one independently successful job. The exact run IDs, artifact names, source branch and member paths are machine-readable in [repro/manifest.json](../repro/manifest.json). They remain the authoritative original cohorts even if new GitHub branches later receive experimental commits.
+The ten primary/sensitivity campaigns below **completed successfully on a self-hosted real-SSD runner**, except where an individual workflow has more than one independently successful job. This is the **original experimental history**, including the optional
+Sample2 persistent-exit arm. The submitted paper's headline algorithm is
+RAM-only Core. The currently active per-figure/run mapping is in
+[ARTIFACT_MAP.md](ARTIFACT_MAP.md); the older Full-anchored Sample2 percentages
+below must not be substituted for the RAM-only paper results.
+
+The exact run IDs, artifact names, source branch and member paths are machine-readable in [repro/manifest.json](../repro/manifest.json). They remain the authoritative original cohorts even if new GitHub branches later receive experimental commits.
 
 | ID | Successful GitHub Actions run | Artifact | Reproduces |
 | --- | --- | --- | --- |
