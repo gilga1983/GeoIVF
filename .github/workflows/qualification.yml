@@ -42,7 +42,7 @@ jobs:
           git rev-parse HEAD > artifacts/upstream/commit.txt
       - name: Build pinned liburing and run direct asynchronous tests
         run: |
-          bash scripts/setup_uring.sh 2>&1 | tee artifacts/upstream/uring-build.log
+          bash scripts/build_execution.sh --uring 2>&1 | tee artifacts/upstream/uring-build.log
           GEOIVF_TEST_DIRECT=1 GEOIVF_TEST_URING=1 .venv/bin/python -m pytest -q --junitxml=artifacts/upstream/tests.xml
       - name: Build upstream CLIP and HIVF-CLIP
         if: always()
