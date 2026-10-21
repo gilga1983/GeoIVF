@@ -15,6 +15,28 @@ they expire. This repository currently has no top-level LICENSE; redistribution
 terms require the owner's approval. These are release blockers, not resolved
 by a successful smoke test.
 
+## Current reviewer entry point (October 21, 2026)
+
+The [two-minute quickstart](ARTIFACT_QUICKSTART.md) and
+[paper/evidence map](ARTIFACT_MAP.md) supersede older descriptions that cover
+only the first 14 original archives. The source manifests now inventory
+**30** required original experiment ZIPs across the primary, supplemental,
+and additional-figure sets. Thirty-three original archive checksums are
+tracked in the private reviewer preparation bundle, three of which are
+optional exploratory controls not required by the current paper.
+
+```bash
+python3 repro/run.py review                                  # no dataset needed
+python3 repro/run.py review --bundle /path/to/reviewer.zip     # independent numeric checks
+```
+
+The second command validates all aggregate JSON SHA-256 digests and
+reproduces four Core SSD-read and latency results, every Figure 8 curve and
+the four-workload junction-score table. It does **not** claim a full SSD
+rerun, and the public artifact URL does not yet host the licensed reviewer
+ZIP. The paper-to-evidence map identifies a remaining provenance gap for
+the single-start destination-source and capacity controls (Table 5).
+
 ## 1. What can be evaluated?
 
 | Level | Data, machine and time | Evidence |

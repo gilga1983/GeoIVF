@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "Please cite the accompanying NavHints paper when using this implementation or result archives."
+type: software
+title: "NavHints: Demand-Aware Navigation for Disk-Resident Vector Search (artifact)"
+authors:
+  - family-names: Einziger
+    given-names: Gil
+repository-code: "https://github.com/gilga1983/GeoIVF"
+url: "https://github.com/gilga1983/GeoIVF/blob/main/docs/ARTIFACT_QUICKSTART.md"
+abstract: >-
+  Source implementation and reproducibility tools for workload-trained
+  junctions and causal recent-result navigation in disk-resident ANN search.

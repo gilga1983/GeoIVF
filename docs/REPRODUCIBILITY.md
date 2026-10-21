@@ -2,6 +2,22 @@
 
 This is the **supported execution specification** for the final NavHints Core, not an overview of discarded prototypes. It connects source snapshots, training data, runs, archived artifacts, tables and figures. Commands are safe by default until you add `--execute`.
 
+## 0. Offline numerical validation first
+
+The original paper's headline RAM-only Core experiment can be checked without
+access to the private manuscript repository or a real SSD:
+
+```bash
+python3 -m unittest discover -s tests -p 'test_navhints_artifact.py' -v
+python3 repro/run.py review
+python3 repro/run.py review --bundle /path/to/approved-reviewer-summary.zip
+```
+
+The last command requires the separately published, data-minimized evidence
+bundle. See [ARTIFACT_QUICKSTART.md](ARTIFACT_QUICKSTART.md) and
+[ARTIFACT_MAP.md](ARTIFACT_MAP.md). The original fourteen GitHub Actions
+ZIPs are temporary; use the verified permanent deposit once available.
+
 ## 1. Check out the two repositories
 
 ```bash
@@ -62,13 +78,13 @@ All experiments use a pinned existing ANN graph with K=10, beam width 8, a measu
 
 ## 4. Fast paper-level reproduction from successful artifacts
 
-The successful original run IDs, artifact IDs/names and required JSON paths are in [the manifest](../repro/manifest.json). To retrieve all ten **without rerunning a single SSD experiment**:
+The successful original run IDs, artifact IDs/names and required JSON paths are in [the manifest](../repro/manifest.json). To retrieve the original fourteen (ten main/sensitivity campaigns and four service-latency archives) **without rerunning any SSD experiment**:
 
 ```bash
 gh auth login                      # if needed for GitHub CLI downloads
 navhints fetch all                  # dry-run preview; does NOT download
 navhints fetch all --execute        # packs each original GH artifact into artifacts/frozen/<id>.zip
-navhints verify all                 # check ten ZIPs, JSON members and final policy
+navhints verify all                 # check fourteen ZIPs, JSON members and final policy
 navhints_paper                      # dry-run figure regeneration and clean PDF build
 navhints_paper --execute            # regenerate plots from frozen JSON + make verify-latex
 ```

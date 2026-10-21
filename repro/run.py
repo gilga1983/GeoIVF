@@ -379,6 +379,8 @@ def main() -> int:
     vf.add_argument("--original-zip", action="store_true",
                     help="Require exact archived GitHub Actions ZIP digest, not a gh-repacked ZIP")
     vf.add_argument("--dir",type=Path,default=ROOT/"artifacts"/"frozen")
+    rv = sub.add_parser("review", help="Verify public manifests or a sanitized reviewer bundle offline")
+    rv.add_argument("--bundle", type=Path, help="Locally obtained sanitized reviewer ZIP")
     pdf = sub.add_parser("paper")
     pdf.add_argument("--paper-dir",type=Path,default=ROOT.parent/"DemmandAwareANN")
     pdf.add_argument("--archives",type=Path,default=ROOT/"artifacts"/"frozen")
@@ -390,6 +392,10 @@ def main() -> int:
     if a.action=="run":return run_experiment(m,a.mode,a.execute,a.allow_public_download,a.overwrite)
     if a.action=="fetch":return fetch(m,a.target,a.dir.resolve(),a.execute,a.replace)
     if a.action=="verify":return verify(m,a.target,a.dir.resolve(),a.original_zip)
+    if a.action=="review":
+        cmd=[sys.executable,str(ROOT/"repro"/"verify_review_bundle.py")]
+        if a.bundle is not None:cmd.extend(["--bundle",str(a.bundle.resolve())])
+        return subprocess.call(cmd,cwd=ROOT)
     if a.action=="paper":return paper(m,a.paper_dir,a.archives.resolve(),a.execute)
     raise AssertionError("unreachable")
 
