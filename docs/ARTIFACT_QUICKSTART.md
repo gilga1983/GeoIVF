@@ -13,7 +13,7 @@ checkout, account login, dataset download or NVMe hardware is needed.
 ```bash
 git clone https://github.com/gilga1983/GeoIVF.git
 cd GeoIVF
-make test
+python3 -m unittest discover -s tests -v
 python3 repro/run.py review --bundle repro/navhints-reviewer-evidence.zip
 ```
 
@@ -26,7 +26,9 @@ Table 5 values are recomputed from measured recall/read frontiers at six
 supported recall targets, including the negative random-ID control.
 
 This is reproduction of numerical analysis from recorded measurements.
-It does not independently rerun the original SSD measurements.
+It does not independently rerun the original SSD measurements. Bash enables
+the native replay-generation source check; that one test is skipped when
+Bash is unavailable. The numerical verifier needs only Python.
 
 ## Regenerate plotted data and render figures
 

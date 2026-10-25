@@ -38,6 +38,7 @@ class MaintainedRepository(unittest.TestCase):
                 if '.generated.sh' not in name:
                     self.assertTrue((ROOT / name).is_file(), f'{workflow.name}: missing {name}')
 
+    @unittest.skipUnless(shutil.which('bash'), 'Native replay source generation requires Bash')
     def test_final_starling_replay_generation_matches_frozen_source(self):
         reference = json.loads((ROOT / 'repro/starling-replay-reference.json').read_text())
         with tempfile.TemporaryDirectory(prefix='navhints-replay-source-') as folder:
