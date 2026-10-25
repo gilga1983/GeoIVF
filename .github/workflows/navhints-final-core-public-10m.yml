@@ -1,14 +1,6 @@
 name: Final NavHints Core on Text2Image and BigANN 10M
 
 on:
-  push:
-    branches: [experiment/navhints-final-core-multidata-20261011]
-    paths:
-      - ".github/workflows/navhints-final-core-public-10m.yml"
-      - "scripts/qualify_final_core_public.py"
-      - "scripts/prepare_public_ann_dataset.py"
-      - "scripts/run_final_core_public_one.sh"
-      - "scripts/patch_navhints_regional_history.py"
   workflow_dispatch:
 
 permissions:

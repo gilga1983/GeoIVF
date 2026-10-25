@@ -1,14 +1,6 @@
 name: NavHints equal-budget junction vs destination tradeoff
 
 on:
-  push:
-    branches: [experiment/navhints-fixed-memory-tradeoff-20261011]
-    paths:
-      - ".github/workflows/navhints-fixed-memory-tradeoff.yml"
-      - "scripts/qualify_navhints_fixed_memory_tradeoff.py"
-      - "scripts/run_navhints_fixed_memory_tradeoff_ci.sh"
-      - "scripts/patch_navhints_regional_history.py"
-      - "scripts/qualify_navhints_catapult_headtohead.py"
   workflow_dispatch:
 
 permissions:

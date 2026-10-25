@@ -4,7 +4,7 @@
 
 **For artifact reviewers:** start with [ARTIFACT_QUICKSTART.md](docs/ARTIFACT_QUICKSTART.md) and the [paper-to-evidence map](docs/ARTIFACT_MAP.md). The [bundled evidence ZIP](repro/navhints-reviewer-evidence.zip) contains 48 aggregate JSON outputs from 35 original experiment archives, including both Table 5 studies. Its SHA-256 is frozen in [the release record](repro/release-20261025.json). Original raw archives are preserved separately. See [current release status](docs/RELEASE-READINESS-2026-10-25.md) and [review/reproduction permissions](LICENSE).
 
-This `main` branch contains the **final** NavHints Core implementation, source-fidelity checks for competing methods, training scripts, four-dataset SSD replays, optional persistent-exit experiments, and an adapter for the **original** Starling library. Exploratory alternatives remain in their Git branches. The original page-oriented GeoIVF implementation is still present; its previous usage guide is [docs/LEGACY_GEOIVF.md](docs/LEGACY_GEOIVF.md). It is **not** the NavHints paper algorithm.
+This `main` branch contains the **final** NavHints Core implementation, source-fidelity checks for competing methods, training scripts, four-dataset SSD replays, optional persistent-exit experiments, and an adapter for the **original** Starling library. The maintained tree contains NavHints and its paper comparisons. The earlier GeoIVF prototype and retired experiments are recoverable from Git history, including commit `213db3766d27833fb6975fb2fccf5ca02c4d6f1f`.
 
 ## Final algorithm
 
@@ -102,6 +102,25 @@ For the **RAM-only NavHints Core presented in the paper**, mean matched-recall l
 
 All auxiliary-memory budgets exclude some container metadata; SSD read counts and optional logical writes must not be relabeled physical NVMe block operations. Reproducing the paper means reproducing the **evaluation protocol and its limitations**, not merely matching its reported percentages.
 
-## Archival history
+## Build and repository scope
 
-This repository began as a page-oriented GeoIVF prototype. Its code (`geoivf/`, `native/`, `tests/`) and earlier workflows are preserved for historical reproducibility but are **not** the selected NavHints paper implementation. The original README is [archived without editing](docs/LEGACY_GEOIVF.md). Explore earlier NavHints alternatives on their named Git branches; `main` supports the selected final Core and the validated comparisons, not every prototype.
+```bash
+make test         # offline NavHints tests, including native replay generation
+make review       # verify the bundled aggregate evidence
+make paper-data   # regenerate plotted CSVs into artifacts/paper
+make figures      # optional two-pass pdfLaTeX figure/table sheet
+```
+
+The maintained tree contains `scripts/` (NavHints, training, engine adapters
+and paper comparisons), `repro/` (frozen evidence and plotting snapshot),
+`tests/` (offline source/reproduction checks), and `docs/` (current reviewer
+instructions). `requirements.txt` is for training and physical replays;
+o third-party Python package is needed for `make test` or `make review`.
+
+The native Starling generator composes several strict source transformations.
+Its generator/patch helpers remain required even when their filenames refer
+to earlier controls. Four generated final replay scripts are checked against
+the pre-cleanup source hashes. The removed GeoIVF package, custom native reader,
+legacy tests, benchmarks and workflows remain recoverable in Git history.
+The repository URL, runner labels and frozen dataset-cache paths are retained
+for compatibility with the paper and original experiment inputs.

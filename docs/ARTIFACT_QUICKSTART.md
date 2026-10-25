@@ -13,8 +13,7 @@ checkout, account login, dataset download or NVMe hardware is needed.
 ```bash
 git clone https://github.com/gilga1983/GeoIVF.git
 cd GeoIVF
-python3 -m unittest discover -s tests -p 'test_navhints_repro.py' -v
-python3 -m unittest discover -s tests -p 'test_navhints_artifact.py' -v
+make test
 python3 repro/run.py review --bundle repro/navhints-reviewer-evidence.zip
 ```
 

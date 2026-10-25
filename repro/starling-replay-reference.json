@@ -1,0 +1,26 @@
+{
+  "source_commit": "213db3766d27833fb6975fb2fccf5ca02c4d6f1f",
+  "scope": "Generated source only; no datasets, engine build or SSD benchmark",
+  "datasets": [
+    {
+      "dataset": "coveo",
+      "sha256": "b86598bcfe92edaca26b4c1369796de793222d5f5b56569c85c7ac5e0ffd3ed0",
+      "bytes": 18033
+    },
+    {
+      "dataset": "bigann",
+      "sha256": "1e2770ae3a73eb0a19f3b75fb05b356d987ec9501eb3b4a8c621105c1ec5c2e4",
+      "bytes": 18213
+    },
+    {
+      "dataset": "pubmed",
+      "sha256": "0a4b4f6e9b58957767de77602401c5186be767f7a9c9f93ffd84881dedf6f139",
+      "bytes": 19697
+    },
+    {
+      "dataset": "text2image",
+      "sha256": "c7fee79a08dc3c8b7174c02577caeef0f977194f4b21b8d952ec5448cf3f8c68",
+      "bytes": 19719
+    }
+  ]
+}

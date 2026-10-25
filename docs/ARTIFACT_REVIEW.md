@@ -87,3 +87,11 @@ own navigator and timing scope, and its adverse BigANN results are preserved.
 Repetition runs replay fixed query sequences and are not independent workload
 samples. Numerical checks of archived aggregates do not certify fresh SSD
 latency on another machine.
+
+## Maintained source tree
+
+The current tree contains NavHints, its reproducibility tools and the
+comparison/ablation code needed by the paper. The original GeoIVF library,
+custom native-reader experiments, retired experiment documents and their
+workflows/tests have been removed from the maintained tree. They remain in
+Git history. `make test` and `make review` now run NavHints-only checks.

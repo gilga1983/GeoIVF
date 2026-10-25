@@ -3,34 +3,29 @@ name: NavHints reproduction contract smoke
 on:
   push:
     branches:
-      - integrate/navhints-reproducible-main-20261011
       - main
       - "artifact/**"
     paths:
+      - "scripts/**"
       - "repro/**"
+      - "tests/**"
+      - "docs/**"
       - "README.md"
-      - "docs/ARTIFACT_REVIEW.md"
-      - "docs/IMPLEMENTATION.md"
-      - "docs/REPRODUCIBILITY.md"
-      - "docs/EXPERIMENTS.md"
-      - "tests/test_navhints_repro.py"
-      - "tests/test_navhints_artifact.py"
-      - "docs/ARTIFACT_QUICKSTART.md"
-      - "docs/ARTIFACT_MAP.md"
+      - "Makefile"
+      - "requirements.txt"
       - "CITATION.cff"
-      - "scripts/*final_core*"
-      - "scripts/*navhints*"
       - ".github/workflows/navhints-repro-smoke.yml"
   pull_request:
     branches: [main]
     paths:
+      - "scripts/**"
       - "repro/**"
-      - "tests/test_navhints_repro.py"
-      - "tests/test_navhints_artifact.py"
-      - "docs/ARTIFACT_QUICKSTART.md"
-      - "docs/ARTIFACT_MAP.md"
+      - "tests/**"
+      - "docs/**"
+      - "README.md"
+      - "Makefile"
+      - "requirements.txt"
       - "CITATION.cff"
-      - "docs/ARTIFACT_REVIEW.md"
       - ".github/workflows/navhints-repro-smoke.yml"
   workflow_dispatch:
 
@@ -59,30 +54,11 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p artifacts/navhints-repro-smoke
-          python3 -m compileall -q repro
-          python3 -m py_compile repro/verify_review_bundle.py
-          python3 -m py_compile \
-            scripts/qualify_final_core_coveo.py \
-            scripts/qualify_final_core_public.py \
-            scripts/qualify_final_core_warmup.py \
-            scripts/qualify_final_core_locality.py \
-            scripts/qualify_final_core_shift.py \
-            scripts/qualify_final_core_write_sweep.py \
-            scripts/qualify_optimal_navhints_catapult.py \
-            scripts/patch_diskann_hint_ivf_packed_direct.py \
-            scripts/patch_diskann_experience_core.py \
-            scripts/patch_navhints_regional_history.py \
-            scripts/patch_starling_final_core.py \
-            scripts/generate_starling_final_core.py \
-            scripts/summarize_starling_final_core.py
-          for file in repro/activate.sh scripts/run_final_core_*.sh \
-                      scripts/run_navhints_*.sh; do
+          python3 -m compileall -q scripts repro tests
+          for file in repro/activate.sh scripts/*.sh; do
             bash -n "$file"
           done
-          python3 -m unittest discover -s tests -p 'test_navhints_repro.py' -v \
-              2>&1 | tee artifacts/navhints-repro-smoke/unittests.log
-          python3 -m unittest discover -s tests -p 'test_navhints_artifact.py' -v \
-              2>&1 | tee artifacts/navhints-repro-smoke/artifact-tests.log
+          make test 2>&1 | tee artifacts/navhints-repro-smoke/unittests.log
           python3 repro/run.py review > artifacts/navhints-repro-smoke/offline-manifests.txt
           grep -q '32 original archive checksums' artifacts/navhints-repro-smoke/offline-manifests.txt
           python3 repro/run.py review --bundle repro/navhints-reviewer-evidence.zip \

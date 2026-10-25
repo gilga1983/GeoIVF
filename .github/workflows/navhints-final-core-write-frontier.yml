@@ -1,12 +1,6 @@
 name: Final Core Sample1 Sample2 Sample4 Sample10 frontier
 
 on:
-  push:
-    branches: [experiment/navhints-final-core-multidata-20261011]
-    paths:
-      - ".github/workflows/navhints-final-core-write-frontier.yml"
-      - "scripts/qualify_final_core_write_sweep.py"
-      - "scripts/run_final_core_write_sweep_ci.sh"
   workflow_dispatch:
 
 permissions:

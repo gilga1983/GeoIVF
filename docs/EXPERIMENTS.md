@@ -23,16 +23,25 @@ The exact run IDs, artifact names, source branch and member paths are machine-re
 
 ## Four-workload matched-recall headline data
 
-Same frozen `B<=14464,C=2048,k=8` algorithm, with sampled persistent exits in Full. All values below are **unweighted means of per-common-target saving percentages**, not ratios of pooled reads or independent query-sample confidence intervals.
+These are the submitted paper's RAM-only Core results, with
+`B<=14464,C=2048,k=8`. Values average per-target savings over the common
+recall support; workload-specific target grids are not pooled.
 
-| Workload | Full: read saving vs DiskANN | Anchor count | Comments |
-| --- | ---: | ---: | --- |
-| Coveo | **80.69%** | 4 | Actual trained B=12,169 (only eligible IDs), substantial destination locality |
-| PubMed1M | **44.23%** | 5 | Selected B=14,464; negligible incremental sampled-exit value |
-| Text2Image-10M | **34.53%** | 5 | Weak exact-neighbor reuse; Core and Sample2 nearly identical in logical I/O |
-| BigANN-10M | **21.01%** | 4 | High-recall weak-locality workload; Sample2 effectively adds zero SSD-read benefit |
+| Workload | Core read saving vs DiskANN | Targets | Complete-request latency saving |
+| --- | ---: | ---: | ---: |
+| Coveo | 80.15% | 4 | 68.32% |
+| PubMed1M | 44.13% | 5 | 28.85% |
+| Text2Image-10M | 34.57% | 5 | 20.46% |
+| BigANN-10M | 21.03% | 4 | 16.08% |
 
-The anchored recall regions differ by dataset and should always be stated with any plot. A Full-anchored curve and a Core-anchored curve may have different numbers of reachable targets. The figure generator restricts comparisons to all four methods' common intervals and does not extrapolate.
+Latency has a separately documented matched-recall grid and includes routing
+and feedback in the common DiskANN engine. The optional Sample2 persistent
+extension has separate Full-anchored summaries in the frozen evidence; it does
+not define the paper's headline RAM-only results.
+
+The four-workload service-latency runs and all newer figure/table sources
+are mapped in [ARTIFACT_MAP.md](ARTIFACT_MAP.md), including the recovered
+Table 5 destination controls. Use `make review` for numerical verification.
 
 ## Native original Starling portability
 
@@ -63,4 +72,4 @@ On PubMed, all policies use the same final RAM-only Core and optional H=10 exit 
 - Negative BigANN/Starling results remain first-class measurements in paper discussion.
 - No user-identifying or licensed Coveo data are distributed through the repository.
 
-The separate [paper repository](https://github.com/gilga1983/DemmandAwareANN) owns its figures and `scripts/derive_final_core_eval.py` / `derive_final_core_sensitivity.py`; it can reconstruct them from the ten archived JSON artifacts without the original datasets.
+The pinned plotting sources and derivations are bundled under `repro/paper/`. `make paper-data` regenerates and checks the plotted CSVs without the private manuscript repository.

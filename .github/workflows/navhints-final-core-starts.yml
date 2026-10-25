@@ -1,11 +1,5 @@
 name: Final Core starts versus locality
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/navhints-final-core-starts.yml"
-      - "scripts/qualify_final_core_starts.py"
-      - "scripts/run_final_core_starts_ci.sh"
   workflow_dispatch:
 permissions:
   contents: read

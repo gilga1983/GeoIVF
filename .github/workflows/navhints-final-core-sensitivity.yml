@@ -1,14 +1,6 @@
 name: Final NavHints Core warmup locality and shift
 
 on:
-  push:
-    branches: [experiment/navhints-final-core-multidata-20261011]
-    paths:
-      - ".github/workflows/navhints-final-core-sensitivity.yml"
-      - "scripts/run_final_core_sensitivity_ci.sh"
-      - "scripts/qualify_final_core_warmup.py"
-      - "scripts/qualify_final_core_locality.py"
-      - "scripts/qualify_final_core_shift.py"
   workflow_dispatch:
 
 permissions:

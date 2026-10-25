@@ -1,4 +1,4 @@
-name: Section 4.7 final Core memory comparison
+name: NavHints alternative-memory controls on PubMed and BigANN
 # Paper results reuse frozen competitor measurements and only change the
 # selected Core reference curve. This expensive full rerun is intentionally
 # manual-only for explicit reproducibility work, not part of ordinary CI.

@@ -1,12 +1,6 @@
 name: NavHints optimal equal-RAM Core vs CatapultDB
 
 on:
-  push:
-    branches: [experiment/navhints-optimal-core-vs-catapult-20261011]
-    paths:
-      - ".github/workflows/navhints-optimal-core-catapult.yml"
-      - "scripts/qualify_optimal_navhints_catapult.py"
-      - "scripts/run_navhints_optimal_vs_catapult_ci.sh"
   workflow_dispatch:
 
 permissions:

@@ -40,7 +40,7 @@ Reproducing **a previous result from archived JSON** and **rerunning a physical 
 - **PubMed1M/MedCPT:** 1,000,000 768-D embeddings; inner product; disjoint first 5K training queries, then held-out 4K warm-up and 1K measured queries. Requires the frozen first-million `.fbin` vectors, the held-out MedRAG/MedCPT query sequence, exact GT and the original DiskANN SSD graph under `$HOME/.cache/geoivf`. Do not substitute another model, vector order, or query distribution.
 - **Text2Image-10M:** public first 10M 200-D float vectors, inner-product; first 5K public queries for training, next 4K warm-up / last 1K measured. Public download/preparer is `scripts/prepare_public_ann_dataset.py`. The runner may build the pinned DiskANN index when absent. This can require large bandwidth, RAM and hours of compute.
 - **BigANN-10M:** public 10M 128-D `uint8` vectors, squared L2; same disjoint 5K/4K/1K chronology. Public preparer checks official GT and file shape.
-- **Coveo chronological production demand:** licensed source with 31,950 normalized 50-D product embeddings, 5K static training, 20K causal warm-up, 5K measured. Original ordering is essential. **Do not distribute the raw licensed records, extracted query text or private manifest paths.** The authorized data must be prepared into the previously frozen local layout. No public download is attempted for this dataset.
+- **Coveo chronological production demand:** licensed source with 31,950 normalized 50-D product embeddings, 5K static training, 20K causal warm-up, 5K measured. Original ordering is essential. **Do not distribute the raw licensed records, extracted query text or private manifest paths.** The NavHints converter `scripts/prepare_coveo_real_demand.py` prepares the normalized chronological stream from authorized source CSVs; the replay requires the exact frozen split layout. No public download is attempted for this dataset.
 
 Default required local paths and frozen split metadata are **machine-readable** in [`../repro/manifest.json`](../repro/manifest.json), under its `paths` and `controller` keys. Run `navhints doctor --mode <dataset>` for explicit missing filenames. Binary vector files are 8-byte little-endian count/dim headers plus row-major payload (`.fbin` float32; `.u8bin` uint8); GT files store ordered exact IDs and may omit distance payloads. The frozen slicers handle both GT variants, validate row counts and **never query the answer oracle for routing hints**.
 
@@ -76,42 +76,36 @@ If the **public** 10M files are absent, pass `--allow-public-download` explicitl
 
 All experiments use a pinned existing ANN graph with K=10, beam width 8, a measured search-width frontier, online updates only from earlier completed queries, rotated method order, and three repeated replays of the same deterministic query sequence. Do not infer independent-sample standard errors or percentage improvements outside the shared recall interval.
 
-## 4. Fast paper-level reproduction from successful artifacts
+## 4. Reproduce the recorded analysis and figures
 
-The successful original run IDs, artifact IDs/names and required JSON paths are in [the manifest](../repro/manifest.json). To retrieve the original fourteen (ten main/sensitivity campaigns and four service-latency archives) **without rerunning any SSD experiment**:
+The public reviewer package is included in this checkout. It does not depend
+on expiring Actions files or access to the private manuscript repository.
 
 ```bash
-gh auth login                      # if needed for GitHub CLI downloads
-navhints fetch all                  # dry-run preview; does NOT download
-navhints fetch all --execute        # packs each original GH artifact into artifacts/frozen/<id>.zip
-navhints verify all                 # check fourteen ZIPs, JSON members and final policy
-navhints_paper                      # dry-run figure regeneration and clean PDF build
-navhints_paper --execute            # regenerate plots from frozen JSON + make verify-latex
+make test
+make review
+make paper-data
+make figures                       # optional: requires the documented TeX packages
 ```
 
-To verify a subset: `navhints fetch coveo --execute && navhints verify coveo`. Artifact retention on GitHub is finite. If an original artifact has expired, rerun the **same** causal protocol and archive the new source commit and input hashes before using its output; do not silently fall back to the compact-history control.
+`make paper-data` validates the frozen evidence checksum, regenerates all 20
+plotted CSVs and compares them against the manuscript references. `make figures`
+then renders the eight-figure/nine-table sheet. The output path can be selected
+with `make paper-data PAPER_OUTPUT=/path/to/output`.
 
-The paper commands call:
-```bash
-cd ../DemmandAwareANN
-python3 scripts/derive_final_core_eval.py \
-  --coveo ../GeoIVF/artifacts/frozen/coveo.zip \
-  --pubmed ../GeoIVF/artifacts/frozen/pubmed.zip \
-  --text2image ../GeoIVF/artifacts/frozen/text2image.zip \
-  --bigann ../GeoIVF/artifacts/frozen/bigann.zip
-python3 scripts/derive_final_core_sensitivity.py \
-  --warmup ../GeoIVF/artifacts/frozen/sensitivity.zip \
-  --locality ../GeoIVF/artifacts/frozen/sensitivity.zip \
-  --shift ../GeoIVF/artifacts/frozen/sensitivity.zip \
-  --writes ../GeoIVF/artifacts/frozen/persistence.zip
-make verify-latex
-```
-
-Use a full local PVLDB/ACM LaTeX template installation and the scripts/Makefile in the paper repository. `make verify-latex` builds into scratch and **does not replace the tracked `main.pdf`**. Check `.latex-verify/result.json`, exact refs, page limits and rendered figure sizes before final publication. Chart CSV regeneration is sourced from measured per-L output and matched-recall comparisons. The presence of a historical PDF file is **not proof** that the active TeX was rebuilt.
+Authors who retain the original fourteen raw Actions ZIPs can additionally
+use `navhints verify all --original-zip --dir /path/to/originals`. The optional
+`navhints fetch all` command previews historical downloads, and `--execute`
+downloads only artifacts that are still retained by GitHub. An expired raw
+artifact does not prevent public numerical review: use the bundled aggregate
+package, or the separately preserved original bytes when those are needed.
+The original provenance is never replaced by a fresh run without a new record.
+The `navhints_paper` integration remains available for authors with a full
+manuscript checkout; it is not needed for the public reviewer workflow.
 
 ## 5. Exact experimental provenance
 
-See [EXPERIMENTS.md](EXPERIMENTS.md). Headline matched-recall SSD read savings on the final four-dataset cohort are 80.69% Coveo, 44.23% PubMed, 34.53% Text2Image-10M and **21.01% BigANN-10M** (the last on four valid common anchors). These are per-dataset means, not the same absolute recall target. The author-aligned Catapult mechanism comparison (run 38127358063) yields 13.28% fewer logical SSD reads for the RAM-only final Core at eleven PubMed targets. Both native Starling replays completed: strong Coveo read and query-latency reductions, but **near break-even and sometimes worse native logical I/O on BigANN-10M**. This is an important negative-boundary result, not a reason to remove BigANN.
+See [EXPERIMENTS.md](EXPERIMENTS.md). Headline RAM-only Core matched-recall SSD read savings are **80.15% Coveo, 44.13% PubMed, 34.57% Text2Image-10M and 21.03% BigANN-10M**, across 4/5/5/4 targets respectively. These are per-dataset means, not the same absolute recall target. The author-aligned Catapult mechanism comparison (run 38127358063) yields 13.28% fewer logical SSD reads for the RAM-only final Core at eleven PubMed targets. Both native Starling replays completed: strong Coveo read and query-latency reductions, but **near break-even and sometimes worse native logical I/O on BigANN-10M**. This is an important negative-boundary result, not a reason to remove BigANN.
 
 All numbers must be interpreted as **logical SSD reads or native Starling logical page counters**, not physical device commands. Auxiliary routing-budget numbers exclude some allocator/hash/table overhead. Sampled persistent writes are logical update requests, not validated crash-consistent storage transactions. Source-aligned Catapult uses its **hash/LRU routing policy within the common DiskANN SSD engine**, not the authors' original complete in-memory search implementation. For these reasons do not claim whole-system native Catapult superiority or universal performance improvement from these experiments.
 
@@ -122,7 +116,7 @@ All numbers must be interpreted as **logical SSD reads or native Starling logica
 - `Cargo build fails`: check the original pinned Microsoft commit and `cargo +1.97.1 --version`; retain the source diff and first compiler error.
 - `Starling source patch fails`: source anchors are intentionally strict; pin the original author Starling SHA instead of patching whatever `main` happens to contain.
 - `SSH/runners unavailable`: use a genuine local Linux SSD run or artifact-only reproduction. Do not switch to an in-memory ANN engine and call the metric comparable.
-- `paper compile failure`: run `make verify-latex` and inspect `.latex-verify/result.json`, not a stale PDF.
+- `figure-sheet compile failure`: run `make figures` and inspect `artifacts/paper/figures.log`; the numeric export works without TeX.
 - `same NVMe device busy`: finish or stop other jobs before timing. Original scripts provide `flock` device guards; do not interpret overlapping job latency as independent runs.
 
 This workflow is intentionally conservative: it favors visible missing evidence over untestable performance claims.

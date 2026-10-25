@@ -1,6 +1,5 @@
-name: First-time Table 7 Coveo and Text2Image comparators
-# First-time launch already triggered from its initial commit.
-# Keep all subsequent executions manual-only. An existing run is unaffected.
+name: NavHints alternative-memory controls on Coveo and Text2Image
+# Physical SSD reproduction is manual-only.
 on:
   workflow_dispatch:
 permissions:
@@ -28,7 +27,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/qualify_table7_missing_workloads.py
           bash -n scripts/run_table7_missing_workload_ci.sh
-      - name: Measure missing competitor datasets
+      - name: Measure the paper comparator workloads
         run: bash scripts/run_table7_missing_workload_ci.sh ${{ matrix.dataset }}
       - uses: actions/upload-artifact@v4
         if: always()

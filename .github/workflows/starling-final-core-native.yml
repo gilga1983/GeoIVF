@@ -1,13 +1,6 @@
 name: Final NavHints Core on original native Starling
 
 on:
-  push:
-    branches: [experiment/navhints-final-core-starling-20261011]
-    paths:
-      - ".github/workflows/starling-final-core-native.yml"
-      - "scripts/patch_starling_final_core.py"
-      - "scripts/generate_starling_final_core.py"
-      - "scripts/summarize_starling_final_core.py"
   workflow_dispatch:
 
 permissions:
