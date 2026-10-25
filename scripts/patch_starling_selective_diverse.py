@@ -26,14 +26,19 @@ def once(s, old, new, label):
 def patch_header(root):
     f = root / "include/pq_flash_index.h"
     s = f.read_text()
-    s = once(s, "    float native_dists[32] = {};", """    float native_dists[32] = {};
+    s = once(
+        s,
+        "    float native_dists[32] = {};",
+        """    float native_dists[32] = {};
     unsigned native_ids[32] = {};
     bool activation_gate = false;
     bool gate_open = true;
     bool want_diverse = false;
     float gate_threshold = 0.f;
     float recent_novelty = -1.f;
-    float junction_novelty = -1.f;""", "debug fields")
+    float junction_novelty = -1.f;""",
+        "debug fields",
+    )
     f.write_text(s)
 
 
@@ -43,13 +48,17 @@ def patch_page(root):
     first = s.index("  void PQFlashIndex<T>::page_search(\n")
     last = s.index("  void PQFlashIndex<T>::page_search_interim(\n", first)
     prefix, part, suffix = s[:first], s[first:last], s[last:]
-    part = once(part, "        navhints_debug->native_dists[i] = d;",
-                "        navhints_debug->native_dists[i] = d;\n"
-                "        navhints_debug->native_ids[i] = retset[i].id;",
-                "native IDs for geometric exclusion")
-    part = once(part,
-      "    // NavHints portable routing interface: score an existing, bounded",
-      r'''    // Gate on a predeclared unlabeled warmup quantile of the strength
+    part = once(
+        part,
+        "        navhints_debug->native_dists[i] = d;",
+        "        navhints_debug->native_dists[i] = d;\n"
+        "        navhints_debug->native_ids[i] = retset[i].id;",
+        "native IDs for geometric exclusion",
+    )
+    part = once(
+        part,
+        "    // NavHints portable routing interface: score an existing, bounded",
+        r"""    // Gate on a predeclared unlabeled warmup quantile of the strength
     // of Starling's own 10 native starting points. This happens BEFORE
     // scanning the 512 destination IDs or the 16K directory.
     const bool navhints_active =
@@ -114,94 +123,118 @@ def patch_page(root):
       return false;
     };
 
-    // NavHints portable routing interface: score an existing, bounded''',
-      "cheap native-start gate and PQ-code geometry")
-    part = once(part,
-       "    if (navhints_recent != nullptr && !navhints_recent->empty()) {",
-       "    if (navhints_active && navhints_recent != nullptr && "
-       "!navhints_recent->empty()) {",
-       "do not score recent hints behind closed gate")
-    part = once(part,
-       "      float best_hint_distance = std::numeric_limits<float>::infinity();",
-       "      std::vector<std::pair<float,unsigned>> recent_pool;\n"
-       "      if (navhints_diverse) recent_pool.reserve(24);\n"
-       "      float best_hint_distance = std::numeric_limits<float>::infinity();",
-       "top-24 recent pool")
-    part = once(part,
-       "          const unsigned id = (*navhints_recent)[off+i];\n"
-       "          if (visited.find(id) != visited.end()) continue;",
-       "          const unsigned id = (*navhints_recent)[off+i];\n"
-       "          if (visited.find(id) != visited.end()) continue;\n"
-       "          if (navhints_diverse)\n"
-       "            navhints_top(recent_pool,dist_scratch[i],id);",
-       "retain competitive recent candidates")
-    part = once(part,
-      "      if (found && navhints_debug != nullptr) {",
-      r'''      if (navhints_diverse) {
+    // NavHints portable routing interface: score an existing, bounded""",
+        "cheap native-start gate and PQ-code geometry",
+    )
+    part = once(
+        part,
+        "    if (navhints_recent != nullptr && !navhints_recent->empty()) {",
+        "    if (navhints_active && navhints_recent != nullptr && "
+        "!navhints_recent->empty()) {",
+        "do not score recent hints behind closed gate",
+    )
+    part = once(
+        part,
+        "      float best_hint_distance = std::numeric_limits<float>::infinity();",
+        "      std::vector<std::pair<float,unsigned>> recent_pool;\n"
+        "      if (navhints_diverse) recent_pool.reserve(24);\n"
+        "      float best_hint_distance = std::numeric_limits<float>::infinity();",
+        "top-24 recent pool",
+    )
+    part = once(
+        part,
+        "          const unsigned id = (*navhints_recent)[off+i];\n"
+        "          if (visited.find(id) != visited.end()) continue;",
+        "          const unsigned id = (*navhints_recent)[off+i];\n"
+        "          if (visited.find(id) != visited.end()) continue;\n"
+        "          if (navhints_diverse)\n"
+        "            navhints_top(recent_pool,dist_scratch[i],id);",
+        "retain competitive recent candidates",
+    )
+    part = once(
+        part,
+        "      if (found && navhints_debug != nullptr) {",
+        r"""      if (navhints_diverse) {
         found = navhints_select(recent_pool, best_hint_id,
                                best_hint_distance,
                                navhints_debug->recent_novelty);
       }
-      if (found && navhints_debug != nullptr) {''',
-      "select novel recent entry")
-    part = once(part,
-       "    if (navhints_junctions != nullptr) {",
-       "    if (navhints_active && navhints_junctions != nullptr) {",
-       "do not score junctions behind closed gate")
-    part = once(part,
-       "      bool found_junction = false;",
-       "      bool found_junction = false;\n"
-       "      std::vector<std::pair<float,unsigned>> junction_pool;\n"
-       "      if (navhints_diverse) junction_pool.reserve(24);",
-       "top-24 junction pool")
-    part = once(part,
-       "        const unsigned medoid_id = dir.medoids[cell];",
-       "        const unsigned medoid_id = dir.medoids[cell];\n"
-       "        if (navhints_diverse && visited.find(medoid_id) == visited.end())\n"
-       "          navhints_top(junction_pool,selected.first,medoid_id);",
-       "store medoid possibilities")
-    part = once(part,
-       "            const unsigned id = dir.children[off+i];\n"
-       "            if (visited.find(id) != visited.end()) continue;",
-       "            const unsigned id = dir.children[off+i];\n"
-       "            if (visited.find(id) != visited.end()) continue;\n"
-       "            if (navhints_diverse)\n"
-       "              navhints_top(junction_pool,dist_scratch[i],id);",
-       "store diverse junction possibilities")
-    part = once(part,
-       "      if (found_junction && navhints_debug != nullptr) {",
-       r'''      if (navhints_diverse) {
+      if (found && navhints_debug != nullptr) {""",
+        "select novel recent entry",
+    )
+    part = once(
+        part,
+        "    if (navhints_junctions != nullptr) {",
+        "    if (navhints_active && navhints_junctions != nullptr) {",
+        "do not score junctions behind closed gate",
+    )
+    part = once(
+        part,
+        "      bool found_junction = false;",
+        "      bool found_junction = false;\n"
+        "      std::vector<std::pair<float,unsigned>> junction_pool;\n"
+        "      if (navhints_diverse) junction_pool.reserve(24);",
+        "top-24 junction pool",
+    )
+    part = once(
+        part,
+        "        const unsigned medoid_id = dir.medoids[cell];",
+        "        const unsigned medoid_id = dir.medoids[cell];\n"
+        "        if (navhints_diverse && visited.find(medoid_id) == visited.end())\n"
+        "          navhints_top(junction_pool,selected.first,medoid_id);",
+        "store medoid possibilities",
+    )
+    part = once(
+        part,
+        "            const unsigned id = dir.children[off+i];\n"
+        "            if (visited.find(id) != visited.end()) continue;",
+        "            const unsigned id = dir.children[off+i];\n"
+        "            if (visited.find(id) != visited.end()) continue;\n"
+        "            if (navhints_diverse)\n"
+        "              navhints_top(junction_pool,dist_scratch[i],id);",
+        "store diverse junction possibilities",
+    )
+    part = once(
+        part,
+        "      if (found_junction && navhints_debug != nullptr) {",
+        r"""      if (navhints_diverse) {
         found_junction = navhints_select(
             junction_pool, best_junction_id, best_junction_distance,
             navhints_debug->junction_novelty);
       }
-      if (found_junction && navhints_debug != nullptr) {''',
-       "select novel junction entry")
-    f.write_text(prefix+part+suffix)
+      if (found_junction && navhints_debug != nullptr) {""",
+        "select novel junction entry",
+    )
+    f.write_text(prefix + part + suffix)
 
 
 def patch_benchmark(root):
     f = root / "tests/search_disk_index.cpp"
     s = f.read_text()
-    s = once(s,
-       '        nav_mode != "oracle") {',
-       '        nav_mode != "oracle" && nav_mode != "diverse_core" &&\n'
-       '        nav_mode != "gate50_core" && nav_mode != "gate50_diverse" &&\n'
-       '        nav_mode != "gate25_diverse") {',
-       "declare full Core policies")
-    s = once(s,
-       "      size_t fifo_cursor = 0;",
-       """      size_t fifo_cursor = 0;
+    s = once(
+        s,
+        '        nav_mode != "oracle") {',
+        '        nav_mode != "oracle" && nav_mode != "diverse_core" &&\n'
+        '        nav_mode != "gate50_core" && nav_mode != "gate50_diverse" &&\n'
+        '        nav_mode != "gate25_diverse") {',
+        "declare full Core policies",
+    )
+    s = once(
+        s,
+        "      size_t fifo_cursor = 0;",
+        """      size_t fifo_cursor = 0;
       // This stays unlabeled: only Starling's own native-entry distances.
       std::vector<float> best_native_warmup;
       best_native_warmup.reserve(nav_warmup);
       float gate_threshold = 0.f;""",
-       "causal gate-calibration data")
-    s = once(s,
-       """        if (i == nav_warmup) {
+        "causal gate-calibration data",
+    )
+    s = once(
+        s,
+        """        if (i == nav_warmup) {
           measured_start = std::chrono::high_resolution_clock::now();
         }""",
-       r'''        if (i == nav_warmup) {
+        r"""        if (i == nav_warmup) {
           measured_start = std::chrono::high_resolution_clock::now();
           const bool gate50 =
               (nav_mode == "gate50_core" || nav_mode == "gate50_diverse");
@@ -217,75 +250,97 @@ def patch_benchmark(root):
                           << " quantile=" << (gate50 ? 0.5 : 0.75)
                           << " no_GT=true" << std::endl;
           }
-        }''',
-       "fix gate quantile before measuring suffix")
-    s = once(s,
-       '             nav_mode == "score_only") ? &recent :',
-       '             nav_mode == "score_only" || nav_mode == "diverse_core" ||\n'
-       '             nav_mode == "gate50_core" || nav_mode == "gate50_diverse" ||\n'
-       '             nav_mode == "gate25_diverse") ? &recent :',
-       "reuse same online set")
-    s = once(s,
-       '             nav_mode == "score_only")\n'
-       '            ? native_junctions.get() : nullptr;',
-       '             nav_mode == "score_only" || nav_mode == "diverse_core" ||\n'
-       '             nav_mode == "gate50_core" || nav_mode == "gate50_diverse" ||\n'
-       '             nav_mode == "gate25_diverse")\n'
-       '            ? native_junctions.get() : nullptr;',
-       "reuse native 16K junction data")
-    s = once(s,
-       '        nav_diag[i].inject = (nav_mode != "score_only");',
-       r'''        nav_diag[i].inject = (nav_mode != "score_only");
+        }""",
+        "fix gate quantile before measuring suffix",
+    )
+    s = once(
+        s,
+        '             nav_mode == "score_only") ? &recent :',
+        '             nav_mode == "score_only" || nav_mode == "diverse_core" ||\n'
+        '             nav_mode == "gate50_core" || nav_mode == "gate50_diverse" ||\n'
+        '             nav_mode == "gate25_diverse") ? &recent :',
+        "reuse same online set",
+    )
+    s = once(
+        s,
+        '             nav_mode == "score_only")\n'
+        "            ? native_junctions.get() : nullptr;",
+        '             nav_mode == "score_only" || nav_mode == "diverse_core" ||\n'
+        '             nav_mode == "gate50_core" || nav_mode == "gate50_diverse" ||\n'
+        '             nav_mode == "gate25_diverse")\n'
+        "            ? native_junctions.get() : nullptr;",
+        "reuse native 16K junction data",
+    )
+    s = once(
+        s,
+        '        nav_diag[i].inject = (nav_mode != "score_only");',
+        r"""        nav_diag[i].inject = (nav_mode != "score_only");
         nav_diag[i].activation_gate =
             (nav_mode == "gate50_core" || nav_mode == "gate50_diverse" ||
              nav_mode == "gate25_diverse");
         nav_diag[i].want_diverse =
             (nav_mode == "diverse_core" || nav_mode == "gate50_diverse" ||
              nav_mode == "gate25_diverse");
-        nav_diag[i].gate_threshold = gate_threshold;''',
-       "gate config for native search")
-    s = once(s,
-       '            stats + i, candidates, dir, &nav_diag[i]);',
-       '''            stats + i, candidates, dir, &nav_diag[i]);
+        nav_diag[i].gate_threshold = gate_threshold;""",
+        "gate config for native search",
+    )
+    s = once(
+        s,
+        "            stats + i, candidates, dir, &nav_diag[i]);",
+        """            stats + i, candidates, dir, &nav_diag[i]);
         if (i < nav_warmup)
-          best_native_warmup.push_back(nav_diag[i].native_best);''',
-       "record only past native quality")
-    s = once(s,
-       '            nav_mode == "score_only") {',
-       '            nav_mode == "score_only" || nav_mode == "diverse_core" ||\n'
-       '            nav_mode == "gate50_core" || nav_mode == "gate50_diverse" ||\n'
-       '            nav_mode == "gate25_diverse") {',
-       "causal FIFO updates for all hint policies")
-    s = once(s,
-       'csv << "query,L,ios,total_us,cpu_us,cache_hits,native_best,";',
-       'csv << "query,L,ios,total_us,cpu_us,cache_hits,native_best,"\n'
-       '          << "gate_open,gate_threshold,diverse,recent_novelty,junction_novelty,";',
-       "add gate/novelty columns")
-    s = once(s,
-       '<< m.n_cache_hits << "," << d.native_best << ","',
-       '<< m.n_cache_hits << "," << d.native_best << ","\n'
-       '            << (d.gate_open ? 1 : 0) << "," << d.gate_threshold << ","\n'
-       '            << (d.want_diverse ? 1 : 0) << ","\n'
-       '            << d.recent_novelty << "," << d.junction_novelty << ","',
-       "write measured gate/novelty")
+          best_native_warmup.push_back(nav_diag[i].native_best);""",
+        "record only past native quality",
+    )
+    s = once(
+        s,
+        '            nav_mode == "score_only") {',
+        '            nav_mode == "score_only" || nav_mode == "diverse_core" ||\n'
+        '            nav_mode == "gate50_core" || nav_mode == "gate50_diverse" ||\n'
+        '            nav_mode == "gate25_diverse") {',
+        "causal FIFO updates for all hint policies",
+    )
+    s = once(
+        s,
+        'csv << "query,L,ios,total_us,cpu_us,cache_hits,native_best,";',
+        'csv << "query,L,ios,total_us,cpu_us,cache_hits,native_best,"\n'
+        '          << "gate_open,gate_threshold,diverse,recent_novelty,junction_novelty,";',
+        "add gate/novelty columns",
+    )
+    s = once(
+        s,
+        '<< m.n_cache_hits << "," << d.native_best << ","',
+        '<< m.n_cache_hits << "," << d.native_best << ","\n'
+        '            << (d.gate_open ? 1 : 0) << "," << d.gate_threshold << ","\n'
+        '            << (d.want_diverse ? 1 : 0) << ","\n'
+        '            << d.recent_novelty << "," << d.junction_novelty << ","',
+        "write measured gate/novelty",
+    )
     f.write_text(s)
 
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("source",type=Path)
-    root=ap.parse_args().source.resolve()
-    for path in ("src/page_search.cpp","include/pq_flash_index.h",
-                 "tests/search_disk_index.cpp"):
-        if not (root/path).is_file():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("source", type=Path)
+    root = ap.parse_args().source.resolve()
+    for path in (
+        "src/page_search.cpp",
+        "include/pq_flash_index.h",
+        "tests/search_disk_index.cpp",
+    ):
+        if not (root / path).is_file():
             raise RuntimeError(f"missing author source {path}")
     patch_header(root)
     patch_page(root)
     patch_benchmark(root)
-    print("STARLING_SELECTIVE_DIVERSE_ADAPTER_READY "
-          "policies=core,diverse_core,gate50_core,gate50_diverse,gate25_diverse "
-          "native_geometry=PQ_reconstructed top24=24 threshold=0.35 "
-          "causal_warmup=4000",flush=True)
+    print(
+        "STARLING_SELECTIVE_DIVERSE_ADAPTER_READY "
+        "policies=core,diverse_core,gate50_core,gate50_diverse,gate25_diverse "
+        "native_geometry=PQ_reconstructed top24=24 threshold=0.35 "
+        "causal_warmup=4000",
+        flush=True,
+    )
 
 
-if __name__=="__main__":main()
+if __name__ == "__main__":
+    main()

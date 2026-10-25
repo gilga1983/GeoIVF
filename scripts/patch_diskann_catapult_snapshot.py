@@ -52,7 +52,7 @@ def patch_snapshot(path: Path) -> None:
 
     marker = """    fn metrics(&self) -> (f64, f64) {
 """
-    helper = r'''    fn save_snapshot(&self, path: &std::path::Path) -> anyhow::Result<()> {
+    helper = r"""    fn save_snapshot(&self, path: &std::path::Path) -> anyhow::Result<()> {
         const MAGIC: &[u8; 8] = b"GICAT001";
         let bucket_count = self.buckets.len();
         let mut flat = Vec::<u32>::new();
@@ -168,7 +168,7 @@ def patch_snapshot(path: Path) -> None:
         Ok(total)
     }
 
-'''
+"""
     s = once(s, marker, helper + marker, "Catapult snapshot methods")
 
     s = once(

@@ -30,46 +30,55 @@ def main():
     pq_chunks = min(64, int(m["dim"]))
     cfg = {
         "search_directories": [str(args.work)],
-        "jobs": [{
-            "type": "disk-index",
-            "content": {
-                "source": {
-                    "disk-index-source": "Build",
-                    "data_type": m["data_type"],
-                    "data": m["files"]["base"],
-                    "distance": m["metric"],
-                    "dim": m["dim"],
-                    "max_degree": 64,
-                    "l_build": 100,
-                    "num_threads": 4,
-                    "build_ram_limit_gb": args.build_ram_gb,
-                    "num_pq_chunks": pq_chunks,
-                    "quantization_type": "FP",
-                    "save_path": str(args.save_prefix),
+        "jobs": [
+            {
+                "type": "disk-index",
+                "content": {
+                    "source": {
+                        "disk-index-source": "Build",
+                        "data_type": m["data_type"],
+                        "data": m["files"]["base"],
+                        "distance": m["metric"],
+                        "dim": m["dim"],
+                        "max_degree": 64,
+                        "l_build": 100,
+                        "num_threads": 4,
+                        "build_ram_limit_gb": args.build_ram_gb,
+                        "num_pq_chunks": pq_chunks,
+                        "quantization_type": "FP",
+                        "save_path": str(args.save_prefix),
+                    },
+                    "search_phase": {
+                        "queries": m["files"]["heldout5000"],
+                        "groundtruth": m["files"]["heldout5000_gt"],
+                        "search_list": [10],
+                        "beam_width": 8,
+                        "recall_at": 10,
+                        "num_threads": 4,
+                        "is_flat_search": False,
+                        "distance": m["metric"],
+                        "vector_filters_file": None,
+                        "num_nodes_to_cache": None,
+                        "search_io_limit": None,
+                        "post_processor": None,
+                    },
                 },
-                "search_phase": {
-                    "queries": m["files"]["heldout5000"],
-                    "groundtruth": m["files"]["heldout5000_gt"],
-                    "search_list": [10],
-                    "beam_width": 8,
-                    "recall_at": 10,
-                    "num_threads": 4,
-                    "is_flat_search": False,
-                    "distance": m["metric"],
-                    "vector_filters_file": None,
-                    "num_nodes_to_cache": None,
-                    "search_io_limit": None,
-                    "post_processor": None,
-                },
-            },
-        }],
+            }
+        ],
     }
     inp = args.work / "build.input.json"
     out = args.work / "build.output.json"
     save(inp, cfg)
     with (args.work / "build.log").open("w") as log:
         subprocess.run(
-            [str(args.binary), "run", "--input-file", str(inp), "--output-file", str(out)],
+            [
+                str(args.binary),
+                "run",
+                "--input-file",
+                str(inp),
+                "--output-file",
+                str(out),
+            ],
             stdout=log,
             stderr=subprocess.STDOUT,
             check=True,

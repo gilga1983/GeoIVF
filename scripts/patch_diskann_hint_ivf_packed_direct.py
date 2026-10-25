@@ -37,7 +37,7 @@ def patch_provider_hint_ivf_fast(path: Path) -> None:
     # kernel. Local IDs address rows 0..nlist-1 in the packed matrix.
     marker_packed = """impl<Data, VP> HasId for DiskAccessor<'_, Data, VP>
 """
-    helper_packed = r'''impl<Data, VP> DiskAccessor<'_, Data, VP>
+    helper_packed = r"""impl<Data, VP> DiskAccessor<'_, Data, VP>
 where
     Data: GraphDataType<VectorIdType = u32>,
     VP: VertexProvider<Data>,
@@ -86,13 +86,13 @@ where
     }
 }
 
-'''
+"""
     s = once(s, marker_packed, helper_packed + marker_packed, "packed coarse PQ scorer")
 
     # A borrowed immutable view over the already-validated ID-only directory.
     marker = """pub struct DiskSearchStrategy<'a, Data, ProviderFactory>
 """
-    helper = r'''#[derive(Clone, Copy)]
+    helper = r"""#[derive(Clone, Copy)]
 struct HintIvfSearch<'a> {
     medoid_ids: &'a [u32],
     coarse_local_ids: &'a [u32],
@@ -102,7 +102,7 @@ struct HintIvfSearch<'a> {
     nprobe: usize,
 }
 
-'''
+"""
     s = once(s, marker, helper + marker, "hint-IVF search view")
 
     # Carry the optional dynamic start policy through the already-existing
@@ -248,7 +248,7 @@ struct HintIvfSearch<'a> {
 
     async fn num_starting_points(&self) -> ANNResult<usize> {
 """
-    new = r'''    async fn start_point_distances<F>(&mut self, mut f: F) -> ANNResult<()>
+    new = r"""    async fn start_point_distances<F>(&mut self, mut f: F) -> ANNResult<()>
     where
         F: FnMut(Self::Id, f32) + Send,
     {
@@ -357,7 +357,7 @@ struct HintIvfSearch<'a> {
     }
 
     async fn num_starting_points(&self) -> ANNResult<usize> {
-'''
+"""
     s = once(s, old, new, "integrated Hint-IVF start selection")
 
     # Add one cheap counter to the existing per-query IO tracker.
@@ -396,7 +396,7 @@ struct HintIvfSearch<'a> {
     # by the benchmark parser when the file is loaded.
     marker = """    /// Perform the ordinary graph search from caller-supplied starting vertices.
 """
-    methods = r'''    /// Validate Hint-IVF database IDs once before serving queries.
+    methods = r"""    /// Validate Hint-IVF database IDs once before serving queries.
     pub fn validate_hint_ivf_ids(
         &self,
         medoid_ids: &[u32],
@@ -542,7 +542,7 @@ struct HintIvfSearch<'a> {
         Ok(search_result)
     }
 
-'''
+"""
     s = once(s, marker, methods + marker, "optimized Hint-IVF public methods")
 
     path.write_text(s)
@@ -695,7 +695,7 @@ def patch_benchmark_hint_ivf_fast(path: Path) -> None:
 
     marker = """fn load_global_start_ids(path: &std::path::Path) -> anyhow::Result<Vec<u32>> {
 """
-    helper = r'''struct HintIvfIndex {
+    helper = r"""struct HintIvfIndex {
     medoid_ids: Vec<u32>,
     coarse_local_ids: Vec<u32>,
     coarse_pq_codes: Vec<u8>,
@@ -775,7 +775,7 @@ impl HintIvfIndex {
     }
 }
 
-'''
+"""
     s = once(s, marker, helper + marker, "optimized Hint-IVF parser")
     path.write_text(s)
 

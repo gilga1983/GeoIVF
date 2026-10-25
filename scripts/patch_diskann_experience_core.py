@@ -51,7 +51,7 @@ def patch_graph(root: Path) -> None:
     anchor = """                scratch.cmps += neighbors.len() as u32;
                 scratch.hops += scratch.beam_nodes.len() as u32;
 """
-    insert = r'''                scratch.cmps += neighbors.len() as u32;
+    insert = r"""                scratch.cmps += neighbors.len() as u32;
                 scratch.hops += scratch.beam_nodes.len() as u32;
 
                 let mut experience_candidates: Vec<(A::Id, f32)> = Vec::new();
@@ -70,7 +70,7 @@ def patch_graph(root: Path) -> None:
                         scratch.best.insert(Neighbor::new(id, distance));
                     }
                 }
-'''
+"""
     text = once(text, anchor, insert, "experience hub frontier insertion")
     p.write_text(text)
 
@@ -124,7 +124,9 @@ struct HintIvfSearch<'a> {
 """
     n = s.count(init_old)
     if n < 1:
-        raise RuntimeError(f"expected at least one HintIvfSearch constructor, found {n}")
+        raise RuntimeError(
+            f"expected at least one HintIvfSearch constructor, found {n}"
+        )
     s = s.replace(init_old, init_new)
 
     s = once(
@@ -160,7 +162,7 @@ struct HintIvfSearch<'a> {
             f(winner.1, winner.0);
             return Ok(());
 """
-    emit_new = r'''            self.io_tracker.selected_hint_start.store(
+    emit_new = r"""            self.io_tracker.selected_hint_start.store(
                 winner.1 as usize,
                 std::sync::atomic::Ordering::Relaxed,
             );
@@ -221,7 +223,7 @@ struct HintIvfSearch<'a> {
             );
             f(winner.1, winner.0);
             return Ok(());
-'''
+"""
     s = once(s, emit_old, emit_new, "experience cache start")
 
     s = once(
@@ -253,7 +255,7 @@ struct HintIvfSearch<'a> {
 
     marker = """    async fn start_point_distances<F>(&mut self, mut f: F) -> ANNResult<()>
 """
-    scorer = r'''    fn experience_hub_distances<F>(
+    scorer = r"""    fn experience_hub_distances<F>(
         &mut self,
         expanded: &[Self::Id],
         mut f: F,
@@ -298,12 +300,12 @@ struct HintIvfSearch<'a> {
         std::future::ready(result)
     }
 
-'''
+"""
     s = once(s, marker, scorer + marker, "experience hub scoring")
 
     marker = """    /// Perform the ordinary graph search from caller-supplied starting vertices.
 """
-    method = r'''    /// Consolidated search: learned 16K entry, optional recent-result cache
+    method = r"""    /// Consolidated search: learned 16K entry, optional recent-result cache
     /// start, and persisted winner shortcuts on the selected hub page.
     /// Vertex continuation hints stay disabled in this core path.
     pub fn search_with_hint_ivf_experience(
@@ -444,7 +446,7 @@ struct HintIvfSearch<'a> {
         Ok((search_result, selected_hub, cache_top))
     }
 
-'''
+"""
     s = once(s, marker, method + marker, "consolidated experience search")
     path.write_text(s)
 
@@ -474,7 +476,7 @@ def patch_benchmark(path: Path) -> None:
 
     // Load the vector filters
 """
-    config = r'''    if let Some(index) = hint_ivf.as_ref() {
+    config = r"""    if let Some(index) = hint_ivf.as_ref() {
         if hint_ivf_nprobe == 0 || hint_ivf_nprobe > index.medoid_ids.len() || hint_ivf_nprobe > 64 {
             anyhow::bail!("DISKANN_HINT_IVF_NPROBE outside valid range");
         }
@@ -520,12 +522,12 @@ def patch_benchmark(path: Path) -> None:
     }
 
     // Load the vector filters
-'''
+"""
     s = once(s, anchor, config, "experience benchmark config")
 
     marker = """// Simplified internal structures to reduce parameter count
 """
-    helper = r'''fn slice_ground_truth_context(
+    helper = r"""fn slice_ground_truth_context(
     ctx: &GroundTruthContext,
     start: usize,
 ) -> anyhow::Result<GroundTruthContext> {
@@ -565,7 +567,7 @@ fn experience_sample_accept(hub: u32, winner: u32, sequence: usize, denominator:
     x % denominator as u64 == 0
 }
 
-'''
+"""
     s = once(s, marker, helper + marker, "experience GT slice helper")
 
     start = "        let zipped = queries\n"
@@ -576,7 +578,8 @@ fn experience_sample_accept(hub: u32, winner: u32, sequence: usize, denominator:
         raise RuntimeError("parallel benchmark block markers missing")
     parallel = s[a:b]
 
-    sequential = r'''        if experience_replay {
+    sequential = (
+        r"""        if experience_replay {
             let index = hint_ivf
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Hint-IVF required"))?;
@@ -785,8 +788,11 @@ fn experience_sample_accept(hub: u32, winner: u32, sequence: usize, denominator:
                 final_page_slots,
             );
         } else {
-''' + parallel + r'''        }
-'''
+"""
+        + parallel
+        + r"""        }
+"""
+    )
     s = s[:a] + sequential + s[b:]
 
     old_result = """        let search_result = DiskSearchResult::new(

@@ -148,7 +148,7 @@ use diskann_vector::{MathematicalValue, PureDistanceFunction, distance::InnerPro
 
     marker = """pub(super) fn search_disk_index<T, StorageType>(
 """
-    helper = r'''#[derive(Debug, Clone, Copy)]
+    helper = r"""#[derive(Debug, Clone, Copy)]
 struct PaperCatapultConfig {
     hashes: usize,
     capacity: usize,
@@ -458,7 +458,7 @@ impl PaperCatapult {
     }
 }
 
-'''
+"""
     s = once(s, marker, helper + marker, "paper catapult implementation")
 
     s = once(
@@ -520,7 +520,7 @@ impl PaperCatapult {
                     mode,
                 ) {
 """
-    new_call = r'''                let query_timer = Instant::now();
+    new_call = r"""                let query_timer = Instant::now();
 
                 let portal_seed = match portal_router.as_ref() {
                     Some(router) => match router.route::<T>(q, portal_nprobe) {
@@ -576,7 +576,7 @@ impl PaperCatapult {
                 };
 
                 match result {
-'''
+"""
     s = once(s, old_call, new_call, "catapult-aware search call")
 
     s = once(
@@ -648,7 +648,9 @@ impl PaperCatapult {
         "catapult result metrics",
     )
 
-    s = s.replace("let cols: [(&str, usize); 14] = [", "let cols: [(&str, usize); 16] = [", 1)
+    s = s.replace(
+        "let cols: [(&str, usize); 14] = [", "let cols: [(&str, usize); 16] = [", 1
+    )
     s = once(
         s,
         """            ("Cache Hit %", 12),

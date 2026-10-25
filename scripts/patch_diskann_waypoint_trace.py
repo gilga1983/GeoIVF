@@ -212,7 +212,7 @@ def patch_benchmark_trace(path: Path) -> None:
 
     anchor = """        let total_time = start.elapsed();
 """
-    dump = r'''        if let Some(base_path) = std::env::var_os("DISKANN_TRACE_FILE") {
+    dump = r"""        if let Some(base_path) = std::env::var_os("DISKANN_TRACE_FILE") {
             let base = std::path::PathBuf::from(base_path);
             let path = if search_params.search_list.len() == 1 {
                 base
@@ -256,7 +256,7 @@ def patch_benchmark_trace(path: Path) -> None:
             out.flush()?;
         }
 
-'''
+"""
     s = once(s, anchor, dump + anchor, "dump traversal trace")
     path.write_text(s)
 

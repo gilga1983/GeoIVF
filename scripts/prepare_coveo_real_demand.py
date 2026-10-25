@@ -237,13 +237,19 @@ def read_queries(
         "interarrival_ms_quantiles": quantiles(gaps.astype(np.float64)),
         "exact_repeated_query_vectors": repeats,
         "exact_repeat_fraction": float(repeats / len(meta)),
-        "repeat_distance_events_quantiles": quantiles(np.asarray(repeat_distances, dtype=np.float64)),
+        "repeat_distance_events_quantiles": quantiles(
+            np.asarray(repeat_distances, dtype=np.float64)
+        ),
         "clicked_skus_total": clicked_total,
         "clicked_skus_present_in_vector_catalog": clicked_mapped,
-        "clicked_sku_catalog_coverage": float(clicked_mapped / clicked_total) if clicked_total else None,
+        "clicked_sku_catalog_coverage": (
+            float(clicked_mapped / clicked_total) if clicked_total else None
+        ),
         "returned_skus_total": result_total,
         "returned_skus_present_in_vector_catalog": result_mapped,
-        "returned_sku_catalog_coverage": float(result_mapped / result_total) if result_total else None,
+        "returned_sku_catalog_coverage": (
+            float(result_mapped / result_total) if result_total else None
+        ),
         "dimension": dim,
     }
     return q, meta, stats
@@ -270,7 +276,9 @@ def main() -> None:
 
     base, skus, sku_to_id, cat_stats = read_catalog(args.catalog_csv)
     if base.shape[1] != args.expected_dim:
-        raise ValueError(f"catalog dimension {base.shape[1]} != expected {args.expected_dim}")
+        raise ValueError(
+            f"catalog dimension {base.shape[1]} != expected {args.expected_dim}"
+        )
 
     queries, meta, query_stats = read_queries(
         args.search_csv, dim=base.shape[1], sku_to_id=sku_to_id

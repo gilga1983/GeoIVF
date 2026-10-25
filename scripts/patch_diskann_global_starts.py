@@ -105,7 +105,7 @@ def patch_benchmark_global(path: Path) -> None:
 
     marker = """fn load_start_points(path: &std::path::Path, expected_rows: usize) -> anyhow::Result<Vec<Vec<u32>>> {
 """
-    helper = r'''fn load_global_start_ids(path: &std::path::Path) -> anyhow::Result<Vec<u32>> {
+    helper = r"""fn load_global_start_ids(path: &std::path::Path) -> anyhow::Result<Vec<u32>> {
     let raw = std::fs::read(path)?;
     const MAGIC: &[u8; 8] = b"GIDST001";
     if raw.len() < 16 || &raw[0..8] != MAGIC {
@@ -144,7 +144,7 @@ def patch_benchmark_global(path: Path) -> None:
     Ok(ids)
 }
 
-'''
+"""
     s = once(s, marker, helper + marker, "global start parser")
     path.write_text(s)
 

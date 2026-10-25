@@ -82,8 +82,23 @@ def rows_of(o):
                 yield from rows_of(x)
 
 
-def run_one(binary, label, queries, gt, index, L, out, *,
-            mode, seed=None, snapshot_load=None, snapshot_dump=None, train=False, ivf=None, extra_env=None):
+def run_one(
+    binary,
+    label,
+    queries,
+    gt,
+    index,
+    L,
+    out,
+    *,
+    mode,
+    seed=None,
+    snapshot_load=None,
+    snapshot_dump=None,
+    train=False,
+    ivf=None,
+    extra_env=None,
+):
     phase = {
         "queries": str(queries),
         "groundtruth": str(gt),
@@ -101,19 +116,25 @@ def run_one(binary, label, queries, gt, index, L, out, *,
     inp = out / f"{label}.input.json"
     result = out / f"{label}.output.json"
     log = out / f"{label}.log"
-    save(inp, {
-        "search_directories": [str(queries.parent)],
-        "jobs": [{
-            "type": "disk-index",
-            "content": {
-                "source": {
-                    "disk-index-source": "Load", "data_type": "float32",
-                    "load_path": str(index),
-                },
-                "search_phase": phase,
-            },
-        }],
-    })
+    save(
+        inp,
+        {
+            "search_directories": [str(queries.parent)],
+            "jobs": [
+                {
+                    "type": "disk-index",
+                    "content": {
+                        "source": {
+                            "disk-index-source": "Load",
+                            "data_type": "float32",
+                            "load_path": str(index),
+                        },
+                        "search_phase": phase,
+                    },
+                }
+            ],
+        },
+    )
     env = os.environ.copy()
     for k in list(env):
         if k.startswith("DISKANN_"):
@@ -124,26 +145,30 @@ def run_one(binary, label, queries, gt, index, L, out, *,
     if mode == "nav":
         if ivf is None or train:
             raise ValueError("NavHints requires static directory, no online training")
-        env.update({
-            "DISKANN_HINT_IVF_FILE": str(ivf),
-            "DISKANN_HINT_IVF_NPROBE": "8",
-            "DISKANN_HINT_IVF_MAX_STARTS": "1",
-            "DISKANN_EXPERIENCE_REPLAY": "1",
-            "DISKANN_EXPERIENCE_WARMUP": str(WARM),
-            "DISKANN_EXPERIENCE_CACHE_CAPACITY": str(PQ_CACHE),
-            "DISKANN_EXPERIENCE_HUB_CAPACITY": "0",  # strictly write-free Core
-        })
+        env.update(
+            {
+                "DISKANN_HINT_IVF_FILE": str(ivf),
+                "DISKANN_HINT_IVF_NPROBE": "8",
+                "DISKANN_HINT_IVF_MAX_STARTS": "1",
+                "DISKANN_EXPERIENCE_REPLAY": "1",
+                "DISKANN_EXPERIENCE_WARMUP": str(WARM),
+                "DISKANN_EXPERIENCE_CACHE_CAPACITY": str(PQ_CACHE),
+                "DISKANN_EXPERIENCE_HUB_CAPACITY": "0",  # strictly write-free Core
+            }
+        )
     elif mode == "catapult":
         if seed is None:
             raise ValueError("Catapult random-hyperplane seed required")
-        env.update({
-            "DISKANN_PAPER_CATAPULT": "1",
-            "DISKANN_CATAPULT_HASHES": str(HASH_BITS),
-            "DISKANN_CATAPULT_CAPACITY": str(CATAPULT_CAPACITY),
-            "DISKANN_CATAPULT_SEED": str(seed),
-            "DISKANN_CATAPULT_CAUSAL_REPLAY": "1",
-            "DISKANN_CATAPULT_CAUSAL_WARMUP": "0" if train else str(WARM),
-        })
+        env.update(
+            {
+                "DISKANN_PAPER_CATAPULT": "1",
+                "DISKANN_CATAPULT_HASHES": str(HASH_BITS),
+                "DISKANN_CATAPULT_CAPACITY": str(CATAPULT_CAPACITY),
+                "DISKANN_CATAPULT_SEED": str(seed),
+                "DISKANN_CATAPULT_CAUSAL_REPLAY": "1",
+                "DISKANN_CATAPULT_CAUSAL_WARMUP": "0" if train else str(WARM),
+            }
+        )
         if snapshot_load is not None:
             env["DISKANN_CATAPULT_SNAPSHOT_LOAD"] = str(snapshot_load)
         if snapshot_dump is not None:
@@ -158,10 +183,19 @@ def run_one(binary, label, queries, gt, index, L, out, *,
     started = time.monotonic()
     with log.open("w") as lf:
         subprocess.run(
-            [str(binary), "run", "--input-file", str(inp),
-             "--output-file", str(result)],
-            env=env, stdout=lf, stderr=subprocess.STDOUT,
-            timeout=2400, check=True,
+            [
+                str(binary),
+                "run",
+                "--input-file",
+                str(inp),
+                "--output-file",
+                str(result),
+            ],
+            env=env,
+            stdout=lf,
+            stderr=subprocess.STDOUT,
+            timeout=2400,
+            check=True,
         )
     rr = list(rows_of(json.loads(result.read_text())))
     if len(rr) != 1 or int(rr[0]["search_l"]) != L:
@@ -181,12 +215,17 @@ def run_one(binary, label, queries, gt, index, L, out, *,
             if token not in info:
                 raise RuntimeError(f"{label}: missing causal suffix proof")
         else:
-            marker = re.search(r"EXPERIENCE_STATS L=\d+ .*?hub_capacity=(\d+).*?eval_writes=(\d+)", info)
+            marker = re.search(
+                r"EXPERIENCE_STATS L=\d+ .*?hub_capacity=(\d+).*?eval_writes=(\d+)",
+                info,
+            )
             if marker is None or tuple(map(int, marker.groups())) != (0, 0):
                 raise RuntimeError(f"{label}: Core accidentally enabled persistence")
-    print(f"PASS {label}: recall={row['recall']} reads={row['mean_ios']:.6f} "
-          f"latency_us={row['mean_latency']:.2f} seconds={time.monotonic()-started:.1f}",
-          flush=True)
+    print(
+        f"PASS {label}: recall={row['recall']} reads={row['mean_ios']:.6f} "
+        f"latency_us={row['mean_latency']:.2f} seconds={time.monotonic()-started:.1f}",
+        flush=True,
+    )
     return {
         "recall": float(row["recall"]),
         "reads": float(row["mean_ios"]),
@@ -227,13 +266,18 @@ def interp(points, recall):
         return None
     for p in points:
         if abs(p["recall"] - recall) < 1e-8:
-            return {"lower_L": p["L"], "upper_L": p["L"],
-                    "reads": p["reads"], "latency_us": p["latency_us"]}
+            return {
+                "lower_L": p["L"],
+                "upper_L": p["L"],
+                "reads": p["reads"],
+                "latency_us": p["latency_us"],
+            }
     for a, b in zip(points, points[1:]):
         if a["recall"] < recall < b["recall"]:
             x = (recall - a["recall"]) / (b["recall"] - a["recall"])
             return {
-                "lower_L": a["L"], "upper_L": b["L"],
+                "lower_L": a["L"],
+                "upper_L": b["L"],
                 "reads": a["reads"] + x * (b["reads"] - a["reads"]),
                 "latency_us": a["latency_us"] + x * (b["latency_us"] - a["latency_us"]),
             }
@@ -247,9 +291,9 @@ def summarize(runs, reps):
         nav = {str(L): runs[f"eval-r{rep}-L{L}-nav"] for L in LS}
         nav_by_rep.append(nav)
         for seed in SEEDS:
-            cat_by_rep_seed.append((rep, seed, {
-                str(L): runs[f"eval-r{rep}-L{L}-cat-s{seed}"] for L in LS
-            }))
+            cat_by_rep_seed.append(
+                (rep, seed, {str(L): runs[f"eval-r{rep}-L{L}-cat-s{seed}"] for L in LS})
+            )
     # All same queries give deterministic recall on repeated runs, but
     # take the mean rather than assuming byte-identical outcomes.
     anchors = []
@@ -264,10 +308,14 @@ def summarize(runs, reps):
                 break
             matched.append({"rep": rep, "seed": seed, **x})
         if len(matched) != len(cat_by_rep_seed):
-            anchors.append({
-                "nav_L": L, "recall_at_10": target, "available": False,
-                "reason": "Not attainable within every Catapult seed/repetition; no extrapolation",
-            })
+            anchors.append(
+                {
+                    "nav_L": L,
+                    "recall_at_10": target,
+                    "available": False,
+                    "reason": "Not attainable within every Catapult seed/repetition; no extrapolation",
+                }
+            )
             continue
         cat_reads = statistics.mean(x["reads"] for x in matched)
         cat_latency = statistics.mean(x["latency_us"] for x in matched)
@@ -277,28 +325,34 @@ def summarize(runs, reps):
             c_read = statistics.mean(x["reads"] for x in per_rep)
             n_read = nav_by_rep[rep][str(L)]["reads"]
             rep_ratios.append(100 * (1.0 - n_read / c_read))
-        anchors.append({
-            "nav_L": L, "recall_at_10": target, "available": True,
-            "nav_reads_per_query": nav_reads,
-            "catapult_reads_per_query": cat_reads,
-            "nav_latency_us": nav_latency,
-            "catapult_latency_us": cat_latency,
-            "nav_reads_saved_percent": 100 * (1.0 - nav_reads / cat_reads),
-            "nav_latency_saved_percent": 100 * (1.0 - nav_latency / cat_latency),
-            "paired_repetition_reads_saved_percent": rep_ratios,
-            "catapult_seed_repetition_interpolants": matched,
-        })
+        anchors.append(
+            {
+                "nav_L": L,
+                "recall_at_10": target,
+                "available": True,
+                "nav_reads_per_query": nav_reads,
+                "catapult_reads_per_query": cat_reads,
+                "nav_latency_us": nav_latency,
+                "catapult_latency_us": cat_latency,
+                "nav_reads_saved_percent": 100 * (1.0 - nav_reads / cat_reads),
+                "nav_latency_saved_percent": 100 * (1.0 - nav_latency / cat_latency),
+                "paired_repetition_reads_saved_percent": rep_ratios,
+                "catapult_seed_repetition_interpolants": matched,
+            }
+        )
     qualified = [a for a in anchors if a["available"]]
     return {
         "matched_recall": anchors,
         "qualifying_anchors": len(qualified),
         "equal_anchor_mean_reads_saved_percent": (
             statistics.mean(x["nav_reads_saved_percent"] for x in qualified)
-            if qualified else None
+            if qualified
+            else None
         ),
         "equal_anchor_mean_latency_saved_percent": (
             statistics.mean(x["nav_latency_saved_percent"] for x in qualified)
-            if qualified else None
+            if qualified
+            else None
         ),
         "caveat": "Three SSD replays use the same deterministic query stream, not independent query samples. No inferential confidence interval is claimed.",
     }
@@ -306,16 +360,36 @@ def summarize(runs, reps):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    for arg in ("nav-bin", "catapult-bin", "queries", "train-gt", "heldout-gt",
-                "index-prefix", "ivf", "work", "out"):
+    for arg in (
+        "nav-bin",
+        "catapult-bin",
+        "queries",
+        "train-gt",
+        "heldout-gt",
+        "index-prefix",
+        "ivf",
+        "work",
+        "out",
+    ):
         ap.add_argument("--" + arg, type=Path, required=True)
     ap.add_argument("--reps", type=int, default=3)
     a = ap.parse_args()
-    for key in ("nav_bin", "catapult_bin", "queries", "train_gt",
-                "heldout_gt", "index_prefix", "ivf", "work", "out"):
+    for key in (
+        "nav_bin",
+        "catapult_bin",
+        "queries",
+        "train_gt",
+        "heldout_gt",
+        "index_prefix",
+        "ivf",
+        "work",
+        "out",
+    ):
         setattr(a, key, getattr(a, key).resolve())
     if a.reps != 3:
-        raise ValueError("publication trial requires exactly 3 order-rotated repetitions")
+        raise ValueError(
+            "publication trial requires exactly 3 order-rotated repetitions"
+        )
     if shape(a.queries) != (TRAIN + WARM + MEASURE, DIM):
         raise ValueError("require exactly 10k frozen 768-dimensional PubMed queries")
     if not a.train_gt.is_file() or not a.heldout_gt.is_file():
@@ -337,7 +411,9 @@ def main():
     if nav_bytes <= 0 or cat_bytes < nav_bytes:
         raise ValueError(f"unsafe budget accounting: nav={nav_bytes} cat={cat_bytes}")
     if not 0.9 <= nav_bytes / cat_bytes <= 1.05:
-        raise ValueError(f"not comparable auxiliary RAM: nav={nav_bytes} cat={cat_bytes}")
+        raise ValueError(
+            f"not comparable auxiliary RAM: nav={nav_bytes} cat={cat_bytes}"
+        )
 
     allowed = sorted(os.sched_getaffinity(0))
     if len(allowed) < SEARCH_THREADS:
@@ -354,13 +430,24 @@ def main():
             for seed in SEEDS:
                 label = f"train-L{L}-s{seed}"
                 dest = a.work / (label + ".snapshot")
-                run_one(a.catapult_bin, label, prefix, a.train_gt,
-                        a.index_prefix, L, a.out,
-                        mode="catapult", seed=seed,
-                        snapshot_dump=dest, train=True)
+                run_one(
+                    a.catapult_bin,
+                    label,
+                    prefix,
+                    a.train_gt,
+                    a.index_prefix,
+                    L,
+                    a.out,
+                    mode="catapult",
+                    seed=seed,
+                    snapshot_dump=dest,
+                    train=True,
+                )
                 occupied = snapshot_entries(dest)
                 if not (0 < occupied <= (1 << HASH_BITS) * CATAPULT_CAPACITY):
-                    raise RuntimeError(f"invalid bucket occupancy for {label}: {occupied}")
+                    raise RuntimeError(
+                        f"invalid bucket occupancy for {label}: {occupied}"
+                    )
                 snapshots[label] = {
                     "resident_entries": occupied,
                     "sha256": hashlib.sha256(dest.read_bytes()).hexdigest(),
@@ -378,14 +465,28 @@ def main():
                 for arm in arms:
                     name = f"eval-r{rep}-L{L}-{arm}"
                     if arm == "nav":
-                        row = run_one(a.nav_bin, name, held, a.heldout_gt,
-                                      a.index_prefix, L, a.out,
-                                      mode="nav", ivf=a.ivf)
+                        row = run_one(
+                            a.nav_bin,
+                            name,
+                            held,
+                            a.heldout_gt,
+                            a.index_prefix,
+                            L,
+                            a.out,
+                            mode="nav",
+                            ivf=a.ivf,
+                        )
                     else:
                         seed = int(arm.rsplit("s", 1)[-1])
                         row = run_one(
-                            a.catapult_bin, name, held, a.heldout_gt,
-                            a.index_prefix, L, a.out, mode="catapult",
+                            a.catapult_bin,
+                            name,
+                            held,
+                            a.heldout_gt,
+                            a.index_prefix,
+                            L,
+                            a.out,
+                            mode="catapult",
                             seed=seed,
                             snapshot_load=a.work / f"train-L{L}-s{seed}.snapshot",
                         )
@@ -398,13 +499,21 @@ def main():
         "experiment": "author-aligned CatapultDB adapted to DiskANN vs RAM-only NavHints Core",
         "source_kind": "same pinned Microsoft DiskANN SSD backend; NOT author's native in-memory graph",
         "population": "PubMed1M MedCPT + 10K MedRAG-Zipf queries, 768d inner product",
-        "query_split": {"static_history": 5000, "causal_warmup": WARM,
-                        "measured_suffix": MEASURE},
+        "query_split": {
+            "static_history": 5000,
+            "causal_warmup": WARM,
+            "measured_suffix": MEASURE,
+        },
         "causality": "Both arms strictly sequential per query, feedback applied only after each completion; both continue updating during the 1K measurement.",
-        "architecture": {"K": K, "beam": BEAM, "configured_search_threads": SEARCH_THREADS,
-                         "causal_query_dispatch_threads": 1,
-                         "widths": list(LS), "seeds": list(SEEDS),
-                         "repetitions": a.reps},
+        "architecture": {
+            "K": K,
+            "beam": BEAM,
+            "configured_search_threads": SEARCH_THREADS,
+            "causal_query_dispatch_threads": 1,
+            "widths": list(LS),
+            "seeds": list(SEEDS),
+            "repetitions": a.reps,
+        },
         "memory": {
             "nav_auxiliary_bytes": nav_bytes,
             "catapult_auxiliary_bytes": cat_bytes,
@@ -418,7 +527,9 @@ def main():
         "summary": summarize(results, a.reps),
     }
     if out["summary"]["qualifying_anchors"] < 3:
-        raise RuntimeError("Insufficient common recall anchors for defensible comparison")
+        raise RuntimeError(
+            "Insufficient common recall anchors for defensible comparison"
+        )
     save(a.out / "navhints-vs-author-aligned-catapult.json", out)
     print("NAVHINTS_CATAPULT_AUTHOR_ALIGNED_CAUSAL_HEADTOHEAD_PASS", flush=True)
     print(json.dumps(out["summary"], indent=2), flush=True)

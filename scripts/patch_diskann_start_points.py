@@ -11,41 +11,50 @@ from pathlib import Path
 
 PINNED = "fcf90534174cf29c78c9f13b4cccf1fcabff85f5"
 
+
 def once(text: str, old: str, new: str, label: str) -> str:
     n = text.count(old)
     if n != 1:
         raise RuntimeError(f"{label}: expected exactly one match, found {n}")
     return text.replace(old, new, 1)
 
+
 def patch_provider(path: Path) -> None:
     s = path.read_text()
 
-    s = once(s,
-"""    /// Scratch pool for disk search operations that need allocations.
+    s = once(
+        s,
+        """    /// Scratch pool for disk search operations that need allocations.
     scratch_pool: &'a Arc<ObjectPool<DiskSearchScratch<Data, ProviderFactory::VertexProviderType>>>,
 }
 """,
-"""    /// Scratch pool for disk search operations that need allocations.
+        """    /// Scratch pool for disk search operations that need allocations.
     scratch_pool: &'a Arc<ObjectPool<DiskSearchScratch<Data, ProviderFactory::VertexProviderType>>>,
 
     /// Optional query-specific graph entry points. None preserves the upstream medoid.
     start_points: Option<&'a [u32]>,
 }
-""", "strategy field")
+""",
+        "strategy field",
+    )
 
-    s = once(s,
-"""    cache_indexed_vectors: bool,
+    s = once(
+        s,
+        """    cache_indexed_vectors: bool,
     flat_scan_filter: Option<IdFilter<'a>>,
 }
 """,
-"""    cache_indexed_vectors: bool,
+        """    cache_indexed_vectors: bool,
     flat_scan_filter: Option<IdFilter<'a>>,
     start_points: Option<&'a [u32]>,
 }
-""", "accessor field")
+""",
+        "accessor field",
+    )
 
-    s = once(s,
-"""    async fn starting_points(&self) -> ANNResult<Vec<u32>> {
+    s = once(
+        s,
+        """    async fn starting_points(&self) -> ANNResult<Vec<u32>> {
         let start_vertex_id = self.provider.graph_header.metadata().medoid as u32;
         Ok(vec![start_vertex_id])
     }
@@ -58,7 +67,7 @@ def patch_provider(path: Path) -> None:
         self.pq_distances(&[start_vertex_id], |dist, id| f(id, dist))
     }
 """,
-"""    async fn starting_points(&self) -> ANNResult<Vec<u32>> {
+        """    async fn starting_points(&self) -> ANNResult<Vec<u32>> {
         if let Some(ids) = self.start_points {
             return Ok(ids.to_vec());
         }
@@ -76,18 +85,23 @@ def patch_provider(path: Path) -> None:
         let start_vertex_id = self.provider.graph_header.metadata().medoid as u32;
         self.pq_distances(&[start_vertex_id], |dist, id| f(id, dist))
     }
-""", "start points accessor")
+""",
+        "start points accessor",
+    )
 
-    s = once(s,
-"""            cache_indexed_vectors: strategy.cache_indexed_vectors,
+    s = once(
+        s,
+        """            cache_indexed_vectors: strategy.cache_indexed_vectors,
             flat_scan_filter: None,
         })
 """,
-"""            cache_indexed_vectors: strategy.cache_indexed_vectors,
+        """            cache_indexed_vectors: strategy.cache_indexed_vectors,
             flat_scan_filter: None,
             start_points: strategy.start_points,
         })
-""", "accessor constructor")
+""",
+        "accessor constructor",
+    )
 
     old_strategy = """    fn search_strategy<'a>(
         &'a self,
@@ -211,76 +225,93 @@ def patch_provider(path: Path) -> None:
 """
     s = once(s, marker, seeded_method + marker, "seeded public method")
 
-    s = once(s,
-"""            Some(&mut indexed_vectors),
+    s = once(
+        s,
+        """            Some(&mut indexed_vectors),
             &mode,
 """,
-"""            Some(&mut indexed_vectors),
+        """            Some(&mut indexed_vectors),
             None,
             &mode,
-""", "indexed-vector call")
+""",
+        "indexed-vector call",
+    )
 
-    s = once(s,
-"""            associated_data,
+    s = once(
+        s,
+        """            associated_data,
             None,
             mode,
         )
 """,
-"""            associated_data,
+        """            associated_data,
             None,
             None,
             mode,
         )
-""", "raw search call")
+""",
+        "raw search call",
+    )
 
-    s = once(s,
-"""        associated_data: &mut [Data::AssociatedDataType],
+    s = once(
+        s,
+        """        associated_data: &mut [Data::AssociatedDataType],
         indexed_vectors: IndexedVectorOutput<'_, Data::VectorDataType>,
         mode: &SearchMode<'_>,
 """,
-"""        associated_data: &mut [Data::AssociatedDataType],
+        """        associated_data: &mut [Data::AssociatedDataType],
         indexed_vectors: IndexedVectorOutput<'_, Data::VectorDataType>,
         start_points: Option<&[u32]>,
         mode: &SearchMode<'_>,
-""", "impl signature")
+""",
+        "impl signature",
+    )
 
     # Only mutate strategy construction inside search_internal_impl.
     head, sep, tail = s.partition("    fn search_internal_impl(")
     if not sep:
         raise RuntimeError("search_internal_impl not found")
-    body, sep2, rest = tail.partition("        query_stats.total_comparisons = stats.cmps;")
+    body, sep2, rest = tail.partition(
+        "        query_stats.total_comparisons = stats.cmps;"
+    )
     if not sep2:
         raise RuntimeError("search_internal_impl end marker not found")
-    body = body.replace("self.search_strategy(", "self.search_strategy_with_start_points(")
     body = body.replace(
-"""                    cache_indexed_vectors,
+        "self.search_strategy(", "self.search_strategy_with_start_points("
+    )
+    body = body.replace(
+        """                    cache_indexed_vectors,
                 );""",
-"""                    cache_indexed_vectors,
+        """                    cache_indexed_vectors,
                     start_points,
-                );""")
+                );""",
+    )
     body = body.replace(
-"""self.search_strategy_with_start_points(&io_tracker, postprocess_config, cache_indexed_vectors);""",
-"""self.search_strategy_with_start_points(
+        """self.search_strategy_with_start_points(&io_tracker, postprocess_config, cache_indexed_vectors);""",
+        """self.search_strategy_with_start_points(
                         &io_tracker,
                         postprocess_config,
                         cache_indexed_vectors,
                         start_points,
-                    );""")
+                    );""",
+    )
     s = head + sep + body + sep2 + rest
 
     if s.count("search_with_start_points(") != 1:
         raise RuntimeError("unexpected seeded method count")
     path.write_text(s)
 
+
 def patch_benchmark(path: Path) -> None:
     s = path.read_text()
 
-    s = once(s,
-"""    let num_queries = queries.nrows();
+    s = once(
+        s,
+        """    let num_queries = queries.nrows();
 
     // Load the vector filters
 """,
-"""    let num_queries = queries.nrows();
+        """    let num_queries = queries.nrows();
 
     // Optional fixed-width query-specific graph seeds. Absence exactly preserves
     // the released medoid-start behavior.
@@ -290,24 +321,29 @@ def patch_benchmark(path: Path) -> None:
     };
 
     // Load the vector filters
-""", "benchmark seed load")
+""",
+        "benchmark seed load",
+    )
 
-    s = once(s,
-"""            .zip(statistics_vec.par_iter_mut())
+    s = once(
+        s,
+        """            .zip(statistics_vec.par_iter_mut())
             .zip(result_counts.par_iter_mut());
 
         zipped.for_each_in_pool(
             pool.as_ref(),
             |(((((q, vf), id_chunk), dist_chunk), stats), rc)| {
 """,
-"""            .zip(statistics_vec.par_iter_mut())
+        """            .zip(statistics_vec.par_iter_mut())
             .zip(result_counts.par_iter_mut())
             .zip(seed_rows.par_iter());
 
         zipped.for_each_in_pool(
             pool.as_ref(),
             |((((((q, vf), id_chunk), dist_chunk), stats), rc), seeds)| {
-""", "benchmark zip")
+""",
+        "benchmark zip",
+    )
 
     old_call = """                match searcher.search(
                     q,
@@ -342,7 +378,7 @@ def patch_benchmark(path: Path) -> None:
 
     marker = """// Simplified internal structures to reduce parameter count
 """
-    helper = r'''fn load_start_points(path: &std::path::Path, expected_rows: usize) -> anyhow::Result<Vec<Vec<u32>>> {
+    helper = r"""fn load_start_points(path: &std::path::Path, expected_rows: usize) -> anyhow::Result<Vec<Vec<u32>>> {
     let raw = std::fs::read(path)?;
     if raw.len() < 8 {
         anyhow::bail!("start-point file is shorter than its header");
@@ -383,9 +419,10 @@ def patch_benchmark(path: Path) -> None:
     Ok(result)
 }
 
-'''
+"""
     s = once(s, marker, helper + marker, "benchmark seed parser")
     path.write_text(s)
+
 
 def main() -> None:
     ap = argparse.ArgumentParser()
@@ -399,6 +436,7 @@ def main() -> None:
     patch_provider(provider)
     patch_benchmark(benchmark)
     print(f"patched {PINNED} for query-specific graph start points")
+
 
 if __name__ == "__main__":
     main()

@@ -21,15 +21,19 @@ from __future__ import annotations
 from pathlib import Path
 import argparse
 
-def once(s:str,old:str,new:str,name:str)->str:
-    n=s.count(old)
-    if n!=1:raise ValueError(f"{name}: expected one match, saw {n}")
-    return s.replace(old,new,1)
 
-def header(root:Path)->None:
-    path=root/"include/pq_flash_index.h"
-    s=path.read_text()
-    s=once(s,
+def once(s: str, old: str, new: str, name: str) -> str:
+    n = s.count(old)
+    if n != 1:
+        raise ValueError(f"{name}: expected one match, saw {n}")
+    return s.replace(old, new, 1)
+
+
+def header(root: Path) -> None:
+    path = root / "include/pq_flash_index.h"
+    s = path.read_text()
+    s = once(
+        s,
         "namespace diskann {\n",
         """namespace diskann {
   // ID-only compact directory; database vector IDs remain original
@@ -40,30 +44,37 @@ def header(root:Path)->None:
     std::vector<unsigned> children;
     unsigned nprobe = 8;
   };
-""","Starling 16K directory state")
-    s=once(s,
+""",
+        "Starling 16K directory state",
+    )
+    s = once(
+        s,
         """        const std::vector<unsigned> *navhints_recent = nullptr);""",
         """        const std::vector<unsigned> *navhints_recent = nullptr,
         const StarlingHintIvf *navhints_junctions = nullptr);""",
-        "static directory optional native page-search interface")
+        "static directory optional native page-search interface",
+    )
     path.write_text(s)
 
-def page_search(root:Path)->None:
-    path=root/"src/page_search.cpp"
-    s=path.read_text()
-    marker="  void PQFlashIndex<T>::page_search(\n"
-    a=s.index(marker)
-    b=s.index("  void PQFlashIndex<T>::page_search_interim(\n",a)
-    head,part,tail=s[:a],s[a:b],s[b:]
-    part=once(part,
+
+def page_search(root: Path) -> None:
+    path = root / "src/page_search.cpp"
+    s = path.read_text()
+    marker = "  void PQFlashIndex<T>::page_search(\n"
+    a = s.index(marker)
+    b = s.index("  void PQFlashIndex<T>::page_search_interim(\n", a)
+    head, part, tail = s[:a], s[a:b], s[b:]
+    part = once(
+        part,
         """      const std::vector<unsigned> *navhints_recent) {""",
         """      const std::vector<unsigned> *navhints_recent,
       const StarlingHintIvf *navhints_junctions) {""",
-        "native junction signature")
-    start=r'''    std::sort(retset.begin(), retset.begin() + cur_list_size);
+        "native junction signature",
+    )
+    start = r"""    std::sort(retset.begin(), retset.begin() + cur_list_size);
 
-    unsigned num_ios = 0;'''
-    extension=r'''    // Two-stage Hint-IVF search: 512 PQ-scored medoids, then
+    unsigned num_ios = 0;"""
+    extension = r"""    // Two-stage Hint-IVF search: 512 PQ-scored medoids, then
     // the children of the eight most promising regions. This selects
     // exactly ONE additional junction start, without replacing Starling's
     // original in-memory graph navigator or reading an extra graph page.
@@ -126,18 +137,22 @@ def page_search(root:Path)->None:
 
     std::sort(retset.begin(), retset.begin() + cur_list_size);
 
-    unsigned num_ios = 0;'''
-    part=once(part,start,extension,"native ID-only junction scorer")
-    path.write_text(head+part+tail)
+    unsigned num_ios = 0;"""
+    part = once(part, start, extension, "native ID-only junction scorer")
+    path.write_text(head + part + tail)
 
-def benchmark(root:Path)->None:
-    p=root/"tests/search_disk_index.cpp"
-    s=p.read_text()
-    s=once(s,"#include <cstdlib>\n",
-           "#include <cstdlib>\n#include <fstream>\n",
-           "Starling packed file support")
-    marker="namespace po = boost::program_options;\n"
-    helper=r'''
+
+def benchmark(root: Path) -> None:
+    p = root / "tests/search_disk_index.cpp"
+    s = p.read_text()
+    s = once(
+        s,
+        "#include <cstdlib>\n",
+        "#include <cstdlib>\n#include <fstream>\n",
+        "Starling packed file support",
+    )
+    marker = "namespace po = boost::program_options;\n"
+    helper = r"""
 // Strict reader for the same compact GHIVF001 ID+CSR format as NavHints.
 // Verified once at startup; PQ lookup and graph search remain native Starling.
 static diskann::StarlingHintIvf load_starling_hint_ivf(const std::string& path) {
@@ -182,11 +197,11 @@ static diskann::StarlingHintIvf load_starling_hint_ivf(const std::string& path) 
   return dir;
 }
 
-'''
-    s=once(s,marker,marker+helper,"Starling packed directory loader")
-    before=r'''  // cache bfs levels
-  std::vector<uint32_t> node_list;'''
-    after=r'''  // Export exactly the top-16K Starling *native traversal* junction IDs
+"""
+    s = once(s, marker, marker + helper, "Starling packed directory loader")
+    before = r"""  // cache bfs levels
+  std::vector<uint32_t> node_list;"""
+    after = r"""  // Export exactly the top-16K Starling *native traversal* junction IDs
   // on a disjoint 5K-query training prefix, before any heldout replay.
   if (const char* target = std::getenv("STARLING_HINT_EXPORT_TOP16K")) {
     const char* train = std::getenv("STARLING_NAVHINTS_TRAIN_FILE");
@@ -221,19 +236,22 @@ static diskann::StarlingHintIvf load_starling_hint_ivf(const std::string& path) 
   }
 
   // cache bfs levels
-  std::vector<uint32_t> node_list;'''
-    s=once(s,before,after,"export and load native Starling junctions")
-    s=once(s,
-        '''    if (nav_mode != "baseline" && nav_mode != "recent512" &&
-        nav_mode != "random512") {''',
-        '''    if (nav_mode != "baseline" && nav_mode != "recent512" &&
+  std::vector<uint32_t> node_list;"""
+    s = once(s, before, after, "export and load native Starling junctions")
+    s = once(
+        s,
+        """    if (nav_mode != "baseline" && nav_mode != "recent512" &&
+        nav_mode != "random512") {""",
+        """    if (nav_mode != "baseline" && nav_mode != "recent512" &&
         nav_mode != "random512" && nav_mode != "learned16k" &&
-        nav_mode != "core16k_recent512") {''',
-        "additional learned modes")
-    s=once(s,
-        '''            nav_mode == "recent512" ? &recent :
-            (nav_mode == "random512" ? &random_ids : nullptr);''',
-        '''            (nav_mode == "recent512" || nav_mode == "core16k_recent512")
+        nav_mode != "core16k_recent512") {""",
+        "additional learned modes",
+    )
+    s = once(
+        s,
+        """            nav_mode == "recent512" ? &recent :
+            (nav_mode == "random512" ? &random_ids : nullptr);""",
+        """            (nav_mode == "recent512" || nav_mode == "core16k_recent512")
                 ? &recent :
             (nav_mode == "random512" ? &random_ids : nullptr);
         const diskann::StarlingHintIvf *dir =
@@ -242,29 +260,41 @@ static diskann::StarlingHintIvf load_starling_hint_ivf(const std::string& path) 
         if ((nav_mode == "learned16k" || nav_mode == "core16k_recent512") &&
             dir == nullptr) {
           throw std::runtime_error("learned NavHints modes require Starling-trained IVF");
-        }''',
-        "learned and online hints")
-    s=once(s,
-        '''            stats + i, candidates);''',
-        '''            stats + i, candidates, dir);''',
-        "pass learn-to-route IDs into native search")
-    s=once(s,
-        '''        if (nav_mode == "recent512") {''',
-        '''        if (nav_mode == "recent512" || nav_mode == "core16k_recent512") {''',
-        "online FIFO updates in Core")
+        }""",
+        "learned and online hints",
+    )
+    s = once(
+        s,
+        """            stats + i, candidates);""",
+        """            stats + i, candidates, dir);""",
+        "pass learn-to-route IDs into native search",
+    )
+    s = once(
+        s,
+        """        if (nav_mode == "recent512") {""",
+        """        if (nav_mode == "recent512" || nav_mode == "core16k_recent512") {""",
+        "online FIFO updates in Core",
+    )
     p.write_text(s)
 
+
 def main():
-    a=argparse.ArgumentParser(description=__doc__)
-    a.add_argument("source",type=Path)
-    x=a.parse_args()
-    root=x.source.resolve()
-    for name in ("include/pq_flash_index.h","src/page_search.cpp",
-                 "tests/search_disk_index.cpp"):
-        if not (root/name).is_file():raise SystemExit(f"no original Starling file {name}")
+    a = argparse.ArgumentParser(description=__doc__)
+    a.add_argument("source", type=Path)
+    x = a.parse_args()
+    root = x.source.resolve()
+    for name in (
+        "include/pq_flash_index.h",
+        "src/page_search.cpp",
+        "tests/search_disk_index.cpp",
+    ):
+        if not (root / name).is_file():
+            raise SystemExit(f"no original Starling file {name}")
     header(root)
     page_search(root)
     benchmark(root)
-    print("STARLING_NATIVE_FULL_CORE_ADAPTER_READY",flush=True)
+    print("STARLING_NATIVE_FULL_CORE_ADAPTER_READY", flush=True)
 
-if __name__=="__main__":main()
+
+if __name__ == "__main__":
+    main()

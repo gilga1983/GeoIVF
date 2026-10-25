@@ -11,36 +11,48 @@ import subprocess
 import sys
 
 
-def once(s,old,new,name):
-    n=s.count(old)
-    if n!=1:raise RuntimeError(f"{name}: expected 1 anchor, got {n}")
-    return s.replace(old,new,1)
+def once(s, old, new, name):
+    n = s.count(old)
+    if n != 1:
+        raise RuntimeError(f"{name}: expected 1 anchor, got {n}")
+    return s.replace(old, new, 1)
 
 
-def nrep(s,old,new,count,name):
-    n=s.count(old)
-    if n!=count:raise RuntimeError(f"{name}: expected {count}, got {n}")
-    return s.replace(old,new)
+def nrep(s, old, new, count, name):
+    n = s.count(old)
+    if n != count:
+        raise RuntimeError(f"{name}: expected {count}, got {n}")
+    return s.replace(old, new)
 
 
 def main():
-    subprocess.run(["python3","scripts/generate_starling_selective_diverse.py"],
-                   check=True)
-    s=Path("scripts/run_starling_selective_diverse.generated.sh").read_text()
-    s=once(s,'ART="$PWD/artifacts/starling-selective-diverse"',
-           'ART="$PWD/artifacts/starling-coveo-coverage"',
-           "dedicated Coveo artifact folder")
-    s=once(s,'WORK="$RUNNER_TEMP/starling-selective-diverse-$GITHUB_RUN_ID"',
-           'WORK="$RUNNER_TEMP/starling-coveo-coverage-$GITHUB_RUN_ID"',
-           "isolated Coveo temporary build")
-    s=once(s,
-       'SRC="$HOME/.cache/geoivf/public-eval/bigann-10M/data/dataset.manifest.json"',
-       'SRC="$HOME/.cache/geoivf/coveo-real-demand-v1/split/dataset.manifest.json"',
-       "frozen Coveo production event manifest")
-    start='python3 - "$SRC" "$DATA" <<\'PY\'\n'
-    end='\nPY\ncp "$DATA/bigann10m.manifest.json" "$ART/"'
-    a=s.index(start);b=s.index(end,a)+len(end)
-    pre=r'''python3 - "$SRC" "$DATA" <<'PY'
+    subprocess.run(
+        ["python3", "scripts/generate_starling_selective_diverse.py"], check=True
+    )
+    s = Path("scripts/run_starling_selective_diverse.generated.sh").read_text()
+    s = once(
+        s,
+        'ART="$PWD/artifacts/starling-selective-diverse"',
+        'ART="$PWD/artifacts/starling-coveo-coverage"',
+        "dedicated Coveo artifact folder",
+    )
+    s = once(
+        s,
+        'WORK="$RUNNER_TEMP/starling-selective-diverse-$GITHUB_RUN_ID"',
+        'WORK="$RUNNER_TEMP/starling-coveo-coverage-$GITHUB_RUN_ID"',
+        "isolated Coveo temporary build",
+    )
+    s = once(
+        s,
+        'SRC="$HOME/.cache/geoivf/public-eval/bigann-10M/data/dataset.manifest.json"',
+        'SRC="$HOME/.cache/geoivf/coveo-real-demand-v1/split/dataset.manifest.json"',
+        "frozen Coveo production event manifest",
+    )
+    start = 'python3 - "$SRC" "$DATA" <<\'PY\'\n'
+    end = '\nPY\ncp "$DATA/bigann10m.manifest.json" "$ART/"'
+    a = s.index(start)
+    b = s.index(end, a) + len(end)
+    pre = r'''python3 - "$SRC" "$DATA" <<'PY'
 import json,struct,sys,hashlib
 from pathlib import Path
 src=Path(sys.argv[1]).resolve()
@@ -95,78 +107,115 @@ manifest={
 print("STARLING_COVEO_FROZEN_SPLIT_VERIFIED n=31950 d=50 train=5000 warm=20000 eval=5000",flush=True)
 PY
 cp "$DATA/coveo-native.manifest.json" "$ART/"'''
-    s=s[:a]+pre+s[b:]
+    s = s[:a] + pre + s[b:]
     # Replace all remaining neutralized filenames, not the actual binary data.
-    names={
-      "base.u8bin":"base.fbin",
-      "train5000.u8bin":"train5000.fbin",
-      "heldout5000.u8bin":"heldout25000.fbin",
-      "heldout5000.gt":"heldout25000.gt",
-      "eval1000.u8bin":"eval5000.fbin",
-      "eval1000.gt":"eval5000.gt",
-      "warm4000.u8bin":"warm20000.fbin",
-      "warm4000.gt":"warm20000.gt",
-      "bigann10m.manifest.json":"coveo-native.manifest.json",
+    names = {
+        "base.u8bin": "base.fbin",
+        "train5000.u8bin": "train5000.fbin",
+        "heldout5000.u8bin": "heldout25000.fbin",
+        "heldout5000.gt": "heldout25000.gt",
+        "eval1000.u8bin": "eval5000.fbin",
+        "eval1000.gt": "eval5000.gt",
+        "warm4000.u8bin": "warm20000.fbin",
+        "warm4000.gt": "warm20000.gt",
+        "bigann10m.manifest.json": "coveo-native.manifest.json",
     }
-    for old,new in names.items():
-        s=s.replace(old,new)
-    s=nrep(s,'DATA_TYPE=uint8','DATA_TYPE=float',1,"native float32 author cli")
-    s=nrep(s,'DIST_FN=l2','DIST_FN=l2',1,"native squared L2 preserved")
-    s=nrep(s,'DATA_DIM=128','DATA_DIM=50',1,"Coveo dimensions")
-    s=nrep(s,'DATA_N=10000000','DATA_N=31950',1,"Coveo catalog size")
-    s=nrep(s,'PREFIX="bigann_native_10m"','PREFIX="coveo_native_real"',1,
-           "Coveo index path")
-    s=once(s,'--base-data-type uint8','--base-data-type float32',
-           "float32 hint-region partition input")
+    for old, new in names.items():
+        s = s.replace(old, new)
+    s = nrep(s, "DATA_TYPE=uint8", "DATA_TYPE=float", 1, "native float32 author cli")
+    s = nrep(s, "DIST_FN=l2", "DIST_FN=l2", 1, "native squared L2 preserved")
+    s = nrep(s, "DATA_DIM=128", "DATA_DIM=50", 1, "Coveo dimensions")
+    s = nrep(s, "DATA_N=10000000", "DATA_N=31950", 1, "Coveo catalog size")
+    s = nrep(
+        s,
+        'PREFIX="bigann_native_10m"',
+        'PREFIX="coveo_native_real"',
+        1,
+        "Coveo index path",
+    )
+    s = once(
+        s,
+        "--base-data-type uint8",
+        "--base-data-type float32",
+        "float32 hint-region partition input",
+    )
     # Original native binary patching, now also add the stronger coverage arm.
-    s=once(s,'python3 scripts/patch_starling_selective_diverse.py "$root"',
-           'python3 scripts/patch_starling_selective_diverse.py "$root"\n'
-           '        python3 scripts/patch_starling_coveo_coverage.py "$root"',
-           "float32 Coveo causal replay and complementary objective")
-    s=nrep(s,'LS="20 40 80"','LS="12 20 40 80"',2,"Coveo high-recall frontier")
-    s=nrep(s,'(20|40|80|160|320|640)','(12|20|40|80)',2,
-           "native summary regex")
-    s=once(s,
-       '"$ART/starling-rep$rep-$mode-summary.txt")" -ge 3',
-       '"$ART/starling-rep$rep-$mode-summary.txt")" -ge 4',
-       "four native recall search widths")
-    s=once(s,
-       'STARLING_NAVHINTS_PROTOCOL mode=$mode warmup=4000 measured=1000',
-       'STARLING_NAVHINTS_PROTOCOL mode=$mode warmup=20000 measured=5000',
-       "validate the actual full 20K/5K chronological protocol")
+    s = once(
+        s,
+        'python3 scripts/patch_starling_selective_diverse.py "$root"',
+        'python3 scripts/patch_starling_selective_diverse.py "$root"\n'
+        '        python3 scripts/patch_starling_coveo_coverage.py "$root"',
+        "float32 Coveo causal replay and complementary objective",
+    )
+    s = nrep(s, 'LS="20 40 80"', 'LS="12 20 40 80"', 2, "Coveo high-recall frontier")
+    s = nrep(s, "(20|40|80|160|320|640)", "(12|20|40|80)", 2, "native summary regex")
+    s = once(
+        s,
+        '"$ART/starling-rep$rep-$mode-summary.txt")" -ge 3',
+        '"$ART/starling-rep$rep-$mode-summary.txt")" -ge 4',
+        "four native recall search widths",
+    )
+    s = once(
+        s,
+        "STARLING_NAVHINTS_PROTOCOL mode=$mode warmup=4000 measured=1000",
+        "STARLING_NAVHINTS_PROTOCOL mode=$mode warmup=20000 measured=5000",
+        "validate the actual full 20K/5K chronological protocol",
+    )
     # Any unused Gorgeous launcher is never invoked. This experiment uses
     # only the original Starling index; it does not pretend to compare systems.
-    oldsplit='python3 - "$SRC" "$DATA" <<\'PY_NATIVE_SPLIT\'\n'
-    oldend='\nPY_NATIVE_SPLIT\n'
-    a=s.index(oldsplit);b=s.index(oldend,a)+len(oldend)
-    s=s[:a]+'echo "STARLING_COVEO_PRESERVED_STATIC_TRAIN_5K_AND_CHRONO_25K"\n'+s[b:]
+    oldsplit = 'python3 - "$SRC" "$DATA" <<\'PY_NATIVE_SPLIT\'\n'
+    oldend = "\nPY_NATIVE_SPLIT\n"
+    a = s.index(oldsplit)
+    b = s.index(oldend, a) + len(oldend)
+    s = (
+        s[:a]
+        + 'echo "STARLING_COVEO_PRESERVED_STATIC_TRAIN_5K_AND_CHRONO_25K"\n'
+        + s[b:]
+    )
     # Native Starling candidate-export phases reuse the frozen 5K static prefix.
     # The author 5K online replay path is now 25K, with a 20K warmup.
-    s=once(s,
-       '0) order=(baseline core16k_recent512 diverse_core gate50_core gate50_diverse gate25_diverse) ;;',
-       '0) order=(baseline recent512 core16k_recent512 diverse_core maxmin_core cover_core gate50_cover) ;;',
-       "rep0 seven-arm order")
-    s=once(s,
-       '1) order=(gate50_diverse gate25_diverse baseline diverse_core gate50_core core16k_recent512) ;;',
-       '1) order=(cover_core gate50_cover baseline maxmin_core recent512 diverse_core core16k_recent512) ;;',
-       "rep1 rotated seven arms")
-    s=once(s,
-       '2) order=(gate50_core diverse_core core16k_recent512 gate25_diverse baseline gate50_diverse) ;;',
-       '2) order=(recent512 maxmin_core core16k_recent512 gate50_cover baseline cover_core diverse_core) ;;',
-       "rep2 rotated seven arms")
-    s=once(s,'STARLING_SELECTIVE_DIVERSE_SUCCESS',
-           'STARLING_COVEO_COVERAGE_SUCCESS',"unique experiment success marker")
-    s=once(s,
-       'python3 scripts/summarize_starling_selective_diverse.py',
-       'python3 scripts/summarize_starling_coveo_coverage.py',
-       "Coveo seven-arm 20K/5K evaluator")
-    p=Path("scripts/run_starling_coveo_coverage.generated.sh")
+    s = once(
+        s,
+        "0) order=(baseline core16k_recent512 diverse_core gate50_core gate50_diverse gate25_diverse) ;;",
+        "0) order=(baseline recent512 core16k_recent512 diverse_core maxmin_core cover_core gate50_cover) ;;",
+        "rep0 seven-arm order",
+    )
+    s = once(
+        s,
+        "1) order=(gate50_diverse gate25_diverse baseline diverse_core gate50_core core16k_recent512) ;;",
+        "1) order=(cover_core gate50_cover baseline maxmin_core recent512 diverse_core core16k_recent512) ;;",
+        "rep1 rotated seven arms",
+    )
+    s = once(
+        s,
+        "2) order=(gate50_core diverse_core core16k_recent512 gate25_diverse baseline gate50_diverse) ;;",
+        "2) order=(recent512 maxmin_core core16k_recent512 gate50_cover baseline cover_core diverse_core) ;;",
+        "rep2 rotated seven arms",
+    )
+    s = once(
+        s,
+        "STARLING_SELECTIVE_DIVERSE_SUCCESS",
+        "STARLING_COVEO_COVERAGE_SUCCESS",
+        "unique experiment success marker",
+    )
+    s = once(
+        s,
+        "python3 scripts/summarize_starling_selective_diverse.py",
+        "python3 scripts/summarize_starling_coveo_coverage.py",
+        "Coveo seven-arm 20K/5K evaluator",
+    )
+    p = Path("scripts/run_starling_coveo_coverage.generated.sh")
     p.write_text(s)
     p.chmod(0o755)
-    subprocess.run(["bash","-n",str(p)],check=True)
-    print("STARLING_COVEO_RUN_SCRIPT_GENERATED n=31950 qtrain=5000 "
-          "warm=20000 eval=5000 arms=7 widths=12,20,40,80 native-original-only",flush=True)
+    subprocess.run(["bash", "-n", str(p)], check=True)
+    print(
+        "STARLING_COVEO_RUN_SCRIPT_GENERATED n=31950 qtrain=5000 "
+        "warm=20000 eval=5000 arms=7 widths=12,20,40,80 native-original-only",
+        flush=True,
+    )
     if "--run" in sys.argv:
-        os.execvp("bash",["bash",str(p)])
+        os.execvp("bash", ["bash", str(p)])
 
-if __name__=="__main__":main()
+
+if __name__ == "__main__":
+    main()

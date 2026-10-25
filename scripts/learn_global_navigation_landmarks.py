@@ -71,14 +71,12 @@ def main():
             support[vid] += 1
 
     ranked = sorted(
-        (
-            (int(s), int(support[vid]), int(vid))
-            for vid, s in score.items()
-            if s > 0
-        ),
+        ((int(s), int(support[vid]), int(vid)) for vid, s in score.items() if s > 0),
         key=lambda x: (-x[0], -x[1], x[2]),
     )
-    portals = [] if args.portals is None else list(map(int, load_start_ids(args.portals)))
+    portals = (
+        [] if args.portals is None else list(map(int, load_start_ids(args.portals)))
+    )
 
     variants = {}
     for budget in [int(x) for x in args.budgets.split(",") if x.strip()]:

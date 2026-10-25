@@ -47,13 +47,16 @@ def write_ids(path, ids):
 def select(stats, mode, budget):
     support, position = stats
     if mode == "sum":
-        return sorted(position, key=lambda vid: (-position[vid], -support[vid], vid))[:budget]
+        return sorted(position, key=lambda vid: (-position[vid], -support[vid], vid))[
+            :budget
+        ]
     if mode == "count":
         return sorted(support, key=lambda vid: (-support[vid], vid))[:budget]
     if mode == "mean":
-        return sorted(position,
-                      key=lambda vid: (-position[vid] / support[vid],
-                                       -support[vid], vid))[:budget]
+        return sorted(
+            position,
+            key=lambda vid: (-position[vid] / support[vid], -support[vid], vid),
+        )[:budget]
     raise ValueError(mode)
 
 
@@ -66,7 +69,9 @@ def main():
     p.add_argument("--queries", type=int, default=5000)
     a = p.parse_args()
     if a.budget not in (8192, 14464) or a.queries != 5000:
-        raise ValueError("Ablation permits B=8192 (Coveo sensitivity) or B=14464 and 5K training queries")
+        raise ValueError(
+            "Ablation permits B=8192 (Coveo sensitivity) or B=14464 and 5K training queries"
+        )
     support, position = collections.Counter(), collections.Counter()
     records = 0
     with a.trace.open() as f:
@@ -90,7 +95,9 @@ def main():
     if records != 5000:
         raise ValueError(f"Training trace has {records} queries, not 5000")
     if len(support) < a.budget:
-        raise ValueError(f"Only {len(support)} eligible vertices, insufficient for matched budget")
+        raise ValueError(
+            f"Only {len(support)} eligible vertices, insufficient for matched budget"
+        )
 
     variants = {}
     all_ids = {}
@@ -98,10 +105,14 @@ def main():
         ids = select((support, position), mode, a.budget)
         out = a.out / f"landmarks-b{a.budget}-{mode}.bin"
         write_ids(out, ids)
-        variants[mode] = {"path": str(out), "sha256": digest(out),
-                          "count": len(ids), "first20": ids[:20],
-                          "max_support": max(support[v] for v in ids),
-                          "median_support": sorted(support[v] for v in ids)[len(ids)//2]}
+        variants[mode] = {
+            "path": str(out),
+            "sha256": digest(out),
+            "count": len(ids),
+            "first20": ids[:20],
+            "max_support": max(support[v] for v in ids),
+            "median_support": sorted(support[v] for v in ids)[len(ids) // 2],
+        }
         all_ids[mode] = set(ids)
     original = a.reference_sum
     if not original.is_file():
@@ -115,7 +126,7 @@ def main():
     n, reserved = struct.unpack("<II", frozen[8:16])
     if reserved != 0 or len(frozen) != 16 + 4 * n or n < a.budget:
         raise ValueError("Frozen reference lacks required ranked prefix")
-    desired = MAGIC + struct.pack("<II", a.budget, 0) + frozen[16:16 + a.budget * 4]
+    desired = MAGIC + struct.pack("<II", a.budget, 0) + frozen[16 : 16 + a.budget * 4]
     if (a.out / f"landmarks-b{a.budget}-sum.bin").read_bytes() != desired:
         raise ValueError(
             "The paper's existing sum-position selection could not be reproduced "
@@ -123,11 +134,16 @@ def main():
         )
     overlaps = {}
     for m in MODES:
-        overlaps[m] = {"overlap_with_sum": len(all_ids[m] & all_ids["sum"]),
-                       "fraction": len(all_ids[m] & all_ids["sum"]) / a.budget}
+        overlaps[m] = {
+            "overlap_with_sum": len(all_ids[m] & all_ids["sum"]),
+            "fraction": len(all_ids[m] & all_ids["sum"]) / a.budget,
+        }
     manifest = {
-        "trace": str(a.trace), "trace_sha256": digest(a.trace),
-        "queries": records, "eligible": len(support), "budget": a.budget,
+        "trace": str(a.trace),
+        "trace_sha256": digest(a.trace),
+        "queries": records,
+        "eligible": len(support),
+        "budget": a.budget,
         "reference_sum_sha256": digest(original),
         "reference_is_full_selected_core": n == a.budget,
         "ranking_prefix_reproduced": True,
@@ -137,7 +153,8 @@ def main():
             "count": "number of unique query traversals; ties by vertex ID",
             "mean": "mean first expansion position among traversals; ties by support, ID",
         },
-        "variants": variants, "overlap": overlaps,
+        "variants": variants,
+        "overlap": overlaps,
     }
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "selection.json").write_text(json.dumps(manifest, indent=2) + "\n")

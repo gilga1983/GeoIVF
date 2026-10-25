@@ -234,7 +234,7 @@ def patch_page_search(root):
             page_visited.insert(pid);""",
         "capture first pages and hint page reads",
     )
-    p.write_text(before+q+after)
+    p.write_text(before + q + after)
 
 
 def patch_benchmark(root):
@@ -259,7 +259,7 @@ def patch_benchmark(root):
     s = once(
         s,
         '            (nav_mode == "recent512" || nav_mode == "core16k_recent512")\n'
-        '                ? &recent :',
+        "                ? &recent :",
         '            (nav_mode == "recent512" || nav_mode == "core16k_recent512" ||\n'
         '             nav_mode == "score_only") ? &recent :',
         "full Core score-only: online input",
@@ -267,10 +267,10 @@ def patch_benchmark(root):
     s = once(
         s,
         '            (nav_mode == "learned16k" || nav_mode == "core16k_recent512")\n'
-        '            ? native_junctions.get() : nullptr;',
+        "            ? native_junctions.get() : nullptr;",
         '            (nav_mode == "learned16k" || nav_mode == "core16k_recent512" ||\n'
         '             nav_mode == "score_only")\n'
-        '            ? native_junctions.get() : nullptr;',
+        "            ? native_junctions.get() : nullptr;",
         "full Core score-only: trained input",
     )
     s = once(
@@ -354,7 +354,10 @@ def main():
     patch_header(root)
     patch_page_search(root)
     patch_benchmark(root)
-    print("STARLING_ENTRY_DIAGNOSTIC_ADAPTER_READY modes=baseline,score_only,core16k_recent512,oracle", flush=True)
+    print(
+        "STARLING_ENTRY_DIAGNOSTIC_ADAPTER_READY modes=baseline,score_only,core16k_recent512,oracle",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

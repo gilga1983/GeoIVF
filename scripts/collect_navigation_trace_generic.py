@@ -64,7 +64,9 @@ def main():
     ap.add_argument("--gt", type=Path, required=True)
     ap.add_argument("--index-prefix", type=Path, required=True)
     ap.add_argument("--data-type", choices=("float32", "uint8"), required=True)
-    ap.add_argument("--distance", choices=("inner_product", "squared_l2"), required=True)
+    ap.add_argument(
+        "--distance", choices=("inner_product", "squared_l2"), required=True
+    )
     ap.add_argument("--train-rows", type=int, default=5000)
     ap.add_argument("--teacher-l", type=int, default=4)
     ap.add_argument("--work", type=Path, required=True)
@@ -88,30 +90,32 @@ def main():
     inp = args.out / "teacher-input.json"
     cfg = {
         "search_directories": [str(args.work)],
-        "jobs": [{
-            "type": "disk-index",
-            "content": {
-                "source": {
-                    "disk-index-source": "Load",
-                    "data_type": args.data_type,
-                    "load_path": str(args.index_prefix),
+        "jobs": [
+            {
+                "type": "disk-index",
+                "content": {
+                    "source": {
+                        "disk-index-source": "Load",
+                        "data_type": args.data_type,
+                        "load_path": str(args.index_prefix),
+                    },
+                    "search_phase": {
+                        "queries": str(train),
+                        "groundtruth": str(args.gt),
+                        "search_list": [args.teacher_l],
+                        "beam_width": BEAM,
+                        "recall_at": 1,
+                        "num_threads": THREADS,
+                        "is_flat_search": False,
+                        "distance": args.distance,
+                        "vector_filters_file": None,
+                        "num_nodes_to_cache": None,
+                        "search_io_limit": None,
+                        "post_processor": None,
+                    },
                 },
-                "search_phase": {
-                    "queries": str(train),
-                    "groundtruth": str(args.gt),
-                    "search_list": [args.teacher_l],
-                    "beam_width": BEAM,
-                    "recall_at": 1,
-                    "num_threads": THREADS,
-                    "is_flat_search": False,
-                    "distance": args.distance,
-                    "vector_filters_file": None,
-                    "num_nodes_to_cache": None,
-                    "search_io_limit": None,
-                    "post_processor": None,
-                },
-            },
-        }],
+            }
+        ],
     }
     save(inp, cfg)
 
@@ -136,7 +140,14 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX)
         with (args.out / "teacher.log").open("w") as log:
             subprocess.run(
-                [str(args.binary), "run", "--input-file", str(inp), "--output-file", str(output)],
+                [
+                    str(args.binary),
+                    "run",
+                    "--input-file",
+                    str(inp),
+                    "--output-file",
+                    str(output),
+                ],
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 env=env,

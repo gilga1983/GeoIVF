@@ -120,7 +120,7 @@ def patch_factory(path: Path) -> None:
 
     marker = """    fn build_cache_via_bfs(
 """
-    helper = r'''    fn load_static_cache_ids(path: &std::path::Path) -> ANNResult<Vec<u32>> {
+    helper = r"""    fn load_static_cache_ids(path: &std::path::Path) -> ANNResult<Vec<u32>> {
         let raw = std::fs::read(path).map_err(|e| {
             diskann_error!(
                 ErrorKind::IndexError,
@@ -193,7 +193,7 @@ def patch_factory(path: Path) -> None:
         Ok(cache)
     }
 
-'''
+"""
     s = once(s, marker, helper + marker, "file cache builder")
     path.write_text(s)
 
@@ -221,7 +221,6 @@ def patch_benchmark(path: Path) -> None:
 """
     s = once(s, old, new, "benchmark cache strategy")
     path.write_text(s)
-
 
 
 def patch_cache_io_accounting(path: Path) -> None:

@@ -223,7 +223,7 @@ struct PaperCatapult {
 """
     s = once(s, old_load, new_load, "load waypoint cache")
 
-    old_route = r'''                let portal_seed = match portal_router.as_ref() {
+    old_route = r"""                let portal_seed = match portal_router.as_ref() {
                     Some(router) => match router.route::<T>(q, portal_nprobe) {
                         Ok(id) => Some(id),
                         Err(e) => {
@@ -257,8 +257,8 @@ struct PaperCatapult {
                     }
                     None => portal_seed.map(|id| (None, vec![id])),
                 };
-'''
-    new_route = r'''                let portal_route = match portal_router.as_ref() {
+"""
+    new_route = r"""                let portal_route = match portal_router.as_ref() {
                     Some(router) => match router.route_with_cell::<T>(q, portal_nprobe) {
                         Ok(route) => Some(route),
                         Err(e) => {
@@ -318,7 +318,7 @@ struct PaperCatapult {
                         }
                     }
                 };
-'''
+"""
     s = once(s, old_route, new_route, "compose waypoint starts")
     path.write_text(s)
 

@@ -29,55 +29,67 @@ def replace_once(source, old, new, label):
 
 
 def patch_provider(path):
-    s=path.read_text()
-    s=replace_once(s,
+    s = path.read_text()
+    s = replace_once(
+        s,
         "    value_cache_ids: Option<&'a [u32]>,\n",
         "    value_cache_ids: Option<&'a [u32]>,\n"
         "    region_cache_ids: Option<&'a [Vec<u32>]>,\n"
         "    region_cache_nprobe: usize,\n",
-        "HintIvfSearch region-local view")
-    count=s.count("            value_cache_ids: None,\n")
-    if count<1:
+        "HintIvfSearch region-local view",
+    )
+    count = s.count("            value_cache_ids: None,\n")
+    if count < 1:
         raise RuntimeError("No default Hint-IVF constructors to update")
-    s=s.replace("            value_cache_ids: None,\n",
-                "            value_cache_ids: None,\n"
-                "            region_cache_ids: None,\n"
-                "            region_cache_nprobe: 1,\n")
-    s=replace_once(s,
+    s = s.replace(
+        "            value_cache_ids: None,\n",
+        "            value_cache_ids: None,\n"
+        "            region_cache_ids: None,\n"
+        "            region_cache_nprobe: 1,\n",
+    )
+    s = replace_once(
+        s,
         "            value_cache_ids: Some(value_cache_ids),\n",
         "            value_cache_ids: Some(value_cache_ids),\n"
         "            region_cache_ids,\n"
         "            region_cache_nprobe,\n",
-        "region cache view in experience search")
+        "region cache view in experience search",
+    )
 
-    s=replace_once(s,
+    s = replace_once(
+        s,
         "    experience_cache_top: std::sync::Mutex<Vec<u32>>,\n",
         "    experience_cache_top: std::sync::Mutex<Vec<u32>>,\n"
         "    selected_hint_region: AtomicUsize,\n",
-        "IOTracker selected coarse region")
-    s=replace_once(s,
+        "IOTracker selected coarse region",
+    )
+    s = replace_once(
+        s,
         "            experience_cache_top: std::sync::Mutex::new(Vec::new()),\n",
         "            experience_cache_top: std::sync::Mutex::new(Vec::new()),\n"
         "            selected_hint_region: AtomicUsize::new(usize::MAX),\n",
-        "IOTracker regional key initialization")
+        "IOTracker regional key initialization",
+    )
 
     # This is the nearest coarse centroid in the *already-scored* Hint-IVF
     # result. We don't hash queries or do a second regional PQ selection.
-    s=replace_once(s,
+    s = replace_once(
+        s,
         "            // Preserve the same canonical fine winner, but gather selected\n",
         "            self.io_tracker.selected_hint_region.store(\n"
         "                coarse[0].1,\n"
         "                std::sync::atomic::Ordering::Relaxed,\n"
         "            );\n\n"
         "            // Preserve the same canonical fine winner, but gather selected\n",
-        "select nearest coarse region without changing best junction")
+        "select nearest coarse region without changing best junction",
+    )
 
     # Score region-specific history with the existing PQ query LUT.
-    old='''            let mut emitted = 1usize;
+    old = """            let mut emitted = 1usize;
             if let Some(cache_ids) = ivf.value_cache_ids {
                 if !cache_ids.is_empty() {
-'''
-    new='''            let mut emitted = 1usize;
+"""
+    new = """            let mut emitted = 1usize;
             let mut regional_candidates = Vec::<u32>::new();
             let eligible: Option<&[u32]> = if let Some(groups) = ivf.region_cache_ids {
                 let count = ivf.region_cache_nprobe.min(coarse.len());
@@ -95,19 +107,21 @@ def patch_provider(path):
             };
             if let Some(cache_ids) = eligible {
                 if !cache_ids.is_empty() {
-'''
-    s=replace_once(s,old,new,"score conditional destinations instead of global cache")
+"""
+    s = replace_once(
+        s, old, new, "score conditional destinations instead of global cache"
+    )
 
     # Original top candidate injection as control; optionally emit already
     # PQ-scored top 2/4/8/10. A single OnceLock avoids repeated getenv work.
-    old='''                    if let Some(&(distance, id)) = top_cache.first() {
+    old = """                    if let Some(&(distance, id)) = top_cache.first() {
                         if id != winner.1 {
                             emitted += 1;
                             f(id, distance);
                         }
                     }
-'''
-    new='''                    static ROUTE_RECENT_START_CAP: std::sync::OnceLock<usize> =
+"""
+    new = """                    static ROUTE_RECENT_START_CAP: std::sync::OnceLock<usize> =
                         std::sync::OnceLock::new();
                     let max_additional_starts = *ROUTE_RECENT_START_CAP.get_or_init(|| {
                         std::env::var("DISKANN_LOCAL_RECENT_STARTS")
@@ -122,43 +136,51 @@ def patch_provider(path):
                             f(id, distance);
                         }
                     }
-'''
-    s=replace_once(s,old,new,"emit selected top-K destination starts")
+"""
+    s = replace_once(s, old, new, "emit selected top-K destination starts")
 
-    s=replace_once(s,
+    s = replace_once(
+        s,
         "        value_cache_ids: &[u32],\n",
         "        value_cache_ids: &[u32],\n"
         "        region_cache_ids: Option<&[Vec<u32>]>,\n"
         "        region_cache_nprobe: usize,\n",
-        "extend experience search arguments")
-    s=replace_once(s,
+        "extend experience search arguments",
+    )
+    s = replace_once(
+        s,
         "    ) -> ANNResult<(SearchResult<Data::AssociatedDataType>, u32, Vec<u32>)> {\n",
         "    ) -> ANNResult<(SearchResult<Data::AssociatedDataType>, u32, usize, Vec<u32>)> {\n",
-        "experience search return region key")
-    s=replace_once(s,
+        "experience search return region key",
+    )
+    s = replace_once(
+        s,
         "        let cache_top = io_tracker\n",
         "        let selected_region = io_tracker\n"
         "            .selected_hint_region\n"
         "            .load(std::sync::atomic::Ordering::Relaxed);\n"
         "        if selected_region == usize::MAX || selected_region >= medoid_ids.len() {\n"
         "            return Err(diskann_error!(ErrorKind::IndexError,\n"
-        "                \"selected Hint-IVF coarse region invalid\"));\n"
+        '                "selected Hint-IVF coarse region invalid"));\n'
         "        }\n"
         "        let cache_top = io_tracker\n",
-        "extract selected coarse region")
-    s=replace_once(s,
+        "extract selected coarse region",
+    )
+    s = replace_once(
+        s,
         "        Ok((search_result, selected_hub, cache_top))\n",
         "        Ok((search_result, selected_hub, selected_region, cache_top))\n",
-        "return region with search result")
+        "return region with search result",
+    )
     path.write_text(s)
-    print("NAVHINTS_LOCAL_HISTORY_PROVIDER_PATCH_PASS",flush=True)
+    print("NAVHINTS_LOCAL_HISTORY_PROVIDER_PATCH_PASS", flush=True)
 
 
 def patch_benchmark(path):
-    s=path.read_text()
-    anchor='''    let experience_replay = std::env::var("DISKANN_EXPERIENCE_REPLAY")
-'''
-    config='''    // Diagnostic modes use exactly the same Hint-IVF junction directory.
+    s = path.read_text()
+    anchor = """    let experience_replay = std::env::var("DISKANN_EXPERIENCE_REPLAY")
+"""
+    config = """    // Diagnostic modes use exactly the same Hint-IVF junction directory.
     // Regions share one total winner-ID capacity, with demand-driven space.
     let local_history_mode = std::env::var("DISKANN_LOCAL_CACHE_MODE")
         .unwrap_or_else(|_| "fifo".to_string());
@@ -170,10 +192,11 @@ def patch_benchmark(path):
     if !(1..=8).contains(&local_region_nprobe) {
         anyhow::bail!("NavHints regional cache nprobe out of range 1..=8");
     }
-'''
-    s=replace_once(s,anchor,config+anchor,"local-history configuration")
+"""
+    s = replace_once(s, anchor, config + anchor, "local-history configuration")
 
-    s=replace_once(s,
+    s = replace_once(
+        s,
         "            let mut cache_evictions = 0usize;\n",
         """            let mut cache_evictions = 0usize;
             // For regional LRU, maintain winners per coarse cell.
@@ -187,13 +210,17 @@ def patch_benchmark(path):
             } else { Vec::new() };
             let mut history_size = 0usize;
 """,
-        "create query-conditioned destination histories")
+        "create query-conditioned destination histories",
+    )
 
-    s=replace_once(s,
+    s = replace_once(
+        s,
         "                let (search_result, selected_hub, cache_top) =\n",
         "                let (search_result, selected_hub, selected_region, cache_top) =\n",
-        "capture nearest coarse routing cell")
-    s=replace_once(s,
+        "capture nearest coarse routing cell",
+    )
+    s = replace_once(
+        s,
         """                        &cache_ids,
                     )?;
 """,
@@ -202,9 +229,10 @@ def patch_benchmark(path):
                         local_region_nprobe,
                     )?;
 """,
-        "pass regional view to search")
+        "pass regional view to search",
+    )
 
-    old='''                // Update the volatile cache after the completed query, so this
+    old = """                // Update the volatile cache after the completed query, so this
                 // request can influence only future requests.
                 if experience_cache_capacity > 0 {
                     if cache_members.contains(&winner) {
@@ -224,8 +252,8 @@ def patch_benchmark(path):
                         cache_inserts += 1;
                     }
                 }
-'''
-    new='''                // The measured query has completed. New observations may
+"""
+    new = """                // The measured query has completed. New observations may
                 // influence subsequent queries, never the current query.
                 if experience_cache_capacity > 0 {
                     if region_mode {
@@ -301,13 +329,16 @@ def patch_benchmark(path):
                         cache_inserts += 1;
                     }
                 }
-'''
-    s=replace_once(s,old,new,"replace only the post-query destination cache update")
+"""
+    s = replace_once(
+        s, old, new, "replace only the post-query destination cache update"
+    )
 
-    s=replace_once(s,
-        '''            let persisted_hubs = page_hubs.len();
-''',
-        '''            eprintln!(
+    s = replace_once(
+        s,
+        """            let persisted_hubs = page_hubs.len();
+""",
+        """            eprintln!(
                 "NAVHINTS_LOCAL_HISTORY L={} mode={} nprobe={} capacity={} stored={} used_regions={} inserted={} resident_refreshes={} evictions={}",
                 l, local_history_mode, local_region_nprobe,
                 experience_cache_capacity,
@@ -316,23 +347,25 @@ def patch_benchmark(path):
                 cache_inserts, cache_skips, cache_evictions
             );
             let persisted_hubs = page_hubs.len();
-''',
-        "emit locality mode and cache counts")
+""",
+        "emit locality mode and cache counts",
+    )
     path.write_text(s)
-    print("NAVHINTS_LOCAL_HISTORY_BENCHMARK_PATCH_PASS",flush=True)
+    print("NAVHINTS_LOCAL_HISTORY_BENCHMARK_PATCH_PASS", flush=True)
 
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("diskann",type=Path)
-    args=p.parse_args()
-    root=args.diskann.resolve()
-    provider=root/"diskann-disk/src/search/provider/disk_provider.rs"
-    benchmark=root/"diskann-benchmark/src/disk_index/search.rs"
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("diskann", type=Path)
+    args = p.parse_args()
+    root = args.diskann.resolve()
+    provider = root / "diskann-disk/src/search/provider/disk_provider.rs"
+    benchmark = root / "diskann-benchmark/src/disk_index/search.rs"
     if not (provider.is_file() and benchmark.is_file()):
         raise RuntimeError("expected pinned DiskANN checkout")
     patch_provider(provider)
     patch_benchmark(benchmark)
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     main()

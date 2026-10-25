@@ -44,7 +44,11 @@ def load_xbin(path: Path, data_type: str):
     expected = 8 + rows * dim * itemsize
     if path.stat().st_size != expected:
         raise ValueError(f"xbin size mismatch {path.stat().st_size} != {expected}")
-    return np.memmap(path, dtype=dtype, mode="r", offset=8, shape=(rows, dim)), rows, dim
+    return (
+        np.memmap(path, dtype=dtype, mode="r", offset=8, shape=(rows, dim)),
+        rows,
+        dim,
+    )
 
 
 def normalize(x):
@@ -68,7 +72,11 @@ def assign_l2(x, centers, batch):
     for lo in range(0, len(x), batch):
         hi = min(len(x), lo + batch)
         xb = x[lo:hi]
-        d2 = np.sum(xb * xb, axis=1, keepdims=True) + c2[None, :] - 2.0 * (xb @ centers.T)
+        d2 = (
+            np.sum(xb * xb, axis=1, keepdims=True)
+            + c2[None, :]
+            - 2.0 * (xb @ centers.T)
+        )
         out[lo:hi] = np.argmin(d2, axis=1)
     return out
 

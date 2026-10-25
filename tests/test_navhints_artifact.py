@@ -1,4 +1,5 @@
 """Offline, synthetic safety/contract tests of the artifact-review verifier."""
+
 from __future__ import annotations
 
 import hashlib
@@ -15,7 +16,8 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location(
-    "navhints_artifact_verifier", ROOT / "repro/verify_review_bundle.py")
+    "navhints_artifact_verifier", ROOT / "repro/verify_review_bundle.py"
+)
 checker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checker)
 
@@ -35,11 +37,18 @@ class ReviewerArtifact(unittest.TestCase):
         manifest = {
             "format": "navhints-sanitized-summary-v1",
             "public_release_approved": False,
-            "sources": [{"original_zip_sha256": source_sha, "retained": [{
-                "published_member": "evidence/paper/result.json",
-                "sanitized_bytes": len(contents),
-                "sanitized_sha256": "b" * 64 if corrupt else digest,
-            }]}],
+            "sources": [
+                {
+                    "original_zip_sha256": source_sha,
+                    "retained": [
+                        {
+                            "published_member": "evidence/paper/result.json",
+                            "sanitized_bytes": len(contents),
+                            "sanitized_sha256": "b" * 64 if corrupt else digest,
+                        }
+                    ],
+                }
+            ],
             "results_members": 1,
         }
         with zipfile.ZipFile(output, "w") as z:
@@ -66,8 +75,12 @@ class ReviewerArtifact(unittest.TestCase):
                 self.assertEqual(manifest["results_members"], 1)
 
     def test_manifest_only_does_not_invoke_benchmarks(self):
-        self.assertFalse(any(token in Path(ROOT / "repro/verify_review_bundle.py").read_text()
-                             for token in ("subprocess.run(", "subprocess.call(", "os.system(")))
+        self.assertFalse(
+            any(
+                token in Path(ROOT / "repro/verify_review_bundle.py").read_text()
+                for token in ("subprocess.run(", "subprocess.call(", "os.system(")
+            )
+        )
 
     def test_bundled_table5_independent_frontiers(self):
         with zipfile.ZipFile(ROOT / "repro/navhints-reviewer-evidence.zip") as z:
@@ -81,23 +94,41 @@ class ReviewerArtifact(unittest.TestCase):
 
     def test_table5_rejects_missing_recall_support(self):
         with zipfile.ZipFile(ROOT / "repro/navhints-reviewer-evidence.zip") as z:
-            source = json.loads(z.read("evidence/destination-equal-work/demand-vs-random.json"))
+            source = json.loads(
+                z.read("evidence/destination-equal-work/demand-vs-random.json")
+            )
             capacity = z.read("evidence/destination-capacity/reviewer-defense.json")
         for point in source["summary"]["randomdb512"].values():
             point["recall_percent"] = 90.0
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "unsupported.zip"
             with zipfile.ZipFile(path, "w") as z:
-                z.writestr("evidence/destination-equal-work/demand-vs-random.json", json.dumps(source))
-                z.writestr("evidence/destination-capacity/reviewer-defense.json", capacity)
+                z.writestr(
+                    "evidence/destination-equal-work/demand-vs-random.json",
+                    json.dumps(source),
+                )
+                z.writestr(
+                    "evidence/destination-capacity/reviewer-defense.json", capacity
+                )
             with zipfile.ZipFile(path) as z:
-                with self.assertRaisesRegex(ValueError, "outside common recall support"):
+                with self.assertRaisesRegex(
+                    ValueError, "outside common recall support"
+                ):
                     checker.destination_controls(z)
 
     def test_public_export_matches_manuscript_without_private_checkout(self):
         with tempfile.TemporaryDirectory() as tmp:
-            result = subprocess.run([sys.executable, str(ROOT / "repro/export_paper_results.py"),
-                                     "--output", tmp], cwd=tmp, text=True, capture_output=True)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "repro/export_paper_results.py"),
+                    "--output",
+                    tmp,
+                ],
+                cwd=tmp,
+                text=True,
+                capture_output=True,
+            )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             report = json.loads((Path(tmp) / "REPRODUCTION.json").read_text())
             self.assertEqual(report["regenerated_reference_csvs"], 20)

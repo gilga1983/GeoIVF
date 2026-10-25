@@ -99,7 +99,10 @@ def download(url: str, dst: Path, max_bytes: int | None = None) -> None:
             total += len(block)
             if total and total % (256 << 20) < (1 << 20):
                 dt = max(time.time() - t0, 1e-9)
-                print(f"  {total / 2**30:.2f} GiB at {total / 2**20 / dt:.1f} MiB/s", flush=True)
+                print(
+                    f"  {total / 2**30:.2f} GiB at {total / 2**20 / dt:.1f} MiB/s",
+                    flush=True,
+                )
     if max_bytes is not None and total != max_bytes:
         raise RuntimeError(f"cropped download got {total} bytes, expected {max_bytes}")
     tmp.replace(dst)
@@ -225,10 +228,20 @@ def main():
 
     result = {
         "dataset": args.dataset,
-        **{k: cfg[k] for k in (
-            "rows", "dim", "dtype", "metric", "data_type", "query_rows",
-            "base_url", "query_url", "gt_url",
-        )},
+        **{
+            k: cfg[k]
+            for k in (
+                "rows",
+                "dim",
+                "dtype",
+                "metric",
+                "data_type",
+                "query_rows",
+                "base_url",
+                "query_url",
+                "gt_url",
+            )
+        },
         "official_gt_rows": gt_rows,
         "official_gt_k": gt_k,
         "split": {"train": [0, 5000], "heldout": [5000, 10000]},

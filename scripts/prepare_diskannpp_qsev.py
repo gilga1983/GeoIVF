@@ -43,7 +43,8 @@ def read_fbin(path: Path):
 
 def locate_disk_index(prefix: Path) -> Path:
     candidates = [
-        p for p in prefix.parent.glob(prefix.name + "*")
+        p
+        for p in prefix.parent.glob(prefix.name + "*")
         if p.is_file() and ("disk.index" in p.name or p.name.endswith("_disk.index"))
     ]
     if len(candidates) != 1:

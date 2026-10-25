@@ -43,14 +43,20 @@ def main():
         raise RuntimeError("expected Starling and dormant Gorgeous L values")
     base = base.replace('LS="20 40 80 160 320 640"', 'LS="20 40 80"')
     for old, new in (
-        ("0) order=(baseline random512 recent512 learned16k core16k_recent512) ;;",
-         "0) order=(baseline score_only core16k_recent512 oracle) ;;"),
-        ("1) order=(learned16k core16k_recent512 baseline random512 recent512) ;;",
-         "1) order=(core16k_recent512 oracle baseline score_only) ;;"),
-        ("2) order=(recent512 learned16k baseline core16k_recent512 random512) ;;",
-         "2) order=(score_only baseline oracle core16k_recent512) ;;"),
+        (
+            "0) order=(baseline random512 recent512 learned16k core16k_recent512) ;;",
+            "0) order=(baseline score_only core16k_recent512 oracle) ;;",
+        ),
+        (
+            "1) order=(learned16k core16k_recent512 baseline random512 recent512) ;;",
+            "1) order=(core16k_recent512 oracle baseline score_only) ;;",
+        ),
+        (
+            "2) order=(recent512 learned16k baseline core16k_recent512 random512) ;;",
+            "2) order=(score_only baseline oracle core16k_recent512) ;;",
+        ),
     ):
-        base = swap(base,old,new,"rotate four diagnostic arms")
+        base = swap(base, old, new, "rotate four diagnostic arms")
     base = swap(
         base,
         '    (cd "$source_dir/scripts" && STARLING_NAVHINTS_EVAL="$mode" \\',
@@ -67,8 +73,8 @@ def main():
     )
     base = swap(
         base,
-        'STARLING_NATIVE_NAVHINTS_FULL_CORE_SUCCESS',
-        'STARLING_ENTRY_DIAGNOSTIC_SUCCESS',
+        "STARLING_NATIVE_NAVHINTS_FULL_CORE_SUCCESS",
+        "STARLING_ENTRY_DIAGNOSTIC_SUCCESS",
         "distinct diagnostic completion marker",
     )
     base += '\npython3 scripts/summarize_starling_entry_diagnostics.py "$ART/diagnostics" "$ART/diagnostic-summary.json" "$ART/diagnostic-summary.md"\n'
@@ -76,9 +82,11 @@ def main():
     p.write_text(base)
     p.chmod(0o755)
     subprocess.run(["bash", "-n", str(p)], check=True)
-    print("DIAGNOSTIC_SH_GENERATED arms=baseline,score_only,core16k_recent512,oracle reps=3 L=20,40,80")
-    if len(sys.argv)>1 and sys.argv[1]=="--run":
-        os.execvp("bash",["bash",str(p)])
+    print(
+        "DIAGNOSTIC_SH_GENERATED arms=baseline,score_only,core16k_recent512,oracle reps=3 L=20,40,80"
+    )
+    if len(sys.argv) > 1 and sys.argv[1] == "--run":
+        os.execvp("bash", ["bash", str(p)])
 
 
 if __name__ == "__main__":

@@ -44,7 +44,9 @@ def load_fbin_memmap(path: Path):
     rows, dim = struct.unpack("<II", raw)
     expected = 8 + rows * dim * 4
     if path.stat().st_size != expected:
-        raise ValueError(f"bad fbin size: got {path.stat().st_size}, expected {expected}")
+        raise ValueError(
+            f"bad fbin size: got {path.stat().st_size}, expected {expected}"
+        )
     mm = np.memmap(path, dtype="<f4", mode="r", offset=8, shape=(rows, dim))
     return mm, rows, dim
 
@@ -90,7 +92,9 @@ def lloyd_spherical(x: np.ndarray, k: int, iterations: int, batch: int, seed: in
     return centers, assign
 
 
-def choose_medoids(x: np.ndarray, centers: np.ndarray, assign: np.ndarray) -> np.ndarray:
+def choose_medoids(
+    x: np.ndarray, centers: np.ndarray, assign: np.ndarray
+) -> np.ndarray:
     medoid_local = np.empty(len(centers), dtype=np.int32)
     for c in range(len(centers)):
         members = np.flatnonzero(assign == c)
@@ -103,7 +107,9 @@ def choose_medoids(x: np.ndarray, centers: np.ndarray, assign: np.ndarray) -> np
     return medoid_local
 
 
-def write_ivf(path: Path, medoid_ids: np.ndarray, buckets: list[np.ndarray], total_landmarks: int):
+def write_ivf(
+    path: Path, medoid_ids: np.ndarray, buckets: list[np.ndarray], total_landmarks: int
+):
     nlist = len(medoid_ids)
     offsets = [0]
     children = []
