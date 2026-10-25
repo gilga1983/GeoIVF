@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 """Evaluate final 14K/2048/eight-start Core and sampled exits on public 10M splits."""
 from __future__ import annotations
-import argparse, fcntl, json, os, struct, subprocess
+import argparse
+import fcntl
+import json
+import os
+import subprocess
 from pathlib import Path
 import numpy as np
+
+from navhints_io import read_xbin_shape, slice_ground_truth, slice_vectors
 
 THREADS = 4
 BEAM = 8
 K = 10
 LS = (10, 20, 40, 80, 160, 320)
 METHODS = ("baseline", "ivf", "core", "full")
+# Method keys are frozen result-schema identifiers: ivf=junction-only,
+# core=RAM-only NavHints, full=Core plus optional sampled page exits.
 CFG = {
     "baseline": {
         "ivf": False,
@@ -77,61 +85,19 @@ def save(p, o):
     p.write_text(json.dumps(o, indent=2) + "\n")
 
 
-def xshape(p):
-    with p.open("rb") as f:
-        raw = f.read(8)
-    if len(raw) != 8:
-        raise ValueError(f"bad xbin header: {p}")
-    return struct.unpack("<II", raw)
+def xshape(path: Path) -> tuple[int, int]:
+    """Return the original binary shape; retained for replay-helper imports."""
+    return read_xbin_shape(path)
 
 
 def slice_xbin(src, dst, start, count, itemsize):
-    rows, dim = xshape(src)
-    if start < 0 or count <= 0 or start + count > rows:
-        raise ValueError("bad xbin slice")
-    with src.open("rb") as fi, dst.open("wb") as fo:
-        fi.seek(8 + start * dim * itemsize)
-        fo.write(struct.pack("<II", count, dim))
-        rem = count * dim * itemsize
-        while rem:
-            b = fi.read(min(16 << 20, rem))
-            if not b:
-                raise ValueError("truncated xbin")
-            fo.write(b)
-            rem -= len(b)
+    """Copy the requested replay vectors without changing their element bytes."""
+    return slice_vectors(src, dst, start, count, itemsize)
 
 
 def slice_gt(src, dst, start, count):
-    with src.open("rb") as f:
-        raw = f.read(8)
-    rows, k = struct.unpack("<II", raw)
-    if start < 0 or count <= 0 or start + count > rows:
-        raise ValueError("bad GT slice")
-    row_bytes = k * 4
-    ids_bytes = rows * row_bytes
-    measured = src.stat().st_size
-    has_distances = measured == 8 + 2 * ids_bytes
-    if measured not in (8 + ids_bytes, 8 + 2 * ids_bytes):
-        raise ValueError(f"unsupported GT byte count: {measured} for rows={rows} k={k}")
-    with src.open("rb") as fi, dst.open("wb") as fo:
-        fo.write(struct.pack("<II", count, k))
-        fi.seek(8 + start * row_bytes)
-        rem = count * row_bytes
-        while rem:
-            b = fi.read(min(8 << 20, rem))
-            if not b:
-                raise ValueError("truncated GT ids")
-            fo.write(b)
-            rem -= len(b)
-        if has_distances:
-            fi.seek(8 + ids_bytes + start * row_bytes)
-            rem = count * row_bytes
-            while rem:
-                b = fi.read(min(8 << 20, rem))
-                if not b:
-                    raise ValueError("truncated GT distances")
-                fo.write(b)
-                rem -= len(b)
+    """Copy the frozen ground-truth rows and preserve their block layout."""
+    return slice_ground_truth(src, dst, start, count)
 
 
 def result_rows(o):
@@ -234,9 +200,9 @@ def run(binary, out, tag, queries, gt, prefix, data_type, distance, ivf, cfg):
 
 def aggregate(reps):
     out = {}
-    for l in LS:
-        rs = [r for rr in reps for r in rr if int(r["search_l"]) == l]
-        out[str(l)] = {
+    for search_width in LS:
+        rs = [r for rr in reps for r in rr if int(r["search_l"]) == search_width]
+        out[str(search_width)] = {
             "recall_percent": float(np.mean([float(r["recall"]) for r in rs])),
             "mean_ios": float(np.mean([float(r["mean_ios"]) for r in rs])),
             "latency_us": float(np.median([float(r["mean_latency"]) for r in rs])),
@@ -249,8 +215,8 @@ def aggregate(reps):
 
 def aggregate_stats(reps):
     out = {}
-    for l in LS:
-        rows = [x[str(l)] for x in reps]
+    for search_width in LS:
+        rows = [x[str(search_width)] for x in reps]
         d = {k: float(np.mean([r[k] for r in rows])) for k in STAT_KEYS}
         d["writes_per_query"] = d["writes"] / 5000.0
         d["eval_writes_per_query"] = d["eval_writes"] / 1000.0
@@ -263,22 +229,24 @@ def aggregate_stats(reps):
         d["final_mean_page_occupancy"] = (
             d["final_page_slots"] / d["persisted_hubs"] if d["persisted_hubs"] else 0.0
         )
-        out[str(l)] = d
+        out[str(search_width)] = d
     return out
 
 
 def mono(s):
+    """Keep nondecreasing recall points in the frozen search-width order."""
     out = []
     best = -1e99
-    for l in LS:
-        r = s[str(l)]["recall_percent"]
+    for search_width in LS:
+        r = s[str(search_width)]["recall_percent"]
         if r + 1e-9 >= best:
-            out.append((r, s[str(l)]))
+            out.append((r, s[str(search_width)]))
             best = max(best, r)
     return out
 
 
 def interp(s, t, f):
+    """Interpolate one recorded cost field without extending recall support."""
     p = mono(s)
     if not p or t < p[0][0] or t > p[-1][0]:
         return None
@@ -291,12 +259,12 @@ def interp(s, t, f):
 
 def matched(summary):
     rows = []
-    for l in LS:
-        target = summary["full"][str(l)]["recall_percent"]
-        row = {"sample2_L": l, "recall_percent": target}
+    for search_width in LS:
+        target = summary["full"][str(search_width)]["recall_percent"]
+        row = {"sample2_L": search_width, "recall_percent": target}
         for ref in ("baseline", "ivf", "core"):
-            fio = summary["full"][str(l)]["mean_ios"]
-            fla = summary["full"][str(l)]["latency_us"]
+            fio = summary["full"][str(search_width)]["mean_ios"]
+            fla = summary["full"][str(search_width)]["latency_us"]
             rio = interp(summary[ref], target, "mean_ios")
             rla = interp(summary[ref], target, "latency_us")
             if rio is not None and rla is not None:
@@ -311,7 +279,7 @@ def matched(summary):
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__)
     for n in ("binary", "dataset-manifest", "index-prefix", "ivf", "work", "out"):
         ap.add_argument("--" + n, type=Path, required=True)
     ap.add_argument("--reps", type=int, default=3)

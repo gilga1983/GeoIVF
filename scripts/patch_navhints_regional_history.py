@@ -1,21 +1,17 @@
 #!/usr/bin/env python3
-"""Exploratory NavHints routing-cache locality ablation on pinned DiskANN3.
+"""Install destination-history selection and multiple starts in pinned DiskANN.
 
-Run AFTER patch_diskann_hint_ivf_packed_direct.py and
-patch_diskann_experience_core.py. Does not modify graph, junction directory,
-PQ algorithm, search width, or the optional persistent-hub mechanism.
+Apply after the junction-selector and experience-controller patches. The
+paper replay selects global unique FIFO with DISKANN_LOCAL_CACHE_MODE=fifo,
+C=2,048 IDs and DISKANN_LOCAL_RECENT_STARTS=8. Duplicate destinations do not
+refresh FIFO age; feedback becomes visible only after the query completes.
 
-Policies:
-* fifo: original globally unique Recent512 FIFO (default, exact control).
-* lru: same global IDs, but refreshing duplicates changes eviction order.
-* region_lru: winners are remembered by the selected Hint-IVF coarse region;
-  candidate regions are chosen by the ALREADY SCORED PQ coarse representatives.
-  Region buckets share one global item budget and evict the oldest timestamp,
-  rather than preallocating a fixed number to every region.
-
-User-space HashMap/Vec metadata and timestamps currently increase real RSS;
-B*4 is only a payload accounting convention. This patch is a MECHANISM
-experiment, not a publication-grade RAM-equality or latency implementation.
+The provider patch PQ-scores candidates and offers the best distinct starts
+to the existing frontier. The benchmark patch owns history updates. Alternative
+lru and region_lru modes support controlled experiments; they do not define
+the selected paper configuration. Graph edges, search width and termination
+remain with the original engine. Payload accounting excludes container and
+allocator overhead, so it must not be interpreted as measured process RSS.
 """
 import argparse
 from pathlib import Path

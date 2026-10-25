@@ -77,7 +77,6 @@ def lloyd_spherical(x: np.ndarray, k: int, iterations: int, batch: int, seed: in
     for _ in range(iterations):
         assign = assign_batched(x, centers, batch)
         new_centers = np.empty_like(centers)
-        counts = np.bincount(assign, minlength=k)
         for c in range(k):
             members = x[assign == c]
             if len(members) == 0:

@@ -22,7 +22,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class MaintainedRepository(unittest.TestCase):
     def test_local_script_imports_resolve(self):
-        prefixes = ("patch_", "qualify_", "summarize_", "learn_", "prepare_", "build_")
+        prefixes = (
+            "patch_",
+            "qualify_",
+            "summarize_",
+            "learn_",
+            "prepare_",
+            "build_",
+            "navhints_",
+        )
         for path in (ROOT / "scripts").glob("*.py"):
             tree = ast.parse(path.read_text(), filename=str(path))
             for node in ast.walk(tree):

@@ -13,6 +13,8 @@ on:
       - "README.md"
       - "Makefile"
       - "requirements.txt"
+      - "requirements-dev.txt"
+      - "pyproject.toml"
       - "CITATION.cff"
       - ".github/workflows/navhints-repro-smoke.yml"
   pull_request:
@@ -25,6 +27,8 @@ on:
       - "README.md"
       - "Makefile"
       - "requirements.txt"
+      - "requirements-dev.txt"
+      - "pyproject.toml"
       - "CITATION.cff"
       - ".github/workflows/navhints-repro-smoke.yml"
   workflow_dispatch:

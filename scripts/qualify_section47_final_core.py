@@ -2,7 +2,12 @@
 """Section 4.7: selected final Core vs competitor RAM allocation, matched recall.
 Only B=14464,C=2048,k=8 is a NavHints reference; never replay retired Core.
 """
-import argparse, fcntl, json, os, subprocess, struct
+import argparse
+import fcntl
+import json
+import os
+import subprocess
+import struct
 from pathlib import Path
 import numpy as np
 from qualify_final_core_public import slice_xbin, slice_gt, result_rows, aggregate, LS
@@ -199,7 +204,6 @@ def main():
     )
     if a.qsev_binary:
         methods += ["qsev-" + str(x) for x in qcounts]
-    warm = out / "heldout5000.input"
     meas = out / "measured1000.input"
     # Public and PubMed manifest provide exactly a disjoint 5,000-request replay.
     rows, dim2 = struct.unpack("<II", q.open("rb").read(8))
@@ -208,7 +212,6 @@ def main():
     slice_xbin(q, meas, 4000, 1000, 4 if a.data_type == "float32" else 1)
     mgt = out / "measured1000.gt"
     slice_gt(gt, mgt, 4000, 1000)
-    binaries = {"core": a.core_binary}
     results = {k: [] for k in methods}
     allowed = sorted(os.sched_getaffinity(0))
     os.sched_setaffinity(0, set(allowed[:4]))

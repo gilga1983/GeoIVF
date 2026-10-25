@@ -88,6 +88,9 @@ remain a separate layer, documented in `docs/REPRODUCIBILITY.md`.
 
 ## Directory map
 
+For a source-level walkthrough, patch-layer order, archived identifier meanings
+and contributor checks, see [CODE_GUIDE.md](docs/CODE_GUIDE.md).
+
 - [`scripts/patch_diskann_hint_ivf_packed_direct.py`](scripts/patch_diskann_hint_ivf_packed_direct.py), [`scripts/patch_diskann_experience_core.py`](scripts/patch_diskann_experience_core.py), [`scripts/patch_navhints_regional_history.py`](scripts/patch_navhints_regional_history.py): final DiskANN routing and online/persistent state patches, applied to the pinned Microsoft checkout.
 - [`scripts/learn_global_navigation_landmarks.py`](scripts/learn_global_navigation_landmarks.py), [`scripts/learn_navhints_generic.py`](scripts/learn_navhints_generic.py), [`scripts/build_hint_ivf.py`](scripts/build_hint_ivf.py), [`scripts/build_hint_ivf_generic.py`](scripts/build_hint_ivf_generic.py): workload-trained junctions and compact PQ-region layout.
 - [`scripts/qualify_final_core_public.py`](scripts/qualify_final_core_public.py), [`scripts/qualify_final_core_coveo.py`](scripts/qualify_final_core_coveo.py) and their `run_final_core_*_ci.sh` scripts: reproducible, four-arm, causal frozen evaluations.

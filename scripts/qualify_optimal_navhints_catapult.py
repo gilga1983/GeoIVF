@@ -12,7 +12,11 @@ repetitions, Catapult seeds 0/1/2, matched Recall@10 without extrapolation.
 The author's original in-memory graph search is NOT being benchmarked.
 """
 from pathlib import Path
-import argparse, os, json, hashlib, statistics
+import argparse
+import os
+import json
+import hashlib
+import statistics
 
 from qualify_navhints_catapult_headtohead import (
     run_one,
@@ -27,8 +31,6 @@ from qualify_navhints_catapult_headtohead import (
     HASH_BITS,
     CATAPULT_CAPACITY,
     SEARCH_THREADS,
-    BEAM,
-    K,
 )
 
 LS = (10, 12, 20, 24, 40, 80, 120, 160, 200, 240, 280, 320)
@@ -46,7 +48,7 @@ def save(p, obj):
 
 def monotone(curve):
     ordered = sorted(
-        ({"L": int(l), **v} for l, v in curve.items()),
+        ({"L": int(search_width), **v} for search_width, v in curve.items()),
         key=lambda x: (x["recall"], x["reads"]),
     )
     out = []
@@ -87,10 +89,14 @@ def summarize(measured, repetitions):
     curves = {}
     for rep in range(repetitions):
         for arm in NAV_ARMS:
-            curves[rep, arm] = {str(l): measured[f"r{rep}-L{l}-{arm}"] for l in LS}
+            curves[rep, arm] = {
+                str(search_width): measured[f"r{rep}-L{search_width}-{arm}"]
+                for search_width in LS
+            }
         for seed in SEEDS:
             curves[rep, f"cat-s{seed}"] = {
-                str(l): measured[f"r{rep}-L{l}-cat-s{seed}"] for l in LS
+                str(search_width): measured[f"r{rep}-L{search_width}-cat-s{seed}"]
+                for search_width in LS
             }
     report = []
     for L in LS:

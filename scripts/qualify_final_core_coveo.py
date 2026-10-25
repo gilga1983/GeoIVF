@@ -6,17 +6,20 @@ import argparse
 import fcntl
 import json
 import os
-import struct
 import subprocess
 from pathlib import Path
 
 import numpy as np
+
+from navhints_io import read_xbin_shape, slice_ground_truth, slice_vectors
 
 THREADS = 4
 BEAM = 8
 K = 10
 LS = (10, 20, 40, 80, 160, 320)
 METHODS = ("baseline", "ivf", "core", "full")
+# Method keys are frozen result-schema identifiers: ivf=junction-only,
+# core=RAM-only NavHints, full=Core plus optional sampled page exits.
 CFG = {
     "baseline": {
         "ivf": False,
@@ -84,58 +87,19 @@ def save(p, o):
     p.write_text(json.dumps(o, indent=2) + "\n")
 
 
-def xshape(p):
-    with p.open("rb") as f:
-        raw = f.read(8)
-    if len(raw) != 8:
-        raise ValueError(f"bad xbin header: {p}")
-    return struct.unpack("<II", raw)
+def xshape(path: Path) -> tuple[int, int]:
+    """Return the original binary shape; retained for replay-helper imports."""
+    return read_xbin_shape(path)
 
 
 def slice_xbin(src, dst, start, count, itemsize=4):
-    rows, dim = xshape(src)
-    if start < 0 or count <= 0 or start + count > rows:
-        raise ValueError("bad xbin slice")
-    with src.open("rb") as fi, dst.open("wb") as fo:
-        fi.seek(8 + start * dim * itemsize)
-        fo.write(struct.pack("<II", count, dim))
-        rem = count * dim * itemsize
-        while rem:
-            b = fi.read(min(16 << 20, rem))
-            if not b:
-                raise ValueError("truncated xbin")
-            fo.write(b)
-            rem -= len(b)
+    """Copy the requested replay vectors without changing their element bytes."""
+    return slice_vectors(src, dst, start, count, itemsize)
 
 
 def slice_gt(src, dst, start, count):
-    with src.open("rb") as f:
-        raw = f.read(8)
-    if len(raw) != 8:
-        raise ValueError("bad GT header")
-    rows, k = struct.unpack("<II", raw)
-    if start < 0 or count <= 0 or start + count > rows:
-        raise ValueError("bad GT slice")
-    row_bytes = k * 4
-    ids_bytes = rows * row_bytes
-    with src.open("rb") as fi, dst.open("wb") as fo:
-        fo.write(struct.pack("<II", count, k))
-        fi.seek(8 + start * row_bytes)
-        rem = count * row_bytes
-        while rem:
-            b = fi.read(min(8 << 20, rem))
-            if not b:
-                raise ValueError("truncated GT ids")
-            fo.write(b)
-            rem -= len(b)
-        fi.seek(8 + ids_bytes + start * row_bytes)
-        rem = count * row_bytes
-        while rem:
-            b = fi.read(min(8 << 20, rem))
-            if not b:
-                raise ValueError("truncated GT distances")
-            fo.write(b)
-            rem -= len(b)
+    """Copy the frozen ground-truth rows and preserve their block layout."""
+    return slice_ground_truth(src, dst, start, count, require_distances=True)
 
 
 def result_rows(o):
@@ -239,9 +203,9 @@ def run(binary, out, tag, queries, gt, prefix, ivf, cfg, warmup_rows):
 
 def aggregate(reps):
     out = {}
-    for l in LS:
-        rs = [r for rr in reps for r in rr if int(r["search_l"]) == l]
-        out[str(l)] = {
+    for search_width in LS:
+        rs = [r for rr in reps for r in rr if int(r["search_l"]) == search_width]
+        out[str(search_width)] = {
             "recall_percent": float(np.mean([float(r["recall"]) for r in rs])),
             "mean_ios": float(np.mean([float(r["mean_ios"]) for r in rs])),
             "latency_us": float(np.median([float(r["mean_latency"]) for r in rs])),
@@ -255,8 +219,8 @@ def aggregate(reps):
 
 def aggregate_stats(reps, replay_rows, eval_rows):
     out = {}
-    for l in LS:
-        rows = [x[str(l)] for x in reps]
+    for search_width in LS:
+        rows = [x[str(search_width)] for x in reps]
         d = {k: float(np.mean([r[k] for r in rows])) for k in STAT_KEYS}
         d["writes_per_query"] = d["writes"] / replay_rows
         d["eval_writes_per_query"] = d["eval_writes"] / eval_rows
@@ -266,22 +230,24 @@ def aggregate_stats(reps, replay_rows, eval_rows):
         d["final_mean_page_occupancy"] = (
             d["final_page_slots"] / d["persisted_hubs"] if d["persisted_hubs"] else 0.0
         )
-        out[str(l)] = d
+        out[str(search_width)] = d
     return out
 
 
 def mono(s):
+    """Keep nondecreasing recall points in the frozen search-width order."""
     out = []
     best = -1e99
-    for l in LS:
-        r = s[str(l)]["recall_percent"]
+    for search_width in LS:
+        r = s[str(search_width)]["recall_percent"]
         if r + 1e-9 >= best:
-            out.append((r, s[str(l)]))
+            out.append((r, s[str(search_width)]))
             best = max(best, r)
     return out
 
 
 def interp(s, t, f):
+    """Interpolate one recorded cost field without extending recall support."""
     p = mono(s)
     if not p or t < p[0][0] or t > p[-1][0]:
         return None
@@ -294,11 +260,11 @@ def interp(s, t, f):
 
 def matched(summary, anchor="full"):
     rows = []
-    for l in LS:
-        target = summary[anchor][str(l)]["recall_percent"]
+    for search_width in LS:
+        target = summary[anchor][str(search_width)]["recall_percent"]
         row = {
             "anchor": anchor,
-            "anchor_L": l,
+            "anchor_L": search_width,
             "recall_percent": target,
             "comparisons": {},
         }
@@ -308,8 +274,8 @@ def matched(summary, anchor="full"):
             if rio is None or rla is None:
                 row["comparisons"][ref] = {"available": False}
                 continue
-            aio = summary[anchor][str(l)]["mean_ios"]
-            ala = summary[anchor][str(l)]["latency_us"]
+            aio = summary[anchor][str(search_width)]["mean_ios"]
+            ala = summary[anchor][str(search_width)]["latency_us"]
             row["comparisons"][ref] = {
                 "available": True,
                 "io_saving_percent": 100 * (1 - aio / rio),
@@ -341,7 +307,7 @@ def mean_comparison(rows, ref):
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__)
     for n in (
         "binary",
         "dataset-manifest",
@@ -373,8 +339,7 @@ def main():
     replay_rows = warmup + eval_rows
     if xshape(replay)[0] != replay_rows:
         raise ValueError("replay rows do not match manifest")
-    with args.replay_gt.open("rb") as f:
-        gt_rows, _ = struct.unpack("<II", f.read(8))
+    gt_rows, _ = read_xbin_shape(args.replay_gt)
     if gt_rows != replay_rows:
         raise ValueError("GT rows do not match replay")
 

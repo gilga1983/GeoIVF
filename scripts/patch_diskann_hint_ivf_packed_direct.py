@@ -1,20 +1,16 @@
 #!/usr/bin/env python3
-"""Patch pinned DiskANN with direct-batch packed-coarse + pooled-fine the pooled-batch ID-only Hint-IVF path.
+"""Install learned-junction selection in DiskANN's resident-PQ search accessor.
 
-Compared with patch_diskann_hint_ivf.py, this implementation is deliberately
-specialized for the paper's one-start NavHints design:
+This layer chooses one junction from the compact regional directory. The
+experience and destination-history patches add causal recent destinations;
+complete replay scripts apply all three layers in that order.
 
-* Hint routing happens inside DiskANN's SearchAccessor, so the query PQ lookup
-  table is prepared once and reused by both Hint-IVF and graph traversal.
-* The Hint-IVF file is structurally validated once at load time, and ID ranges
-  are validated once after the DiskANN searcher is constructed.
-* Per-query routing performs no full vocabulary validation.
-* Coarse routing keeps only the best nprobe cells in a fixed stack buffer.
-* Selected buckets are PQ-scored directly, without concatenating their IDs.
-* With one deployed start, the selector tracks only the best hint rather than
-  materializing and sorting the complete fine candidate set.
-
-No full vectors, copied PQ codes, adjacency lists, or auxiliary graph are kept.
+The query PQ lookup table is shared with ordinary graph traversal. Coarse
+selection keeps the best nprobe regions in a fixed buffer, and selected
+buckets are scored directly without materializing the complete candidate set.
+Directory structure and ID ranges are checked when the index loads rather
+than on every query. Additional state consists of IDs, group offsets and
+compact representative PQ codes; full vectors remain in the original index.
 """
 from __future__ import annotations
 

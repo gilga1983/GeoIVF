@@ -20,7 +20,8 @@ def require(label, s, fragment):
 
 
 def audit(author, ported, patched=None):
-    assert (author / "src/search/adjacency_graph.rs").is_file()
+    if not (author / "src/search/adjacency_graph.rs").is_file():
+        raise FileNotFoundError(f"Expected a Catapult author source checkout: {author}")
     src = (author / "src/search/adjacency_graph.rs").read_text()
     orig_hasher = (author / "src/search/hash_start/hyperplane_hasher.rs").read_text()
     orig_starter = (author / "src/search/hash_start/engine_starter.rs").read_text()
@@ -30,7 +31,11 @@ def audit(author, ported, patched=None):
     author_sha = subprocess.check_output(
         ["git", "-C", str(author), "rev-parse", "HEAD"], text=True
     ).strip()
-    assert author_sha == "a16eddd34b4339db5ec86e292470ce7929179bc3", author_sha
+    expected_sha = "a16eddd34b4339db5ec86e292470ce7929179bc3"
+    if author_sha != expected_sha:
+        raise ValueError(
+            f"Catapult source revision mismatch: expected {expected_sha}, found {author_sha}"
+        )
 
     requirements = {
         "author_has_random_hyperplane_LSH": (

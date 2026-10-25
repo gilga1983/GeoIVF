@@ -6,11 +6,13 @@ with/without empty-slot seeding at the SAME SSD/index, heldout queries and
 training prefix. Three repeated rotated methods, warm=4000, eval=1000.
 The write counts are logical controller requests, not physical amplification.
 """
-import argparse, fcntl, json, os, statistics
+import argparse
+import fcntl
+import json
+import os
+import statistics
 from pathlib import Path
 from qualify_final_core_public import (
-    K,
-    BEAM,
     THREADS,
     LS,
     run,

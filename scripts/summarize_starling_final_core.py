@@ -11,7 +11,6 @@ Starling counters; three reps are repeats of one query stream.
 import csv
 import json
 from pathlib import Path
-import re
 import statistics
 import sys
 
@@ -69,32 +68,37 @@ def curve(rows, rep, mode, Ls):
     pts = sorted(
         (
             (
-                rows[f"r{rep}-{mode}-L{l}"]["recall"],
-                rows[f"r{rep}-{mode}-L{l}"]["ios"],
-                l,
-                rows[f"r{rep}-{mode}-L{l}"]["total_us"],
+                rows[f"r{rep}-{mode}-L{search_width}"]["recall"],
+                rows[f"r{rep}-{mode}-L{search_width}"]["ios"],
+                search_width,
+                rows[f"r{rep}-{mode}-L{search_width}"]["total_us"],
             )
-            for l in Ls
+            for search_width in Ls
         ),
         key=lambda z: (z[0], z[1]),
     )
     # Remove same-recall ties; never extrapolate.
     out = []
-    for rec, io, l, lat in pts:
+    for rec, io, search_width, lat in pts:
         if out and abs(rec - out[-1][0]) < 1e-9:
             if io < out[-1][1]:
-                out[-1] = (rec, io, l, lat)
+                out[-1] = (rec, io, search_width, lat)
         else:
-            out.append((rec, io, l, lat))
+            out.append((rec, io, search_width, lat))
     return out
 
 
 def matched(points, target):
     if target < points[0][0] - 1e-9 or target > points[-1][0] + 1e-9:
         return None
-    for rec, io, l, lat in points:
+    for rec, io, search_width, lat in points:
         if abs(rec - target) < 1e-9:
-            return {"reads": io, "latency_us": lat, "low_L": l, "high_L": l}
+            return {
+                "reads": io,
+                "latency_us": lat,
+                "low_L": search_width,
+                "high_L": search_width,
+            }
     for (r0, i0, l0, t0), (r1, i1, l1, t1) in zip(points, points[1:]):
         if r0 < target < r1:
             x = (target - r0) / (r1 - r0)

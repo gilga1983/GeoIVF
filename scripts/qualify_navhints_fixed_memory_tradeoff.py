@@ -19,7 +19,6 @@ import json
 import hashlib
 import os
 import re
-import statistics
 from pathlib import Path
 
 from qualify_navhints_catapult_headtohead import (

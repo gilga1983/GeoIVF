@@ -1,22 +1,17 @@
 #!/usr/bin/env python3
-"""Add the consolidated causal experience controller to DiskANN.
+"""Install causal destination feedback and optional page exits in DiskANN.
 
-Apply after patch_diskann_hint_ivf_packed_direct.py. This core patch deliberately
-does not use vertex-associated data or the retired support-2 continuation path.
+Apply after patch_diskann_hint_ivf_packed_direct.py. This layer owns the
+successful-result ID history and its post-query updates. The following
+patch_navhints_regional_history.py layer supplies the selected FIFO provider
+and multiple PQ-ranked starts; replay scripts explicitly configure the
+paper's B<=14,464 junctions, C=2,048 destinations and k=8 extra starts.
 
-Controller:
-  * Hint-IVF 16K chooses the normal learned entry hub.
-  * A unique FIFO value cache stores recent successful result IDs and the hub
-    that produced them. The best cached ID is PQ-scored as a second start.
-  * Persisted hub pages hold up to H successful winner IDs. When the selected
-    hub page is expanded, those IDs are PQ-scored as middle-of-search shortcuts.
-  * After completion, rank-1 is learned causally for the selected hub and cache.
-
-Hub writes are modeled explicitly. Direct per-hub evidence is protected. On a
-flush, spare page slots may be packed with the newest same-hub winners currently
-resident in the value cache. Later direct evidence replaces filler on rewrite.
-Only the persisted page image participates in hub routing; unflushed direct
-evidence remains a write-buffer state and cannot shortcut traversal.
+Optional persistent exits store successful destination IDs in selected
+junction pages. They remain a separate experimental arm and are disabled in
+the headline RAM-only Core. Only persisted page images supply page exits;
+unflushed feedback cannot shortcut a search. Update counters describe logical
+page requests, not physical NAND writes or a crash-consistent storage engine.
 """
 from __future__ import annotations
 

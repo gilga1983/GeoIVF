@@ -117,7 +117,7 @@ def archive_checks(z: zipfile.ZipFile, public_digests: dict[str, str]) -> dict:
     require(
         len(sources) >= len(public_digests), "review ZIP missing recorded experiments"
     )
-    retain = {}
+    retained_members: set[str] = set()
     source_digests = set()
     for source in sources:
         digest = source["original_zip_sha256"]
@@ -131,7 +131,7 @@ def archive_checks(z: zipfile.ZipFile, public_digests: dict[str, str]) -> dict:
                 f"unexpected result path: {name}",
             )
             require(
-                name in names and name not in retain,
+                name in names and name not in retained_members,
                 f"missing or duplicated result: {name}",
             )
             payload = z.read(name)
@@ -141,17 +141,17 @@ def archive_checks(z: zipfile.ZipFile, public_digests: dict[str, str]) -> dict:
                 f"{name}: checksum mismatch",
             )
             json.loads(payload)
-            retain[name] = True
+            retained_members.add(name)
     require(
         public_digests.keys() <= source_digests,
         "review ZIP omits publicly manifested sources",
     )
     require(
-        len(retain) == manifest["results_members"],
+        len(retained_members) == manifest["results_members"],
         "result count does not match manifest",
     )
     require(
-        all(name in retain for name in names if name.startswith("evidence/")),
+        all(name in retained_members for name in names if name.startswith("evidence/")),
         "unmanifested result payload found",
     )
     return manifest
@@ -164,6 +164,8 @@ def curve(rows: dict) -> list[tuple[float, float]]:
 
 
 def interpolate(points: list[tuple[float, float]], target: float) -> float | None:
+    """Interpolate measured costs inside common recall support; never extrapolate."""
+    require(bool(points), "Cannot interpolate an empty recall/cost curve")
     if target < points[0][0] - 1e-7 or target > points[-1][0] + 1e-7:
         return None
     for a, b in points:
@@ -183,6 +185,7 @@ def approx(actual: float, expected: float, limit: float, label: str) -> None:
 
 
 def primary(z: zipfile.ZipFile, summary: dict) -> None:
+    """Check Core-anchored read savings using each workload's original target grid."""
     lookup = {x["dataset"]: x for x in summary["headline_results"]}
     for key, (label, basename) in DATASETS.items():
         result = json.loads(z.read(f"evidence/{key}/{basename}"))
@@ -226,6 +229,7 @@ def pareto(points: list[dict]) -> list[tuple[float, float]]:
 
 
 def latency(z: zipfile.ZipFile, summary: dict) -> None:
+    """Match recall per repetition/seed before averaging complete-request savings."""
     lookup = {x["dataset"]: x for x in summary["headline_results"]}
     for key, (basename, wanted_targets) in SERVICE.items():
         data = json.loads(z.read(f"evidence/service-{key}/{basename}"))
@@ -264,8 +268,8 @@ def latency(z: zipfile.ZipFile, summary: dict) -> None:
                         value = interpolate(points(rep, actual), target)
                         if value is not None:
                             measurements_at_recall.append(value)
-                require_or_skip = reps * (len(seeds) if arm == "catapult" else 1)
-                if len(measurements_at_recall) != require_or_skip:
+                expected_measurements = reps * (len(seeds) if arm == "catapult" else 1)
+                if len(measurements_at_recall) != expected_measurements:
                     break
                 costs[arm] = statistics.mean(measurements_at_recall)
             if len(costs) == 3:

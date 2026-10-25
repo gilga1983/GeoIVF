@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Generate first-time PubMed or Text2Image native Starling final-Core benchmark.
+"""Generate the PubMed or Text2Image native-Starling paper replay.
 
-Inherits the *validated* original-author Starling pipeline and exact source
-patch sequence of generate_starling_final_core.py bigann. The only changed
-inputs are the native float32/MIPS dataset, index identity, split, and L grid.
-Coveo/BigANN published native experiments are never rerun.
+Compose the pinned author-engine source transformations used by the four
+workload comparison. Relative to the shared BigANN template, this generator
+selects the frozen float32/MIPS inputs, index identity, query split and L grid.
+Generation writes and syntax-checks a shell script. Only --run executes the
+physical benchmark; generating a script never reruns another dataset.
 """
 from __future__ import annotations
 from pathlib import Path

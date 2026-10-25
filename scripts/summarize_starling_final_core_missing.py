@@ -8,7 +8,8 @@ Do not extrapolate missing 97/98 Recall@10 measurements.
 """
 from __future__ import annotations
 from pathlib import Path
-import json, sys
+import json
+import sys
 from summarize_starling_final_core import analyze, markdown
 import summarize_starling_final_core as native
 

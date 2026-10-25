@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Controlled workload-locality sweep for frozen NavHints."""
 from __future__ import annotations
-import argparse, fcntl, json, os, struct, subprocess
+import argparse
+import fcntl
+import json
+import os
+import struct
+import subprocess
 from pathlib import Path
 import numpy as np
 

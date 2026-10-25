@@ -5,7 +5,9 @@ Source patches are applied to a temporary original pinned Starling checkout,
 preserving original native index, page layout, memory navigator and search.
 """
 from pathlib import Path
-import argparse, os, subprocess
+import argparse
+import os
+import subprocess
 
 
 def one(s, old, new, label):
