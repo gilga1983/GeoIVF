@@ -1,3 +1,5 @@
+> Historical audit. Superseded by [the 25 October release status](RELEASE-READINESS-2026-10-25.md).
+
 # NavHints artifact release status (October 17, 2026)
 
 This public repository is the code and reproducibility entry point for the

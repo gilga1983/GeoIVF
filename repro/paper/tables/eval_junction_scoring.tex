@@ -1,0 +1,23 @@
+% RQ2 score-only junction ranking, verified frozen real-SSD artifacts:
+% Coveo B=8192: GeoIVF 38533263735, artifact 11882657623.
+% PubMed B=14464: GeoIVF 38525797031, artifact 11875829581.
+% T2I-10M B=14464: GeoIVF 38533263735, artifact 11883762091.
+% BigANN-10M B=14464: GeoIVF 38529130742, artifact 11878486519.
+% Three order-rotated repetitions; selected sum-score reference reproduced.
+\begin{table}[t]
+\centering
+\caption{\textbf{Junction-ranking sensitivity.} Mean matched-recall SSD-read savings of the sum-of-expansion-positions score over visit frequency or mean position. Positive values favor this score. Coveo uses a binding $B=8{,}192$; other workloads use $B=14{,}464$.}
+\label{tab:eval-junction-scoring}
+\small
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Workload & $B$ & Targets & vs.\ frequency & vs.\ mean pos. \\
+\midrule
+Coveo & 8,192 & 6 & +1.05\% & +0.89\% \\
+PubMed & 14,464 & 4 & $-$0.09\% & $-$0.03\% \\
+T2I-10M & 14,464 & 5 & +0.52\% & +0.14\% \\
+BigANN-10M & 14,464 & 5 & +0.28\% & +1.07\% \\
+\bottomrule
+\end{tabular}
+\end{table}

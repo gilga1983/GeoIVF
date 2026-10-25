@@ -1,8 +1,8 @@
 # NavHints: Demand-Aware Navigation for Disk-Resident Vector Search
 
-**Reproducible code and experiment harness for the NavHints PVLDB/VLDB 2027 paper.** This is the code repository, historically named GeoIVF. The manuscript and figures live separately in [gilga1983/DemmandAwareANN](https://github.com/gilga1983/DemmandAwareANN).
+**Code, reviewer evidence and experiment harness for the NavHints PVLDB/VLDB 2027 paper.** This is the code repository, historically named GeoIVF. All reviewer quickstart commands and standalone plot exports work from this public checkout. The authoring manuscript is maintained separately.
 
-**For artifact reviewers:** start with [ARTIFACT_QUICKSTART.md](docs/ARTIFACT_QUICKSTART.md) and the [paper-to-evidence map](docs/ARTIFACT_MAP.md). This public repository includes the selected RAM-only algorithm, source-fidelity tests, causal SSD replays and immutable evidence provenance. A lightweight, data-minimized numerical reviewer package has been prepared separately but awaits redistribution approval and durable public hosting. The original GitHub Actions artifacts will expire; their SHA-256-verified original bytes have been preserved privately. See [release readiness](docs/RELEASE-READINESS-2026-10-17.md).
+**For artifact reviewers:** start with [ARTIFACT_QUICKSTART.md](docs/ARTIFACT_QUICKSTART.md) and the [paper-to-evidence map](docs/ARTIFACT_MAP.md). The [bundled evidence ZIP](repro/navhints-reviewer-evidence.zip) contains 48 aggregate JSON outputs from 35 original experiment archives, including both Table 5 studies. Its SHA-256 is frozen in [the release record](repro/release-20261025.json). Original raw archives are preserved separately. See [current release status](docs/RELEASE-READINESS-2026-10-25.md) and [review/reproduction permissions](LICENSE).
 
 This `main` branch contains the **final** NavHints Core implementation, source-fidelity checks for competing methods, training scripts, four-dataset SSD replays, optional persistent-exit experiments, and an adapter for the **original** Starling library. Exploratory alternatives remain in their Git branches. The original page-oriented GeoIVF implementation is still present; its previous usage guide is [docs/LEGACY_GEOIVF.md](docs/LEGACY_GEOIVF.md). It is **not** the NavHints paper algorithm.
 
@@ -20,17 +20,24 @@ cd GeoIVF
 python3 -m unittest discover -s tests -p 'test_navhints_repro.py' -v
 python3 -m unittest discover -s tests -p 'test_navhints_artifact.py' -v
 python3 repro/run.py review
-# If you have the separate, approved sanitized reviewer ZIP:
-python3 repro/run.py review --bundle /path/to/NavHints-reviewer-bundle.zip
+python3 repro/run.py review --bundle repro/navhints-reviewer-evidence.zip
+python3 repro/export_paper_results.py --output artifacts/paper
 ```
 
-The manifest-only command verifies 30 original experiment provenance records;
+The manifest-only command verifies 32 required experiment provenance records;
 the bundle command checks each aggregate JSON's SHA-256 and independently
 recomputes the headline read savings, full-request latency, Figure 8 and
-junction-scoring results at the original matched-recall grids. **Neither
+junction-scoring results and every Table 5 row at the original matched-recall grids. **Neither
 command downloads datasets, invokes a simulator, compiles DiskANN, or touches
-the SSD.** It does not claim the numerical ZIP has already been publicly
-archived. The complete experiment, hardware and data requirements are below.
+the SSD.** The plot exporter regenerates 20 plotted CSVs, checks their numerical agreement with the frozen manuscript, and prepares the eight figures and nine tables without the private manuscript repository. Rendering the sheet requires pdfLaTeX, TikZ/PGFPlots, booktabs and multirow:
+
+```bash
+cd artifacts/paper
+pdflatex -interaction=nonstopmode -halt-on-error figures.tex
+pdflatex -interaction=nonstopmode -halt-on-error figures.tex
+```
+
+These are checks of recorded measurements. Full physical experiment, hardware and data requirements are below.
 
 ## Activate and reproduce
 
@@ -66,22 +73,18 @@ navhints run pubmed --execute    # HEAVY: pinned index, causal replays, real SSD
 
 The original workflows are available in [`.github/workflows/`](.github/workflows/) with `workflow_dispatch`. They are **self-hosted only** (`[self-hosted, linux, x64, geoivf]`) and should not be run simultaneously against the same NVMe device. Use `doctor` first and confirm the correct host, authorized data and free storage. The full source/hardware/data contract is in [docs/REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md).
 
-### Rebuild paper figures directly from frozen results
-
-To regenerate the **paper-specific TeX plots and tables** from original unmodified experiment archives, rather than only validate numerical results, obtain the checksum-verified original ZIPs from the approved archive or from GitHub Actions while available. The paper-specific scripts require an authorized checkout of the separate manuscript repository:
+### Regenerate figures from the public reviewer package
 
 ```bash
-source repro/activate.sh
-navhints fetch all             # Preview all 14 evidence downloads
-navhints fetch all --execute   # Requires gh CLI and GitHub authentication
-navhints verify all           # Validate all 14 ZIP contents and policy fields
-navhints_paper                 # Dry run: lists exact paper regeneration/build steps
-navhints_paper --execute       # Regenerates read/latency CSVs and tables, then checks LaTeX
+python3 repro/export_paper_results.py --output artifacts/paper
 ```
 
-Clone [the paper repository](https://github.com/gilga1983/DemmandAwareANN) beside GeoIVF as `../DemmandAwareANN` before running the final command. To build its PDF, install its pinned PVLDB 2027 template and local pdfLaTeX/BibTeX tools. The paper regeneration scripts **refuse missing or mismatched artifacts**, never impute values and never extrapolate outside the common recall interval. The `verify-latex` target does not overwrite the tracked PDF; the actual source and plots should be reviewed before preparing a submission PDF.
-
-For a machine without access to large datasets, the fourteen artifact ZIPs are enough for the plotting and prose audit, including the four-dataset complete-request latency subsection. With unmodified original Actions ZIPs, `navhints verify all --original-zip` additionally checks recorded SHA-256 hashes. Frozen original data/SSD graph binaries are **not** checked into Git. See [repro/manifest.json](repro/manifest.json) for engine SHAs, run IDs, artifact names, file layout and policy parameters.
+This is the supported public plotting path. It needs only this checkout and
+Python's standard library. See the quickstart for optional PDF rendering.
+The original manuscript's derivation scripts and 20 independent reference
+CSVs are bundled under `repro/paper/` with their source revision and hashes.
+The exact source archives and input datasets required for new SSD experiments
+remain a separate layer, documented in `docs/REPRODUCIBILITY.md`.
 
 ## Directory map
 

@@ -1,0 +1,25 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{Destination-history value and capacity on PubMed.} Matched-recall logical SSD-read savings relative to junction-only routing with a fixed 16K-junction directory. Each configuration selects one additional starting point. The upper block compares candidate sources with 512 PQ-scored IDs; the lower block varies destination-history capacity. Positive values indicate fewer reads.}
+\label{tab:eval-destinations}
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}lr@{}}
+\toprule
+Navigation history & I/O saving \\
+\midrule
+\multicolumn{2}{@{}l}{\textbf{Equal-work 512-ID control}} \\
+Random corpus IDs & $-0.90\%$ \\
+Reservoir of past destinations & $4.41\%$ \\
+Recent512 (unique FIFO) & $\mathbf{4.78\%}$ \\
+\midrule
+\multicolumn{2}{@{}l}{\textbf{Recent-destination capacity}} \\
+64 IDs & $1.64\%$ \\
+128 IDs & $2.77\%$ \\
+256 IDs & $3.50\%$ \\
+512 IDs (2\,KiB) & $\mathbf{4.78\%}$ \\
+1,024 IDs & $5.17\%$ \\
+2,048 IDs & $5.26\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}

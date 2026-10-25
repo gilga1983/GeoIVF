@@ -1,0 +1,19 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{Fixed-budget routing-memory allocation on PubMed.} Additional logical SSD reads relative to \sys at matched Recall@10 under the same 102,940-byte accounted routing budget. The first block varies the junction/history allocation with $k=8$; the final row varies $k$ at the reference allocation. Results average six common recall targets across three rotated replays; positive values favor \sys.}
+\label{tab:eval-core-reallocation}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}rrrc@{}}
+\toprule
+Junctions $B$ & Destinations $C$ & Starts $k$ & Extra reads \\
+\midrule
+\textbf{14,464} & \textbf{2,048} & \textbf{8} & \textbf{reference} \\
+15,488 & 1,024 & 8 & +6.62\% \\
+12,416 & 4,096 & 8 & +0.08\% \\
+8,320 & 8,192 & 8 & +0.16\% \\
+\midrule
+14,464 & 2,048 & 4 & +1.89\% \\
+\bottomrule
+\end{tabular}
+\end{table}

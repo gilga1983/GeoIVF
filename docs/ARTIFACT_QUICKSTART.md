@@ -1,79 +1,71 @@
-# NavHints: two-minute artifact review
+# NavHints: reviewer quickstart
 
-**Paper:** *NavHints: Demand-Aware Navigation for Disk-Resident Vector Search*
+**Paper:** NavHints: Demand-Aware Navigation for Disk-Resident Vector Search
 (regular research paper, PVLDB Volume 20 / VLDB 2027).
 
-**Public code:** https://github.com/gilga1983/GeoIVF
+**Public entry point:** https://github.com/gilga1983/GeoIVF
 
-## Fast source-level validation (no data or compiled dependencies)
+## Verify the recorded results
+
+Python 3.10+ and Git suffice. No package installation, private manuscript
+checkout, account login, dataset download or NVMe hardware is needed.
 
 ```bash
 git clone https://github.com/gilga1983/GeoIVF.git
 cd GeoIVF
 python3 -m unittest discover -s tests -p 'test_navhints_repro.py' -v
 python3 -m unittest discover -s tests -p 'test_navhints_artifact.py' -v
-python3 repro/run.py review
+python3 repro/run.py review --bundle repro/navhints-reviewer-evidence.zip
 ```
 
-This validates the exact selected NavHints controller, causal/no-download
-dry-run controls, original-source markers, and 30 immutable experiment
-provenance records (14 main + nine supplemental + seven additional). It uses
-only Python >=3.10 and standard-library packages. It does not access the
-network beyond the initial Git clone and does **not** run SSD workloads.
+Expected: 32 required original-archive provenance records; the public ZIP
+contains 35 source archives (three optional controls) and 48 checksummed
+aggregate JSON outputs. The verifier recomputes the headline four-workload
+read savings, four complete-request latency comparisons, all Figure 8
+observations, junction scoring, and every Table 5 source/capacity row.
+Table 5 values are recomputed from measured recall/read frontiers at six
+supported recall targets, including the negative random-ID control.
 
-## Paper result verification (requires reviewer ZIP)
+This is reproduction of numerical analysis from recorded measurements.
+It does not independently rerun the original SSD measurements.
 
-Obtain the separately approved *data-minimized reviewer evidence archive*
-from the artifact release. The original raw ZIPs are deliberately omitted
-from this reviewer candidate pending rights clearance. From the code checkout:
+## Regenerate plotted data and render figures
 
 ```bash
-python3 repro/run.py review --bundle /path/to/NavHints-PVLDB-evidence.zip
+python3 repro/export_paper_results.py --output artifacts/paper
+cd artifacts/paper
+pdflatex -interaction=nonstopmode -halt-on-error figures.tex
+pdflatex -interaction=nonstopmode -halt-on-error figures.tex
 ```
 
-The verifier first SHA-256-checks every included aggregate JSON member against
-its manifest, then computes the actual values underlying the paper's core
-read-saving bars, complete-request latency table, both Figure 8 panels and
-junction-ranking sensitivity table. It checks target counts and recall
-interpolation without extrapolation, and reports each dataset separately.
-On the frozen reviewer candidate this completes in seconds without extra
-Python dependencies, proprietary datasets, Linux or NVMe hardware.
+The Python step regenerates 20 plotted CSVs and verifies their agreement
+with the frozen manuscript reference values. It exports the destination
+controls, junction scoring, motivation curves and latency details as well.
+The TeX sheet uses the eight original figure sources and nine table sources;
+the table sources are pinned manuscript outputs, with numerical verification
+coverage distinguished in [ARTIFACT_MAP.md](ARTIFACT_MAP.md).
 
-**This does not reproduce the raw measurement process.** A source-independent
-real SSD rerun requires Linux, the original input datasets and query order,
-a pinned DiskANN/Starling checkout, Rust and a suitably isolated SSD.
+Only the optional PDF step needs TeX Live with TikZ/PGFPlots, booktabs,
+multirow, xspace, geometry and colortbl. The private paper repository is
+not required. Choose a new output path or use `--overwrite` for another export.
 
-## Native reproduction (optional, heavy)
+## Re-run physical experiments
 
 ```bash
 source repro/activate.sh
-navhints list
 navhints doctor --mode pubmed
-navhints run pubmed                  # inspect command, dry run
-navhints run pubmed --execute        # real pinned SSD experiment
+navhints run pubmed                  # command preview
+navhints run pubmed --execute        # real SSD experiment
 ```
 
-The original runner scripts are included. Never run overlapping latency
-benchmarks on the same device, and do not substitute unauthorized Coveo data.
-See [REPRODUCIBILITY.md](REPRODUCIBILITY.md) for the exact split paths,
-input formats, pinned dependencies, SSD isolation rules and method semantics.
+Full replay requires Linux, the pinned DiskANN/Starling sources, original
+input data and query order, and an otherwise quiet NVMe device. See
+[REPRODUCIBILITY.md](REPRODUCIBILITY.md). Original licensed Coveo data are
+supplied separately by an authorized user. Do not substitute another dataset
+and describe it as reproducing the same workload.
 
-## Which experiment supports which claim?
-
-See the [paper/evidence map](ARTIFACT_MAP.md) and the immutable manifests in
-`repro/`. The selected algorithm is RAM-only (B up to 14,464 junction IDs,
-512 regions, C=2,048 causal unique-FIFO destinations, k=8 starts). The
-optional Sample2 persistent-exit extension is a distinct experiment.
-
-## Current publication status
-
-The public code is available now. The separate data-minimized candidate was
-built and checked privately, but requires author approval for redistribution
-and permanent archival hosting. The original frozen archives contain machine
-paths, diagnostics, and material potentially governed by Coveo usage terms.
-The code repository has **no declared top-level software license yet**.
-
-The original paper source repository is private and is not required to run
-*either* of the offline validation commands above. Regenerating the complete
-LaTeX figure collection from original SSD archives requires an authorized
-copy of the paper derivation scripts. See [release readiness](RELEASE-READINESS-2026-10-17.md).
+The evidence ZIP omits raw vectors, query text, graph binaries, per-request
+profiler logs, host diagnostics and third-party source trees. Original raw
+archives have been preserved separately; review does not rely on expiring
+GitHub Actions downloads. Permissions for original contributions are in
+[LICENSE](../LICENSE); third-party terms are unchanged.

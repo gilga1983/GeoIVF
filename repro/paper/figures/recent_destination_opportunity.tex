@@ -1,0 +1,37 @@
+% Figure 2: independent causal oracle destination reuse diagnostic.
+% Measured on self-hosted runner: https://github.com/gilga1983/GeoIVF/actions/runs/37753634954
+% Values in figures/data/recent_destination_overlap.csv.
+% This is not NavHints runtime success or query-answer reuse.
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    navhints plot single, navhints legend top,
+    xmin=0,xmax=2048,ymin=0,ymax=100,
+    xtick={0,512,1024,1536,2048},
+    ytick={0,25,50,75,100},
+    xlabel={Recent destinations (IDs)},
+    ylabel={Queries with top-10 overlap (\%)},
+]
+\addplot[navhints pubmed,mark=none,forget plot] table[x=capacity,y=pubmed,col sep=comma] {figures/data/recent_destination_overlap.csv};
+\addlegendimage{navhints pubmed}
+\addlegendentry{PubMed1M}
+\addplot[navhints pubmed,only marks,forget plot] coordinates {(256,52.20) (512,69.80) (1024,84.60) (2048,95.10)};
+\addplot[navhints coveo,mark=none,forget plot] table[x=capacity,y=coveo,col sep=comma] {figures/data/recent_destination_overlap.csv};
+\addlegendimage{navhints coveo}
+\addlegendentry{Coveo}
+\addplot[navhints coveo,only marks,forget plot] coordinates {(256,71.66) (512,84.68) (1024,94.08) (2048,98.60)};
+\addplot[navhints text2image,mark=none,forget plot] table[x=capacity,y=text2image,col sep=comma] {figures/data/recent_destination_overlap.csv};
+\addlegendimage{navhints text2image}
+\addlegendentry{Text2Image-10M}
+\addplot[navhints text2image,only marks,forget plot] coordinates {(256,0.10) (512,0.60) (1024,1.00) (2048,1.60)};
+\addplot[navhints bigann,mark=none,forget plot] table[x=capacity,y=bigann,col sep=comma] {figures/data/recent_destination_overlap.csv};
+\addlegendimage{navhints bigann}
+\addlegendentry{BigANN-10M}
+\addplot[navhints bigann,only marks,forget plot] coordinates {(256,0.10) (512,0.10) (1024,0.20) (2048,0.40)};
+\end{axis}
+\end{tikzpicture}
+\caption{\textbf{Historical destination reuse.} Fraction of queries whose exact top-10 contains one of the preceding $C$ distinct rank-1 destinations. At $C=512$, overlap reaches 84.7\% on Coveo and 69.8\% on PubMed, compared with 0.6\% on Text2Image-10M and 0.1\% on BigANN-10M. Coveo follows production chronology; the remaining workloads use benchmark query order.}
+\Description{Line plot of exact top-10 overlap versus prior destination IDs from zero to 2048 for PubMed1M, Coveo, Text2Image-10M, and BigANN-10M. The Coveo curve rises fastest, reaching 84.7 percent overlap at 512 IDs; PubMed reaches 69.8 percent; Text2Image reaches 0.6 percent and BigANN 0.1 percent. Curves have distinct colors, dashes, and marker shapes.}
+\label{fig:destination-opportunity}
+\end{figure}

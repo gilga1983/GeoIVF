@@ -1,0 +1,23 @@
+NavHints Review and Reproduction Permission
+
+Copyright holders retain their rights in the original contributions.
+
+Permission is granted to access, run, copy, and privately modify original
+NavHints contributions made by the repository owner solely for peer review
+and reproduction or validation of the results of the accompanying paper,
+"NavHints: Demand-Aware Navigation for Disk-Resident Vector Search".
+Retain this notice in copies made under this permission. This permission does
+not grant a general right to redistribute the software, deploy it in products,
+or use it for unrelated purposes. Contact the applicable rights holder for
+additional permission. Rights provided by GitHub's Terms of Service are
+unaffected.
+
+Third-party code, dependencies, source patches containing third-party
+material, and datasets remain subject to their own applicable licenses and
+terms. This permission grants no additional rights in those materials.
+Upstream engines and original datasets are acquired separately; they are not
+included in the public reviewer evidence ZIP.
+
+The original contributions and aggregate evidence are provided "AS IS",
+without warranty of any kind. To the extent permitted by applicable law,
+the copyright holders are not liable for claims or damages arising from use.

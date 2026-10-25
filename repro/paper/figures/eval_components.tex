@@ -1,0 +1,37 @@
+% NavHints and junction-only routing, core-anchored matched recall.
+% Recomputed directly from the final RAM-only data in GeoIVF #38136319610,
+% #38137049239 and #38136365199; no other method determines the anchors.
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  navhints plot compact,
+  ybar,
+  ymin=0,ymax=90,
+  xmin=-.55,xmax=3.55,
+  xtick={0,1,2,3},
+  xticklabels={Coveo,PubMed,T2I-10M,BigANN},
+  x tick label style={font=\fontsize{8}{9}\selectfont},
+  ytick={0,20,40,60,80},
+  ylabel={Logical reads saved (\%)},
+  bar width=7pt,
+  legend style={draw=none,fill=none,font=\fontsize{8}{9}\selectfont,
+    at={(.5,1.03)},anchor=south,legend columns=2,
+    column sep=8pt,inner sep=1pt},
+]
+\addplot+[draw=black!55,line width=.35pt,fill=nhBlue!80]
+ table[x=dataset_id,y=junction,col sep=comma]{figures/data/eval_components.csv};
+\addlegendentry{Junctions}
+\addplot+[draw=black!55,line width=.35pt,fill=nhTeal!75]
+ table[x=dataset_id,y=navhints,col sep=comma]{figures/data/eval_components.csv};
+\addlegendentry{NavHints}
+\end{axis}
+\end{tikzpicture}
+\caption{\textbf{SSD-read savings at matched recall.} Junction-only routing uses the learned regional directory, while \sys additionally selects PQ-ranked historical destinations. Bars show mean logical SSD-read reductions relative to \DiskANN across jointly supported recall targets (Coveo: 4; PubMed: 5; Text2Image-10M: 5; BigANN-10M: 4).}
+\Description{Two bars per workload compare the learned junction directory
+alone and NavHints with additional destination starts. Junction-only
+routing saves 27.07, 30.54, 24.71 and 20.68 percent of reads;
+NavHints saves 80.15, 44.13, 34.57 and 21.03 percent on
+Coveo, PubMed, Text2Image-10M and BigANN-10M, respectively.}
+\label{fig:eval-components}
+\end{figure}

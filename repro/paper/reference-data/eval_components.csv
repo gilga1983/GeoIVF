@@ -1,0 +1,5 @@
+dataset_id,dataset,junction,navhints,anchors,recall_min,recall_max
+0,Coveo,27.0733,80.1504,4,93.842,98.904
+1,PubMed,30.5393,44.1277,5,29.010,71.680
+2,Text2Image-10M,24.7145,34.5673,5,41.600,89.780
+3,BigANN-10M,20.6798,21.0260,4,94.030,99.790

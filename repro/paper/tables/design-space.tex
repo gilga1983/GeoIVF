@@ -1,0 +1,25 @@
+\begin{table*}[t]
+\centering
+\caption{Representative design-space positioning. Workload means that observed query behavior can change deployed state. The rows intentionally mix index, navigation, layout, and cache systems because \sys sits at their intersection.}
+\label{tab:designspace}
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccccl}
+\toprule
+Method & Extra vectors & Extra topology & Stored state & Workload & Changes graph/index & Changes disk layout & Main idea \\
+\midrule
+DiskANN cache & \checkmark & \checkmark & graph records & sometimes & no & no & avoid reads after reaching hot nodes \\
+SPANN & \checkmark & no & centroids & no & yes & yes & memory centroids + disk posting lists \\
+DiskANN++ QSEV & \checkmark & no & representatives & no & no & yes & query-sensitive entry + page search \\
+Starling & \checkmark & \checkmark & sampled graph & optional & no & yes & in-memory navigator + block search \\
+GPS/Gorgeous & \checkmark & \checkmark & graph/cache & no & no & yes & graph-priority memory + replicated layout \\
+CatapultDB & no & no & destination IDs & yes & no & no & query-local destination shortcuts \\
+QVCache / Aker & \checkmark & optional & queries + results & yes & no & no & answer reuse for semantically nearby queries \\
+OOD-DiskANN & implicit & graph itself & graph itself & yes & yes & no & query-aware graph construction \\
+\textbf{\sys core} & \textbf{no} & \textbf{no} & \textbf{IDs} & \textbf{yes} & \textbf{no} & \textbf{no} & \textbf{learned entry + recent destination seed} \\
+\textbf{+\ persistence} & \textbf{no} & \textbf{no} & \textbf{IDs in page slack} & \textbf{yes} & \textbf{no} & \textbf{no$^\dagger$} & \textbf{sampled junction-specific exits} \\
+\bottomrule
+\end{tabular}%
+}
+{\scriptsize $^\dagger$On the evaluated PubMed layout; other record formats may require a side structure.}
+\end{table*}

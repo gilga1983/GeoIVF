@@ -1,0 +1,41 @@
+% Real out-of-sample curves from:
+% https://github.com/gilga1983/GeoIVF/actions/runs/37748550632
+% Two 2,500-query cohorts, L=64, beam=8, skip first 20 expansions.
+% Zero-training-visit IDs are randomly tie-broken in the lighter 10M tails.
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    navhints plot single, navhints legend top,
+    xmin=0,xmax=5,ymin=0,ymax=100,
+    xtick={0,1,2,3,4,5},
+    ytick={0,25,50,75,100},
+    ylabel={Later graph visits (\%)},
+    xlabel={Top-ranked vertices (\% of corpus)},
+  ]
+\addplot[navhints pubmed,mark=none,forget plot] coordinates {(0.00000,0.000) (0.01000,5.428) (0.05000,14.351) (0.10000,20.933) (0.20000,29.106) (0.50000,43.087) (1.00000,56.084) (1.60000,65.234) (2.00000,69.476) (3.00000,77.121) (4.00000,81.477) (5.00000,85.782)};
+\addlegendimage{navhints pubmed}
+\addlegendentry{PubMed1M}
+\addplot[navhints pubmed,only marks,forget plot] coordinates {(1.00000,56.084) (2.00000,69.476) (3.00000,77.121) (4.00000,81.477) (5.00000,85.782)};
+\addplot[navhints coveo,mark=none,forget plot] coordinates {(0.00000,0.000) (0.01000,0.301) (0.05000,1.404) (0.10000,2.413) (0.20000,4.212) (0.50000,8.056) (1.00000,13.271) (1.60000,18.619) (2.00000,21.691) (3.00000,27.830) (4.00000,32.810) (5.00000,37.499)};
+\addlegendimage{navhints coveo}
+\addlegendentry{Coveo}
+\addplot[navhints coveo,only marks,forget plot] coordinates {(1.00000,13.271) (2.00000,21.691) (3.00000,27.830) (4.00000,32.810) (5.00000,37.499)};
+\addplot[navhints text2image,mark=none,forget plot] coordinates {(0.00000,0.000) (0.01000,1.697) (0.05000,2.658) (0.10000,3.533) (0.20000,4.199) (0.50000,5.641) (1.00000,7.950) (1.60000,10.488) (2.00000,12.142) (2.10567,12.575)};
+\addlegendimage{navhints text2image}
+\addlegendentry{Text2Image-10M}
+\addplot[navhints text2image,opacity=0.66,mark=none,densely dotted,forget plot] coordinates {(2.10567,12.575) (3.00000,13.380) (4.00000,14.284) (5.00000,15.203)};
+\addplot[navhints text2image,only marks,forget plot] coordinates {(1.00000,7.950) (2.00000,12.142)};
+\addplot[navhints text2image,only marks,opacity=.66,forget plot] coordinates {(3.00000,13.380) (4.00000,14.284) (5.00000,15.203)};
+\addplot[navhints bigann,mark=none,forget plot] coordinates {(0.00000,0.000) (0.01000,0.547) (0.05000,1.008) (0.10000,1.124) (0.20000,1.372) (0.50000,2.074) (1.00000,3.249) (1.60000,4.604) (1.82505,5.092)};
+\addlegendimage{navhints bigann}
+\addlegendentry{BigANN-10M}
+\addplot[navhints bigann,opacity=0.66,mark=none,densely dotted,forget plot] coordinates {(1.82505,5.092) (2.00000,5.259) (3.00000,6.209) (4.00000,7.185) (5.00000,8.134)};
+\addplot[navhints bigann,only marks,forget plot] coordinates {(1.00000,3.249)};
+\addplot[navhints bigann,only marks,opacity=.66,forget plot] coordinates {(2.00000,5.259) (3.00000,6.209) (4.00000,7.185) (5.00000,8.134)};
+\end{axis}
+\end{tikzpicture}
+\caption{\textbf{Persistence of traversal hotspots.} We rank vertices by visit frequency over 2,500 queries and measure their share of graph visits over the next 2,500 ($L=64$, beam 8; first 20 expansions excluded). The top 1\% captures 56.1\% of visits on PubMed versus 3.2\% on BigANN. Faded tails indicate vertices unseen during training.}
+\Description{Four colored and distinctively patterned curves compare the share of later graph visits captured by the top 0 to 5 percent of vertices, ranked using earlier queries. At 1 percent, PubMed1M captures 56.1 percent, Coveo 13.3 percent, Text2Image-10M 8.0 percent, and BigANN-10M 3.2 percent.}
+\label{fig:motivation-opportunity}
+\end{figure}

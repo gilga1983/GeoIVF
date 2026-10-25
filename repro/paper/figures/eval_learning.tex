@@ -1,0 +1,70 @@
+% Selected NavHints B=14,464/C=2,048, no persistent exits.
+% (a) k=1/2/4/8 warm-up: GeoIVF #38516776145, artifact 11873220542,
+% source SHA b74857e418746498249955dcc432d6bd99e5cf07.
+% The k=8 series exactly reproduces #38137378869, artifact 11707480968.
+% (b) Starts x locality: GeoIVF #38164539106, artifact 11712384153;
+% source SHA 59e0e63eedde4942a1f2b5794dc581df9c80141b.
+% Six matched targets: 35,45,55,65,72,75% Recall@10.
+% Regenerate (a) with scripts/derive_warmup_starts.py and
+% (b) with scripts/derive_starts_locality.py.
+\begin{figure*}[t]
+\centering
+\begin{minipage}[t]{.49\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    navhints plot panel,
+    xmin=0,xmax=4000,
+    xtick={0,1000,2000,3000,4000},
+    ymin=-4,ymax=16,
+    ytick={-4,0,4,8,12,16},
+    xlabel={Previous requests},
+    ylabel={SSD I/O saving (\%)},
+]
+\addplot+[black,solid,line width=1.35pt,mark=*,mark size=1.8pt]
+  table[x=history,y=k1,col sep=comma]{figures/data/eval_warmup_starts_final_core.csv};
+\addplot+[nhBlue,densely dashed,line width=1.4pt,mark=square*,mark size=1.9pt]
+  table[x=history,y=k2,col sep=comma]{figures/data/eval_warmup_starts_final_core.csv};
+\addplot+[nhRose,densely dotted,line width=1.55pt,mark=diamond*,mark size=2pt]
+  table[x=history,y=k4,col sep=comma]{figures/data/eval_warmup_starts_final_core.csv};
+\addplot+[nh core]
+  table[x=history,y=k8,col sep=comma]{figures/data/eval_warmup_starts_final_core.csv};
+\end{axis}
+\end{tikzpicture}
+\par{\nhTickFont (a) Learning from completed searches}
+\end{minipage}\hfill
+\begin{minipage}[t]{.49\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    navhints plot panel,
+    xmin=1,xmax=50,xmode=log,
+    xtick={1,2.5,5,10,50},
+    xticklabels={1,2.5,5,10,50},
+    ymin=-4,ymax=16,
+    ytick={-4,0,4,8,12,16},
+    xlabel={Requests per query in working set},
+    ylabel={SSD I/O saving (\%)},
+]
+\addplot+[black,solid,line width=1.35pt,mark=*,mark size=1.8pt]
+  table[x=repeats,y=k1,col sep=comma]{figures/data/eval_locality_starts_final_core.csv};
+\addplot+[nhBlue,densely dashed,line width=1.4pt,mark=square*,mark size=1.9pt]
+  table[x=repeats,y=k2,col sep=comma]{figures/data/eval_locality_starts_final_core.csv};
+\addplot+[nhRose,densely dotted,line width=1.55pt,mark=diamond*,mark size=2pt]
+  table[x=repeats,y=k4,col sep=comma]{figures/data/eval_locality_starts_final_core.csv};
+\addplot+[nh core]
+  table[x=repeats,y=k8,col sep=comma]{figures/data/eval_locality_starts_final_core.csv};
+\end{axis}
+\end{tikzpicture}
+\par{\nhTickFont (b) Repetition and destination starts}
+\end{minipage}
+\par\vspace{4pt}
+{\nhLegendFont
+ \tikz[baseline=-.5ex]{\draw[black,solid,line width=1.35pt] (0,0)--(.55,0);}\;$k=1$\hspace{14pt}
+ \tikz[baseline=-.5ex]{\draw[nhBlue,densely dashed,line width=1.4pt] (0,0)--(.55,0);}\;$k=2$\hspace{14pt}
+ \tikz[baseline=-.5ex]{\draw[nhRose,densely dotted,line width=1.55pt] (0,0)--(.55,0);}\;$k=4$\hspace{14pt}
+ \tikz[baseline=-.5ex]{\draw[nhTeal,dashdotted,line width=1.4pt] (0,0)--(.55,0);}\;$k=8$}
+\caption{\textbf{Learning, demand locality, and starting points on PubMed.} Mean logical SSD-read savings relative to junction-only routing at six matched Recall@10 targets. Both panels compare $k\in\{1,2,4,8\}$ with $B=14{,}464$ and $C=2{,}048$ fixed. (a) Savings after increasing causal history prefixes, each evaluated on its next 500 requests. (b) Savings across five controlled working sets, each with 4,000 warm-up and 1,000 measured requests. Negative values indicate additional reads.}
+\Description{Two line plots show logical SSD-read savings relative to junction-only routing, using consistent markers and line patterns for 1, 2, 4, and 8 historical starts. Left: after zero history, two starts save 3.27 percent, whereas eight starts incur 1.92 percent more reads; four starts lead during much of the warm-up, before eight narrowly catch up at 4,000 previous queries. Right: at high query repetition, two starts still save 4.14 percent, while eight increase reads by 1.79 percent.}
+\label{fig:eval-learning}
+\end{figure*}

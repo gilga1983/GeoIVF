@@ -1,232 +1,89 @@
-# NavHints artifact evaluation
+# NavHints artifact review
 
-This is the **artifact-review entry point** for *NavHints: Demand-Aware Navigation
-for Disk-Resident Vector Search*. The paper is maintained separately in
-[DemmandAwareANN](https://github.com/gilga1983/DemmandAwareANN). This repository
-is historically named GeoIVF; the older `geoivf/`, `native/` and many research
-workflows are **not** the algorithm used in the NavHints paper. Keep them for
-research provenance, but use the paths below to review NavHints.
+This public repository is the reviewer entry point for *NavHints:
+Demand-Aware Navigation for Disk-Resident Vector Search*. Start with the
+[two-minute quickstart](ARTIFACT_QUICKSTART.md).
 
-**Status (2026-10-13):** Fourteen original GitHub Actions ZIPs are inventoried,
-including all four complete-request latency studies. The original Actions
-archives expire **October 25–27, 2026**. They must be preserved in a
-long-lived, access-controlled archive and assigned a stable review URL before
-they expire. This repository currently has no top-level LICENSE; redistribution
-terms require the owner's approval. These are release blockers, not resolved
-by a successful smoke test.
+## Public review package (25 October 2026)
 
-## Current reviewer entry point (October 21, 2026)
+- Final RAM-only NavHints implementation and source-aligned competitor checks.
+- Causal four-workload DiskANN replay scripts and original Starling adapter.
+- [Evidence ZIP](../repro/navhints-reviewer-evidence.zip): 48 aggregate JSON
+  outputs from 35 checksum-frozen original experiment archives.
+- [Release record](../repro/release-20261025.json): evidence ZIP SHA-256,
+  code base revision and exact manuscript revision.
+- [Paper/evidence map](ARTIFACT_MAP.md): every current figure and result table.
+- [Plotting snapshot](../repro/paper/): original figure/table sources,
+  derivation scripts and independent reference CSVs from the frozen manuscript.
+- [Review and reproduction permission](../LICENSE) for original contributions.
 
-The [two-minute quickstart](ARTIFACT_QUICKSTART.md) and
-[paper/evidence map](ARTIFACT_MAP.md) supersede older descriptions that cover
-only the first 14 original archives. The source manifests now inventory
-**30** required original experiment ZIPs across the primary, supplemental,
-and additional-figure sets. Thirty-three original archive checksums are
-tracked in the private reviewer preparation bundle, three of which are
-optional exploratory controls not required by the current paper.
+The 32 required original experiment records are in four manifests: 14 main,
+nine supplemental, seven motivation/memory studies, and the two recovered
+Table 5 studies. The remaining three source archives are optional controls.
+Every published aggregate is individually checksummed in the ZIP manifest.
+The original raw archives are separately preserved, including both newly
+recovered Table 5 originals. No expiring Actions download is needed for the
+public quickstart.
+
+## Evaluation levels
+
+| Level | Requirements | What it verifies |
+| --- | --- | --- |
+| Source preflight | Python 3.10+, minutes | Final controller, provenance and safe command previews |
+| Recorded numerical reproduction | Same public checkout, bundled ZIP | Headline reads, complete-request latency, Figure 8, junction scoring, Table 5 |
+| Plot regeneration | Same public checkout; TeX optional | 20 independently regenerated plotted CSVs match manuscript references; standalone figure/table sheet |
+| Physical SSD replay | Linux, exact authorized datasets, pinned engines, exclusive NVMe window | New measurements using the documented original protocol |
 
 ```bash
-python3 repro/run.py review                                  # no dataset needed
-python3 repro/run.py review --bundle /path/to/reviewer.zip     # independent numeric checks
+python3 repro/run.py review
+python3 repro/run.py review --bundle repro/navhints-reviewer-evidence.zip
+python3 repro/export_paper_results.py --output artifacts/paper
 ```
 
-The second command validates all aggregate JSON SHA-256 digests and
-reproduces four Core SSD-read and latency results, every Figure 8 curve and
-the four-workload junction-score table. It does **not** claim a full SSD
-rerun, and the public artifact URL does not yet host the licensed reviewer
-ZIP. The paper-to-evidence map identifies a remaining provenance gap for
-the single-start destination-source and capacity controls (Table 5).
+The first command checks provenance only. The second verifies the aggregate
+bytes and recomputes the indicated numerical results. The third validates
+the frozen ZIP checksum, recomputes plotting data, and copies pinned original
+plot/table sources into an independent build directory. The source manuscript
+repository is not required for any of these public reviewer paths.
 
-## 1. What can be evaluated?
+## Full physical reproduction
 
-| Level | Data, machine and time | Evidence |
-| --- | --- | --- |
-| A. Static/offline preflight | Linux/macOS/Windows, Python 3.10+, standard library, minutes | Repository completeness, paper controller, provenance hashes, safe CLI behavior |
-| B. Frozen-result reproduction | 14 original ZIPs, Python 3.10+, a sibling paper checkout; LaTeX only to rebuild PDF | Validate archived outputs and recompute the reported figures and complete-request latency table without running SSD benchmarks |
-| C. Full experiment | Linux, pinned Rust/C++, DiskANN/Starling, frozen datasets, spare RAM/storage, exclusive real NVMe measurement window; substantial wall time | Rebuild learned state, run causal held-out replays and measure the underlying engine |
-
-Do **not** interpret A or B as an independent NVMe rerun. Equally, a new C run
-on a different SSD or workload is not a bitwise reproduction of the original
-timing numbers. The original successful experiments have input hashes and
-patched-source records in their ZIPs.
-
-## 2. Five-minute, no-data start
+See [REPRODUCIBILITY.md](REPRODUCIBILITY.md) for dataset contracts, engine
+builds and query splits, and [IMPLEMENTATION.md](IMPLEMENTATION.md) for adapter
+locations. Review these command previews before executing a physical replay:
 
 ```bash
-git clone https://github.com/gilga1983/GeoIVF.git
-cd GeoIVF
-python3 -m unittest discover -s tests -p 'test_navhints_repro.py' -v
 source repro/activate.sh
 navhints list
-navhints run pubmed                    # dry run: does NOT start an SSD benchmark
-navhints fetch all                     # dry run: does NOT fetch ZIPs or create files
-navhints_paper                         # dry run: lists all derivation/build commands
-```
-
-This path uses only the Python standard library and does not install Faiss,
-clone third-party engines, fetch restricted data or execute performance tests.
-The older `make test` target builds and tests the separate legacy GeoIVF
-implementation; it is **not** a smoke test of DiskANN+NavHints.
-
-## 3. Verify original evidence and reproduce the figures
-
-Obtain the frozen review bundle containing the **fourteen original GitHub
-Actions ZIPs** from the maintainer's permanent artifact archive. Put the files
-in `artifacts/frozen/`, named
-`coveo.zip`, `pubmed.zip`, `text2image.zip`, `bigann.zip`,
-`catapult.zip`, `memory.zip`, `sensitivity.zip`, `persistence.zip`,
-`starling-coveo.zip`, `starling-bigann.zip`, and
-`service-{pubmed,coveo,text2image,bigann}.zip`.
-The complete original Actions run IDs, artifact IDs, source commits, member
-paths and **SHA-256 of the unmodified GitHub ZIP bytes** are in
-[`repro/manifest.json`](../repro/manifest.json).
-
-```bash
-navhints verify all --original-zip
-```
-
-This validates each original ZIP's SHA-256 **and** its internal JSON policy and
-producing-source marker. Without `--original-zip`, `navhints verify all`
-validates members, controller, method arms, source SHA and causal protocol,
-but does not authenticate original compressed ZIP bytes.
-
-If the original archives have **not** yet expired, the existing GitHub CLI
-fetcher provides an alternative to the permanent bundle:
-
-```bash
-gh auth login
-navhints fetch all --execute
-navhints verify all
-```
-
-`gh run download` extracts files; `navhints fetch` recompresses them into
-a canonical per-case ZIP for downstream plotting. **Do not apply
-`--original-zip` to these recompressed files.** Original SHA-256 values in
-the manifest refer to the Actions API ZIP byte stream, not to this repack.
-
-Clone [DemmandAwareANN](https://github.com/gilga1983/DemmandAwareANN) alongside
-this checkout and install its LaTeX dependencies. To regenerate the
-four-workload read results, sensitivity plots and **all four complete-request
-latency curves/table** from the archived JSON:
-
-```bash
-navhints_paper                       # inspect exact commands first
-navhints_paper --execute             # updates paper CSV/table files; scratch PDF build
-```
-
-For a reviewer wanting only the latency result, without LaTeX or other
-figures, run the paper script in a scratch copy of the paper repository:
-
-```bash
-python3 ../DemmandAwareANN/scripts/derive_service_latency.py \
-  --coveo artifacts/frozen/service-coveo.zip \
-  --pubmed artifacts/frozen/service-pubmed.zip \
-  --text2image artifacts/frozen/service-text2image.zip \
-  --bigann artifacts/frozen/service-bigann.zip \
-  --out-data /tmp/navhints-review/data \
-  --out-table /tmp/navhints-review/service-table.tex \
-  --out-summary /tmp/navhints-review/service-summary.json
-```
-
-The derivative validates the per-repetition Pareto frontiers and refuses
-unsupported recall interpolation. The generated values can be compared against
-`figures/data/eval_service_*.csv` and
-`tables/eval_service_latency_table.tex` in the paper checkout. This command
-runs on a normal CPU; it does not rerun the SSD experiment.
-
-## 3a. Supplemental evidence added to the current manuscript
-
-The original 14-archive inventory predates later approved experiments. The
-additional evidence is now inventoried, with exact run IDs, artifact IDs and
-observed original-ZIP SHA-256 digests, in
-[the October 14 supplemental manifest](../repro/supplemental-manifest-20261014.json).
-
-It includes both four-curve Figure 8 studies, all four junction-ranking
-comparisons, the fixed-k memory controls, and the original native Starling
-PubMed and Text2Image experiments. In particular, the original native
-Starling runs must **not** be confused with later pruning experiments.
-
-The existing `navhints verify all` command intentionally covers only the
-original 14-package inventory. This new manifest is additional evidence;
-it is **not** automatically fetched or verified by that original command.
-Do not tell reviewers the old 14-package command alone reproduces the
-current paper's new sensitivity table. The supplemental ZIPs must be included
-and checked in the eventual permanent review bundle.
-
-## 4. Re-run the actual SSD measurements
-
-See [REPRODUCIBILITY.md](REPRODUCIBILITY.md) for data acquisition, pinned
-upstream revisions, exact query splits and engine builds, and
-[IMPLEMENTATION.md](IMPLEMENTATION.md) for the RAM-only design and adapter
-locations. Key reference code is:
-
-- DiskANN source patches:
-  `scripts/patch_diskann_hint_ivf_packed_direct.py`,
-  `scripts/patch_diskann_experience_core.py`,
-  `scripts/patch_navhints_regional_history.py`
-- Trained routing data:
-  `scripts/learn_global_navigation_landmarks.py`,
-  `scripts/learn_navhints_generic.py`, `scripts/build_hint_ivf*.py`
-- Final real-SSD replay: `scripts/run_final_core_*_ci.sh`
-- Native Starling port: `scripts/patch_starling_final_core.py`
-
-The original engine sources are fetched at recorded SHAs, then the patches
-are applied. No third-party source tree or large SSD graph is vendored in
-this repository. A dry run is always available:
-
-```bash
 navhints doctor --mode pubmed
 navhints run pubmed
 ```
 
-Only a deliberately authorized real replay should include `--execute`.
-Run SSD benchmarks **sequentially** on an otherwise quiet physical NVMe.
-The code repository is public, but the original Coveo production data are
-licensed and must be supplied separately by an authorized owner; do not
-upload that raw dataset to a public archive. PubMed, Text2Image and BigANN
-also require exact original vector/order/split/index inputs. Replacing the
-datasets changes the scientific question.
+The runner scripts pin upstream revisions and apply the original patches.
+Use `--execute` only with the exact inputs and an isolated measurement window.
+Do not overlap benchmarks on the same SSD. The original data, indexes and
+third-party engines are acquired separately. Public benchmark access and
+Coveo usage terms remain independent of the source-code permission.
 
-## 5. Interpretation and honest boundaries
+For authors retaining the fourteen unmodified original ZIPs, the existing
+`navhints verify all --original-zip` checks their exact compressed-byte hashes.
+That legacy command covers the original 14-package inventory only; the public
+reviewer verifier covers all four current manifests. `navhints_paper` remains
+an authoring integration for a manuscript checkout; public plot regeneration
+uses `repro/export_paper_results.py` instead.
 
-The primary algorithm is RAM-only NavHints Core:
-at most 14,464 learned junction IDs in 512 geometric groups, 2,048 successful
-destination IDs in a causal unique-FIFO history, and at most eight PQ-ranked
-additional starts. It does not change DiskANN's graph topology or reuse
-cached answers. The 102,940-byte PubMed figure is **accounted routing
-payload**, not an RSS measurement. Optional sampled persistent exits
-(Sample2) are a separate experiment, not a mandatory core component.
+## Scientific scope
 
-- A logical SSD read/page counter is **not** a physical NAND operation.
-- Real-request latency is measured separately from logical I/O. Workload
-  and recall regime matter; a few tested points can regress.
-- Starling retains its native navigator and graph layout. Its BigANN gain
-  is small or can regress; do not claim universal performance improvement.
-- The comparison called Catapult is a source-aligned **routing-policy port
-  inside common disk-resident DiskANN**, not the authors' entire original
-  search implementation.
-- Repetitions replay the same fixed queries. They are not independent
-  request populations or a basis for IID confidence intervals.
+The selected algorithm uses up to 14,464 junction IDs in 512 regions, a
+2,048-ID causal unique-FIFO destination history, and up to eight PQ-ranked
+extra starts. Table 5 deliberately fixes 16K junctions and one extra start to
+isolate destination quality/capacity; it is not a headline configuration.
+Optional Sample2 persistent exits are a separate experiment.
 
-## 6. Release checklist and retention
-
-Before depositing an artifact-release archive, complete the following:
-
-- [ ] Preserve the fourteen ZIPs **before October 25–27, 2026** and check
-      the original SHA-256 values against `repro/manifest.json`.
-- [ ] Review all uploaded ZIPs for embedded absolute paths, personal host
-      information, credentials, and licensed Coveo content before public
-      distribution. A private archival backup can precede a sanitized
-      public release.
-- [ ] Publish a permanent artifact URL/DOI (e.g. an institutional repository
-      or Zenodo) and record the archived package's checksum.
-- [ ] Decide and add an explicit repository software license after verifying
-      redistribution rights for original author code and embedded patches.
-- [ ] Integrate any later paper-approved complete-service experiments or
-      table changes into the selected artifact commit, then freeze and tag it.
-- [ ] Recheck the paper's artifact-availability URL, final TeX compile,
-      figure consistency, dependency environment and access from a clean
-      reviewer checkout.
-
-**This document is not a claim that the last six items are already done.**
-It is a deterministic path from the current evidence to an auditable release.
+Logical SSD-provider reads are not physical NAND operations. The 102,940-byte
+figure accounts for routing payload, not RSS. Catapult is a source-aligned
+routing-policy port in the common DiskANN engine. Native Starling retains its
+own navigator and timing scope, and its adverse BigANN results are preserved.
+Repetition runs replay fixed query sequences and are not independent workload
+samples. Numerical checks of archived aggregates do not certify fresh SSD
+latency on another machine.

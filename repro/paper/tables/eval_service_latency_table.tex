@@ -1,0 +1,17 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{Complete-request latency savings at matched recall.} Mean percentage savings of \sys relative to \DiskANN and \CatapultDB routing across jointly supported Recall@10 targets. Recall ranges and target counts are workload-specific. Results use non-dominated per-run recall--latency curves; positive values indicate faster requests.}
+\label{tab:eval-service-latency}
+\small
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Workload & Recall@10 ($n$) & DiskANN & Catapult \\
+\midrule
+Coveo & 94.75--99.43\% (3) & +68.3\% & +51.2\% \\
+PubMed & 34.21--79.64\% (10) & +28.9\% & +9.6\% \\
+T2I-10M & 54.20--88.45\% (4) & +20.5\% & +18.8\% \\
+BigANN-10M & 97.25--99.96\% (4) & +16.1\% & +12.8\% \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "table": "Table 5, destination-source and history-capacity controls",
+  "controller_scope": "16,000 junction IDs, one extra start; RAM-only; 4K warm-up and 1K measured queries",
+  "runs": [
+    {
+      "id": "destination-equal-work",
+      "run_id": 37728823486,
+      "artifact_id": 11528779604,
+      "source_commit": "d10ea44d90f5078c4596ee4ad9e39369872488e7",
+      "sha256": "d4bf99f6b43f34604e0e7c518e26a93e99c91de83c2acbfec463866a337be085",
+      "aggregate_member": "results/demand-vs-random.json",
+      "replay_script": "scripts/qualify_demand_vs_random.py",
+      "source_url": "https://github.com/gilga1983/GeoIVF/tree/d10ea44d90f5078c4596ee4ad9e39369872488e7"
+    },
+    {
+      "id": "destination-capacity",
+      "run_id": 37672729944,
+      "artifact_id": 11507354502,
+      "source_commit": "84a5090cbab78ed0e34840ffec12656c5745311d",
+      "sha256": "f91954adb70811d41227ed55e73515a2da20e9c555f7a95d06638e13e58fa029",
+      "aggregate_member": "results/reviewer-defense.json",
+      "replay_script": "scripts/qualify_reviewer_defense.py",
+      "source_url": "https://github.com/gilga1983/GeoIVF/tree/84a5090cbab78ed0e34840ffec12656c5745311d"
+    }
+  ]
+}

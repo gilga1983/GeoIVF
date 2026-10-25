@@ -1,0 +1,90 @@
+% Selected RAM-only NavHints: per-L logical SSD reads on the frozen DiskANN
+% index for each workload. Original measured archives:
+% Coveo GeoIVF #38136319610 (artifact 11701308908);
+% PubMed #38137049239 (artifact 11702879389);
+% Text2Image-10M / BigANN-10M #38136365199
+% (artifacts 11702522173 / 11704362848).
+\begin{figure*}[t]
+\centering
+\begin{minipage}[t]{.49\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    navhints plot panel,
+    xmin=74,xmax=100,xtick={75,85,95,100},
+    ymin=12,ymax=450,ymode=log,
+    log ticks with fixed point,ytick={20,50,100,200,400},
+    xlabel={Recall@10 (\%)},ylabel={SSD reads/query},
+]
+\addplot+[nh baseline] table[x=recall,y=ssd_reads,col sep=comma]{figures/data/eval_frontier_coveo_baseline.csv};
+\addplot+[nh junction] table[x=recall,y=ssd_reads,col sep=comma]{figures/data/eval_frontier_coveo_junction.csv};
+\addplot+[nh core] table[x=recall,y=ssd_reads,col sep=comma]{figures/data/eval_frontier_coveo_core.csv};
+\end{axis}
+\end{tikzpicture}
+\par{\nhTickFont (a) Coveo eCommerce}
+\end{minipage}\hfill
+\begin{minipage}[t]{.49\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    navhints plot panel,
+    xmin=20,xmax=82,xtick={20,40,60,80},
+    ymin=12,ymax=450,ymode=log,
+    log ticks with fixed point,ytick={20,50,100,200,400},
+    xlabel={Recall@10 (\%)},
+]
+\addplot+[nh baseline] table[x=recall,y=ssd_reads,col sep=comma]{figures/data/eval_frontier_pubmed_baseline.csv};
+\addplot+[nh junction] table[x=recall,y=ssd_reads,col sep=comma]{figures/data/eval_frontier_pubmed_junction.csv};
+\addplot+[nh core] table[x=recall,y=ssd_reads,col sep=comma]{figures/data/eval_frontier_pubmed_core.csv};
+\end{axis}
+\end{tikzpicture}
+\par{\nhTickFont (b) PubMed1M/MedCPT}
+\end{minipage}
+\par\vspace{6pt}
+\begin{minipage}[t]{.49\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    navhints plot panel,
+    xmin=35,xmax=96,xtick={40,60,80,95},
+    ymin=12,ymax=450,ymode=log,
+    log ticks with fixed point,ytick={20,50,100,200,400},
+    xlabel={Recall@10 (\%)},ylabel={SSD reads/query},
+]
+\addplot+[nh baseline] table[x=recall,y=ssd_reads,col sep=comma]{figures/data/eval_frontier_text2image_baseline.csv};
+\addplot+[nh junction] table[x=recall,y=ssd_reads,col sep=comma]{figures/data/eval_frontier_text2image_junction.csv};
+\addplot+[nh core] table[x=recall,y=ssd_reads,col sep=comma]{figures/data/eval_frontier_text2image_core.csv};
+\end{axis}
+\end{tikzpicture}
+\par{\nhTickFont (c) Text2Image-10M}
+\end{minipage}\hfill
+\begin{minipage}[t]{.49\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    navhints plot panel,
+    xmin=84,xmax=100,xtick={85,90,95,100},
+    ymin=12,ymax=450,ymode=log,
+    log ticks with fixed point,ytick={20,50,100,200,400},
+    xlabel={Recall@10 (\%)},
+]
+\addplot+[nh baseline] table[x=recall,y=ssd_reads,col sep=comma]{figures/data/eval_frontier_bigann_baseline.csv};
+\addplot+[nh junction] table[x=recall,y=ssd_reads,col sep=comma]{figures/data/eval_frontier_bigann_junction.csv};
+\addplot+[nh core] table[x=recall,y=ssd_reads,col sep=comma]{figures/data/eval_frontier_bigann_core.csv};
+\end{axis}
+\end{tikzpicture}
+\par{\nhTickFont (d) BigANN-10M}
+\end{minipage}
+\par\vspace{4pt}
+{\nhLegendFont
+ \tikz[baseline=-.5ex]{\draw[black,line width=1.35pt] (0,0)--(.5,0);}\;DiskANN\hspace{8pt}
+ \tikz[baseline=-.5ex]{\draw[nhBlue,densely dashed,line width=1.4pt] (0,0)--(.5,0);}\;Junctions\hspace{8pt}
+ \tikz[baseline=-.5ex]{\draw[nhTeal,dashdotted,line width=1.4pt] (0,0)--(.5,0);}\;NavHints}
+\caption{\textbf{Recall--SSD-read tradeoffs.} Measured logical SSD reads per query versus Recall@10 for \DiskANN, junction-only routing, and \sys across (a) Coveo, (b) PubMed, (c) Text2Image-10M, and (d) BigANN-10M. Each point represents a measured search-list capacity $L$. Panels share a logarithmic SSD-read axis with workload-specific recall ranges. Figure~\ref{fig:eval-components} summarizes savings at matched recall.}
+\Description{Four panels show mean logical SSD reads per query against
+Recall@10: (a) Coveo, (b) PubMed, (c) Text2Image-10M and (d) BigANN-10M.
+DiskANN is black solid, junction-only routing blue dashed, and NavHints teal
+dash-dotted. NavHints provides the largest additional improvement over
+junction-only routing on Coveo and a smaller difference on BigANN.}
+\label{fig:eval-frontiers}
+\end{figure*}

@@ -10,19 +10,19 @@ access to the private manuscript repository or a real SSD:
 ```bash
 python3 -m unittest discover -s tests -p 'test_navhints_artifact.py' -v
 python3 repro/run.py review
-python3 repro/run.py review --bundle /path/to/approved-reviewer-summary.zip
+python3 repro/run.py review --bundle repro/navhints-reviewer-evidence.zip
+python3 repro/export_paper_results.py --output artifacts/paper
 ```
 
-The last command requires the separately published, data-minimized evidence
-bundle. See [ARTIFACT_QUICKSTART.md](ARTIFACT_QUICKSTART.md) and
-[ARTIFACT_MAP.md](ARTIFACT_MAP.md). The original fourteen GitHub Actions
-ZIPs are temporary; use the verified permanent deposit once available.
+The data-minimized evidence ZIP and standalone plotting sources are included
+in this public checkout. See [ARTIFACT_QUICKSTART.md](ARTIFACT_QUICKSTART.md) and
+[ARTIFACT_MAP.md](ARTIFACT_MAP.md). The public aggregate package does not depend on expiring Actions ZIPs;
+original raw archives have been preserved separately.
 
-## 1. Check out the two repositories
+## 1. Check out the code repository
 
 ```bash
 git clone https://github.com/gilga1983/GeoIVF.git
-git clone https://github.com/gilga1983/DemmandAwareANN.git
 cd GeoIVF
 source repro/activate.sh
 navhints list

@@ -1,0 +1,28 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{Alternative uses of auxiliary memory.} Mean matched-recall logical SSD-read savings of \sys relative to native BFS caching, workload-hot caching, and DiskANN++-style query-sensitive entry selection across four workloads. Competitors receive approximately 1$\times$, 4$\times$, or 16$\times$ \sys's accounted routing-memory budget. Positive values favor \sys.}
+\label{tab:eval-final-core-competitors}
+\small
+\setlength{\tabcolsep}{2.8pt}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+Workload & Comparator & $\sim$1$\times$ & $\sim$4$\times$ & $\sim$16$\times$ \\
+\midrule
+Coveo & Native BFS cache & 69.6\% & 68.6\% & 66.4\% \\
+ & Workload-hot cache & 68.4\% & 66.1\% & 57.2\% \\
+ & DiskANN++-style QSEV & 66.5\% & 65.7\% & 62.2\% \\
+\midrule
+PubMed & Native BFS cache & 40.1\% & 36.4\% & 35.8\% \\
+ & Workload-hot cache & 37.1\% & 33.3\% & 26.3\% \\
+ & DiskANN++-style QSEV & 38.7\% & 35.5\% & 31.8\% \\
+\midrule
+T2I-10M & Native BFS cache & 25.3\% & 24.7\% & 21.9\% \\
+ & Workload-hot cache & 25.0\% & 22.3\% & 18.7\% \\
+ & DiskANN++-style QSEV & 31.4\% & 23.7\% & 14.0\% \\
+\midrule
+BigANN & Native BFS cache & 11.6\% & 8.3\% & 1.9\% \\
+ & Workload-hot cache & 9.2\% & 5.4\% & 1.5\% \\
+ & DiskANN++-style QSEV & 9.8\% & 2.3\% & 1.2\% \\
+\bottomrule
+\end{tabular}
+\end{table}

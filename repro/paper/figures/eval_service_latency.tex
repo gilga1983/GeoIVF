@@ -1,0 +1,86 @@
+% Complete-request latency, source: GeoIVF self-hosted successful runs:
+% PubMed #38259064842, artifact 11756292555, source 2676793f;
+% Coveo/T2I-10M/BigANN-10M #38273561420, artifacts
+% 11768943552 / 11774381198 / 11778631189, source 9037366a.
+% Plots show non-dominated measured aggregate per-L means; Table uses
+% per-repetition/seed non-dominated curves before interpolation.
+\begin{figure*}[t]
+\centering
+\begin{minipage}[t]{.49\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    navhints plot panel,
+    xmin=74,xmax=100,xtick={75,85,95,100},
+    ymin=0,ymax=6.5,ytick={0,2,4,6},
+    xlabel={Recall@10 (\%)},ylabel={Latency (ms)},
+    unbounded coords=discard,
+]
+\addplot+[nh baseline] table[x=baseline_recall,y=baseline_ms,col sep=comma]{figures/data/eval_service_coveo.csv};
+\addplot+[nhRose,densely dashed,line width=1.4pt,mark=diamond*,mark size=2pt] table[x=catapult_recall,y=catapult_ms,col sep=comma]{figures/data/eval_service_coveo.csv};
+\addplot+[nh core] table[x=navhints_recall,y=navhints_ms,col sep=comma]{figures/data/eval_service_coveo.csv};
+\end{axis}
+\end{tikzpicture}
+\par{\nhTickFont (a) Coveo eCommerce}
+\end{minipage}\hfill
+\begin{minipage}[t]{.49\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    navhints plot panel,
+    xmin=20,xmax=82,xtick={20,40,60,80},
+    ymin=0,ymax=13,ytick={0,4,8,12},
+    xlabel={Recall@10 (\%)},
+    unbounded coords=discard,
+]
+\addplot+[nh baseline] table[x=baseline_recall,y=baseline_ms,col sep=comma]{figures/data/eval_service_pubmed.csv};
+\addplot+[nhRose,densely dashed,line width=1.4pt,mark=diamond*,mark size=2pt] table[x=catapult_recall,y=catapult_ms,col sep=comma]{figures/data/eval_service_pubmed.csv};
+\addplot+[nh core] table[x=navhints_recall,y=navhints_ms,col sep=comma]{figures/data/eval_service_pubmed.csv};
+\end{axis}
+\end{tikzpicture}
+\par{\nhTickFont (b) PubMed1M/MedCPT}
+\end{minipage}
+\par\vspace{6pt}
+\begin{minipage}[t]{.49\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    navhints plot panel,
+    xmin=35,xmax=96,xtick={40,60,80,95},
+    ymin=0,ymax=16,ytick={0,5,10,15},
+    xlabel={Recall@10 (\%)},ylabel={Latency (ms)},
+    unbounded coords=discard,
+]
+\addplot+[nh baseline] table[x=baseline_recall,y=baseline_ms,col sep=comma]{figures/data/eval_service_t2i.csv};
+\addplot+[nhRose,densely dashed,line width=1.4pt,mark=diamond*,mark size=2pt] table[x=catapult_recall,y=catapult_ms,col sep=comma]{figures/data/eval_service_t2i.csv};
+\addplot+[nh core] table[x=navhints_recall,y=navhints_ms,col sep=comma]{figures/data/eval_service_t2i.csv};
+\end{axis}
+\end{tikzpicture}
+\par{\nhTickFont (c) Text2Image-10M}
+\end{minipage}\hfill
+\begin{minipage}[t]{.49\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    navhints plot panel,
+    xmin=84,xmax=100,xtick={85,90,95,100},
+    ymin=0,ymax=15,ytick={0,5,10,15},
+    xlabel={Recall@10 (\%)},
+    unbounded coords=discard,
+]
+\addplot+[nh baseline] table[x=baseline_recall,y=baseline_ms,col sep=comma]{figures/data/eval_service_bigann.csv};
+\addplot+[nhRose,densely dashed,line width=1.4pt,mark=diamond*,mark size=2pt] table[x=catapult_recall,y=catapult_ms,col sep=comma]{figures/data/eval_service_bigann.csv};
+\addplot+[nh core] table[x=navhints_recall,y=navhints_ms,col sep=comma]{figures/data/eval_service_bigann.csv};
+\end{axis}
+\end{tikzpicture}
+\par{\nhTickFont (d) BigANN-10M}
+\end{minipage}
+\par\vspace{4pt}
+{\nhLegendFont
+ \tikz[baseline=-.5ex]{\draw[black,line width=1.35pt] (0,0)--(.5,0);}\;DiskANN\hspace{8pt}
+ \tikz[baseline=-.5ex]{\draw[nhRose,densely dashed,line width=1.4pt] (0,0)--(.5,0);}\;Catapult routing\hspace{8pt}
+ \tikz[baseline=-.5ex]{\draw[nhTeal,dashdotted,line width=1.4pt] (0,0)--(.5,0);}\;NavHints}
+\caption{\textbf{Complete-request latency versus recall.} Mean request latency for \DiskANN, \CatapultDB routing, and \sys across (a) Coveo, (b) PubMed, (c) Text2Image-10M, and (d) BigANN-10M. Curves show non-dominated measured operating points averaged over three rotated repetitions and three \CatapultDB hash seeds. Timing includes routing, graph search, result preparation, and online updates. Vertical scales differ across workloads to show each recall--latency tradeoff clearly; Table~\ref{tab:eval-service-latency} provides matched-recall percentage savings.}
+\Description{Four panels show absolute measured mean request latency in milliseconds versus recall, for unmodified DiskANN in black, source-aligned Catapult routing in rose dashed lines, and NavHints in teal dash-dot lines. Coveo and PubMed show large improvements, while Text2Image and BigANN show smaller improvements with sensitivity to high-recall timing variability.}
+\label{fig:eval-service-latency}
+\end{figure*}

@@ -84,7 +84,11 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_navhints_artifact.py' -v \
               2>&1 | tee artifacts/navhints-repro-smoke/artifact-tests.log
           python3 repro/run.py review > artifacts/navhints-repro-smoke/offline-manifests.txt
-          grep -q '30 original archive checksums' artifacts/navhints-repro-smoke/offline-manifests.txt
+          grep -q '32 original archive checksums' artifacts/navhints-repro-smoke/offline-manifests.txt
+          python3 repro/run.py review --bundle repro/navhints-reviewer-evidence.zip \
+              > artifacts/navhints-repro-smoke/bundled-evidence.txt
+          python3 repro/export_paper_results.py --output artifacts/navhints-repro-smoke/paper \
+              > artifacts/navhints-repro-smoke/plot-reproduction.txt
           python3 repro/run.py list > artifacts/navhints-repro-smoke/available.txt
           python3 repro/run.py run pubmed > artifacts/navhints-repro-smoke/dryrun.txt
           python3 repro/run.py fetch all > artifacts/navhints-repro-smoke/fetch-preview.txt

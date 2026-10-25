@@ -1,0 +1,31 @@
+% Original Starling source: 17dc3e8a011533a62374445f53963e951b72883a.
+% Frozen native Coveo/BigANN: GeoIVF #38137155521;
+%   artifacts 11702922642 (Coveo) and 11705972486 (BigANN).
+% First-time native float/MIPS PubMed and T2I: GeoIVF #38186111308;
+%   artifacts 11721096058 (PubMed) and 11722683829 (Text2Image).
+% Each result interpolates three-repetition mean absolute native curves
+% only within per-dataset supported Recall@10 ranges.
+\begin{table}[t]
+\centering
+\caption{\textbf{NavHints in the original Starling engine.} Logical SSD-read and native search-latency savings relative to unmodified \Starling at matched Recall@10 across four workloads. Positive values indicate improvements; negative values indicate additional costs. Recall targets are workload-specific. Native search timings may exclude post-query history updates.}
+\label{tab:eval-starling}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Workload & Recall@10 & Reads saved & Latency saved \\
+\midrule
+Coveo & $97\%$ & $\mathbf{42.72\%}$ & $\mathbf{27.41\%}$ \\
+      & $98\%$ & $\mathbf{50.90\%}$ & $\mathbf{36.01\%}$ \\
+\midrule
+PubMed & $99\%$ & $37.28\%$ & $-11.35\%$ \\
+       & $99.5\%$ & $47.38\%$ & $12.30\%$ \\
+\midrule
+T2I-10M & $60\%$ & $8.88\%$ & $5.30\%$ \\
+        & $80\%$ & $6.48\%$ & $9.68\%$ \\
+\midrule
+BigANN-10M & $97\%$ & $0.36\%$ & $-16.15\%$ \\
+           & $98\%$ & $-0.45\%$ & $-16.37\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}

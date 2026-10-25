@@ -1,0 +1,66 @@
+% NavHints/PVLDB figure system. All lengths are FINAL printed sizes.
+% All axes and legends must be readable at 100% paper size: no resizebox.
+\pgfplotsset{compat=1.18}
+\definecolor{nhBlue}{RGB}{31,99,154}
+\definecolor{nhTeal}{RGB}{0,109,104}
+\definecolor{nhRose}{RGB}{165,64,100}
+\newcommand{\nhAxisFont}{\fontsize{9.5}{11}\selectfont}
+\newcommand{\nhTickFont}{\fontsize{9}{11}\selectfont}
+\newcommand{\nhLegendFont}{\fontsize{9}{11}\selectfont}
+\pgfplotsset{
+  navhints plot base/.style={
+    scale only axis=false,
+    font=\nhTickFont,
+    tick label style={font=\nhTickFont},
+    label style={font=\nhAxisFont},
+    xlabel style={font=\nhAxisFont},
+    ylabel style={font=\nhAxisFont},
+    grid=major,
+    grid style={draw=black!13,line width=.35pt},
+    axis line style={black!75,line width=.65pt},
+    tick style={black!70,line width=.6pt},
+    tick align=outside,
+    major tick length=1.7pt,
+    axis lines=left,
+    clip=true,
+    enlarge x limits=false,
+    enlarge y limits=false,
+    line cap=round,
+    xlabel near ticks,
+    ylabel near ticks,
+    legend cell align=left,
+  },
+  % Use single for one-column plots; wide for a figure*; panel for figure* pairs.
+  navhints plot single/.style={navhints plot base,width=.92\columnwidth,height=5.05cm},
+  navhints plot wide/.style={navhints plot base,width=.96\textwidth,height=6.65cm},
+  navhints plot panel/.style={navhints plot base,width=.92\linewidth,height=5.55cm},
+  navhints plot compact/.style={navhints plot base,width=.92\columnwidth,height=4.20cm},
+  navhints axis/.style={navhints plot single}, % Backward-compatible alias.
+  navhints legend top/.style={
+    legend style={draw=none,fill=white,fill opacity=.93,text opacity=1,
+      font=\nhLegendFont,at={(0.5,1.03)},anchor=south,
+      legend columns=2,cells={anchor=west},column sep=2pt,inner sep=1.5pt}
+  },
+  navhints legend inline/.style={
+    legend style={draw=none,fill=white,fill opacity=.92,text opacity=1,
+      font=\nhLegendFont,at={(.98,.98)},anchor=north east,
+      legend columns=1,cells={anchor=west},inner sep=2pt}
+  },
+  navhints bar/.style={ybar,bar width=6pt,area legend,
+    enlarge x limits=0.12,major x tick style=transparent},
+  navhints scatter/.style={only marks,scatter,scatter src=explicit symbolic},
+  navhints pubmed/.style={black,solid,line width=1.4pt,mark=*,mark size=2pt},
+  navhints coveo/.style={nhBlue,densely dashed,line width=1.4pt,mark=square*,mark size=1.9pt},
+  navhints text2image/.style={nhTeal,dashdotted,line width=1.45pt,mark=triangle*,mark size=2.2pt},
+  navhints bigann/.style={nhRose,densely dotted,line width=1.55pt,mark=diamond*,mark size=2.0pt},
+}
+
+
+% Evaluation uses a stable method palette across all result figures:
+% baseline black, learned junction blue, NavHints teal.
+\pgfplotsset{
+  nh baseline/.style={black,solid,line width=1.35pt,mark=*,mark size=1.8pt},
+  nh junction/.style={nhBlue,densely dashed,line width=1.4pt,mark=square*,mark size=1.9pt},
+  nh core/.style={nhTeal,dashdotted,line width=1.4pt,mark=triangle*,mark size=2pt},
+  nh allocation/.style={nhRose,solid,line width=1.55pt,mark=diamond*,mark size=2pt},
+}

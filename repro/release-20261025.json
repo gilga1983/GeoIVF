@@ -1,0 +1,11 @@
+{
+  "paper": "NavHints: Demand-Aware Navigation for Disk-Resident Vector Search",
+  "paper_commit": "0af8904f3885979a85af59bc5bd732ba9ee3c087",
+  "code_base_commit": "4effc74a931efe5525e8c68339980f022c290f2b",
+  "artifact": "repro/navhints-reviewer-evidence.zip",
+  "sha256": "b3ec43e34bb9b3ae4ea02a695917afade8a0b6ea87f1ea896a056896487e5dcb",
+  "sources": 35,
+  "aggregate_json_files": 48,
+  "raw_measurements_rerun": false,
+  "public_entry": "https://github.com/gilga1983/GeoIVF"
+}

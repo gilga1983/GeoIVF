@@ -1,0 +1,17 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{Evaluation workloads and query splits.} Train/warm/test gives the number of queries used for junction training, online warm-up, and measurement. Coveo follows production chronology; the other workloads use disjoint benchmark query sequences.}
+\label{tab:eval-workloads}
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lcll@{}}
+\toprule
+Workload & Vectors $\times$ dim. & Metric & Train/warm/test \\
+\midrule
+Coveo eCom & 31,950 $\times$ 50 & IP & 5K/20K/5K \\
+PubMed/MedCPT & 1M $\times$ 768 & IP & 5K/4K/1K \\
+Text2Image & 10M $\times$ 200 & IP & 5K/4K/1K \\
+BigANN & 10M $\times$ 128 & $L_2^2$ & 5K/4K/1K \\
+\bottomrule
+\end{tabular}
+\end{table}

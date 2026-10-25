@@ -7,8 +7,8 @@ compile an ANN engine, execute an SSD benchmark, or modify the paper.
   python3 repro/verify_review_bundle.py                 # source/provenance audit
   python3 repro/verify_review_bundle.py --bundle path.zip
 
-Source data are held in a separate, explicitly approved reviewer ZIP. The
-permanent release location will be added only after data-rights approval.
+The public aggregate ZIP is bundled at repro/navhints-reviewer-evidence.zip.
+Original input datasets and raw experiment archives are not distributed here.
 """
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ SOURCES = [
     ("repro/manifest.json", 14, "original_artifact_sha256"),
     ("repro/supplemental-manifest-20261014.json", 9, "sha256"),
     ("repro/active-figures-table7-sources-20261017.json", 7, "sha256"),
+    ("repro/destination-controls-sources-20261025.json", 2, "sha256"),
 ]
 DATASETS = {
     "coveo": ("Coveo", "coveo-final-core.json"),
@@ -238,12 +239,65 @@ def newest_ablations(z: zipfile.ZipFile, summary: dict) -> None:
               f" vs visits {from_frequency:7.4f}%, vs mean {from_mean:7.4f}%  PASS")
 
 
+def destination_controls(z: zipfile.ZipFile) -> list[dict]:
+    """Recompute Table 5 from measured recall/read frontiers, not reported gains."""
+    targets = (35., 45., 55., 65., 72., 75.)
+    source = json.loads(z.read("evidence/destination-equal-work/demand-vs-random.json"))
+    capacity = json.loads(z.read("evidence/destination-capacity/reviewer-defense.json"))
+    require(source["evaluation"] == {
+        "Ls": [10, 20, 40, 80, 160, 320], "reps": 3,
+        "replay_queries": 5000, "warmup": 4000, "measured": 1000,
+    }, "Table 5: unexpected source-control replay protocol")
+    require(capacity["controller_blob"] == "2cd0b5a2cbd8ea059cdd1dc0745a9679d2f6f6eb",
+            "Table 5: unexpected historical controller")
+
+    def saving(summaries: dict, reference: str, arm: str) -> float:
+        baseline, candidate = curve(summaries[reference]), curve(summaries[arm])
+        values = []
+        for target in targets:
+            b, c = interpolate(baseline, target), interpolate(candidate, target)
+            require(b is not None and c is not None and b > 0,
+                    f"Table 5 {arm}: target {target} outside common recall support")
+            values.append(100 * (1 - c / b))
+        return statistics.mean(values)
+
+    rows = []
+    for arm, label, published in (
+        ("randomdb512", "Random corpus IDs", -.90),
+        ("history512", "Reservoir of past destinations", 4.41),
+        ("recent512", "Recent512 (unique FIFO)", 4.78),
+    ):
+        observed = saving(source["summary"], "entry", arm)
+        approx(observed, published, .005, "Table 5 " + label)
+        recorded = next(r for r in source["ranking"] if r["method"] == arm)
+        approx(observed, -recorded["mean_io_change_percent_vs_entry"], 1e-9,
+               "Table 5 source recorded summary")
+        rows.append({"block": "equal-work", "configuration": label,
+                     "capacity_ids": 512, "read_savings_pct": observed})
+    require([r["capacity_ids"] for r in capacity["capacity_sweep"]]
+            == [0, 64, 128, 256, 512, 1024, 2048], "Table 5: incomplete capacity sweep")
+    for size, published in ((64, 1.64), (128, 2.77), (256, 3.50),
+                            (512, 4.78), (1024, 5.17), (2048, 5.26)):
+        observed = saving(capacity["summary"], "cap0", f"cap{size}")
+        approx(observed, published, .005, f"Table 5 capacity {size}")
+        recorded = next(r for r in capacity["capacity_sweep"] if r["capacity_ids"] == size)
+        require(recorded["vs_entry"]["points"] == len(targets), "Table 5 missing capacity targets")
+        approx(observed, recorded["vs_entry"]["mean_io_saving_percent"], 1e-9,
+               "Table 5 capacity recorded summary")
+        rows.append({"block": "capacity", "configuration": f"{size} IDs",
+                     "capacity_ids": size, "read_savings_pct": observed})
+    approx(rows[2]["read_savings_pct"], rows[6]["read_savings_pct"], 1e-9,
+           "Table 5 independent Recent512 controls")
+    print("  Table 5     all 3 source controls and 6 capacities, six recall targets each  PASS")
+    return rows
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--bundle", type=Path, help="Data-minimized reviewer ZIP (no network required)")
     args = ap.parse_args()
     public_digests = check_source_manifests()
-    print(f"Public source inventories: {len(public_digests)} original archive checksums (14 + 9 + 7)  PASS")
+    print(f"Public source inventories: {len(public_digests)} original archive checksums (14 + 9 + 7 + 2)  PASS")
     if args.bundle is None:
         print("Manifest-only preflight completed; supply --bundle to reproduce paper results.")
         return 0
@@ -255,6 +309,7 @@ def main() -> int:
         primary(z, summary)
         latency(z, summary)
         newest_ablations(z, summary)
+        destination_controls(z)
     print("PASS: NavHints data-minimized manuscript reproduction completed without SSD work")
     return 0
 

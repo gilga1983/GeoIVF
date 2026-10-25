@@ -1,0 +1,33 @@
+\begin{tikzpicture}[
+  x=1cm,y=1cm,
+  box/.style={draw=black!65,rounded corners=1.6pt,align=center,inner sep=2.6pt,font=\scriptsize,
+              line width=.45pt,minimum height=.56cm},
+  base/.style={box,fill=gray!8},
+  learned/.style={box,fill=blue!8},
+  online/.style={box,fill=green!7},
+  flow/.style={-{Latex[length=1.55mm,width=.85mm]},line width=.70pt,draw=black!75},
+  stateflow/.style={-{Latex[length=1.4mm,width=.80mm]},line width=.65pt,draw=blue!65!black},
+  update/.style={-{Latex[length=1.4mm,width=.80mm]},line width=.65pt,draw=green!45!black},
+  bus/.style={line width=.55pt,draw=green!45!black},
+]
+% The top lane carries forward query execution, left to right.
+\node[base,minimum width=.75cm] (query) at (.50,0) {Query};
+\node[base,minimum width=1.76cm] (select) at (2.70,0) {PQ-select entry\\+ up to 8 starts};
+\node[base,minimum width=1.70cm] (search) at (5.30,0) {DiskANN\\best-first search};
+\node[base,minimum width=.82cm] (result) at (7.60,0) {Result};
+\draw[flow] (query.east) -- (select.west);
+\draw[flow] (select.east) -- (search.west);
+\draw[flow] (search.east) -- (result.west);
+
+% The middle lane holds the learned junction directory and online destination history.
+\node[learned,minimum width=1.80cm] (junctions) at (1.57,-1.30) {14,464 junctions\\in 512 regions};
+\node[online,minimum width=1.80cm] (recent) at (3.73,-1.30) {2,048 recent\\destination IDs};
+\draw[stateflow] (junctions.north) -- ++(0,.16) -| ($(select.south west)!0.26!(select.south east)$);
+\draw[stateflow] (recent.north) -- ++(0,.16) -| ($(select.south west)!0.74!(select.south east)$);
+
+% Online learning updates the destination history after the search.
+\coordinate (fb-recent) at (3.73,-2.44);
+\draw[bus] (result.south) |- (fb-recent);
+\draw[update] (fb-recent) -- (recent.south);
+\node[font=\scriptsize,inner sep=0pt,text=green!40!black] at (6.86,-2.08) {after search};
+\end{tikzpicture}

@@ -1,0 +1,55 @@
+% Figure 3: restrained semantic colors, matching the paper's blue/teal palette.
+% Solid graph execution and dashed NavHints starting candidates remain distinct in B/W.
+\definecolor{nhHandleMemory}{RGB}{31,99,154}
+\definecolor{nhHandleHints}{RGB}{0,109,104}
+\definecolor{nhHandleStorage}{RGB}{165,100,64}
+\begin{tikzpicture}[
+  node distance=4.5mm and 5mm,
+  box/.style={draw=black!60, rounded corners=2pt, align=center, inner sep=3.5pt, font=\scriptsize, line width=.56pt, text=black!90},
+  base/.style={box, fill=gray!6},
+  mem/.style={box, fill=nhHandleMemory!13, draw=nhHandleMemory!80!black},
+  disk/.style={box, fill=nhHandleStorage!16, draw=nhHandleStorage!85!black},
+  nav/.style={box, fill=nhHandleHints!12, draw=nhHandleHints!75!black, dashed, line width=.66pt},
+  arr/.style={-{Latex[length=1.8mm]}, line width=.82pt, draw=black!78},
+  navarr/.style={-{Latex[length=1.8mm]}, line width=.80pt, draw=nhHandleHints!85!black, dashed},
+  looparr/.style={arr, draw=nhHandleMemory!78!black}
+]
+\node[base] (q) {query $q$};
+\node[mem, right=of q] (pq) {build PQ\\lookup table};
+\node[base, right=of pq] (start) {score start\\candidate(s)};
+\node[base, right=of start] (queue) {bounded best-first\\frontier ($L$)};
+\node[disk, below=7mm of queue] (read) {read selected\\graph record(s) from SSD};
+\node[mem, left=of read] (score) {PQ-score\\neighbor IDs};
+\node[base, left=of score] (insert) {insert eligible\\neighbors into frontier};
+
+\draw[arr] (q) -- (pq);
+\draw[arr] (pq) -- (start);
+\draw[arr] (start) -- (queue);
+\draw[arr] (queue) -- (read);
+\draw[arr] (read) -- (score);
+\draw[arr] (score) -- (insert);
+
+
+\node[nav, above=7mm of start] (h1) {existing start-point interface:\\junction + up to 8 destinations};
+\draw[navarr] (h1) -- (start);
+
+% Feedback routing plan (no changes to nodes or forward paths):
+%   source = completed neighbor insertion (insert.west)
+%   target = bounded search frontier (queue.east)
+%   west lane is outside the leftmost lower-row node;
+%   return lane stays below the SSD-read and PQ-scoring nodes;
+%   east lane returns outside the graph-record box.
+% The three dedicated orthogonal corridors keep the feedback arrow
+% disjoint from query execution and the NavHints start interface.
+\coordinate (feedback-west) at ($(insert.west)+(-4mm,0)$);
+\coordinate (feedback-low) at ($(read.south)+(0,-9mm)$);
+\coordinate (feedback-east) at ($(read.east)+(9mm,0)$);
+\draw[looparr] (insert.west)
+  -- (feedback-west |- insert.west)
+  -- (feedback-west |- feedback-low)
+  -- (feedback-east |- feedback-low)
+  -- (feedback-east |- queue.east)
+  -- (queue.east);
+
+\node[font=\tiny, align=center, text=nhHandleMemory!85!black, below=1mm of pq] {resident memory};
+\end{tikzpicture}
