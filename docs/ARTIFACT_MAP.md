@@ -1,7 +1,9 @@
 # NavHints paper to artifact evidence map
 
-This file maps the **current** PVLDB v20 manuscript to immutable experiment
-records. A method used in an ablation does not redefine the selected NavHints
+This file maps the **ICDE 2027** NavHints manuscript to immutable experiment
+records. The evidence was frozen in October 2026 before the venue-specific IEEE
+formatting and scientific-positioning revisions; no experiment was rerun for
+the ICDE format conversion. A method used in an ablation does not redefine the selected NavHints
 algorithm, and different matched-recall grids must not be pooled.
 
 The main reproducibility entry point is [ARTIFACT_REVIEW.md](ARTIFACT_REVIEW.md).
