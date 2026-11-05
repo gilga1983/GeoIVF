@@ -1,7 +1,7 @@
 # NavHints: reviewer quickstart
 
 **Paper:** NavHints: Demand-Aware Navigation for Disk-Resident Vector Search
-(regular research paper, PVLDB Volume 20 / VLDB 2027).
+(regular research-track submission, ICDE 2027).
 
 **Public entry point:** https://github.com/gilga1983/GeoIVF
 
