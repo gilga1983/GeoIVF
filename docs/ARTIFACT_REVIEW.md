@@ -11,7 +11,9 @@ Demand-Aware Navigation for Disk-Resident Vector Search*. Start with the
 - [Evidence ZIP](../repro/navhints-reviewer-evidence.zip): 48 aggregate JSON
   outputs from 35 checksum-frozen original experiment archives.
 - [Release record](../repro/release-20261025.json): evidence ZIP SHA-256,
-  code base revision and exact manuscript revision.
+  code base revision and October 25 baseline manuscript revision.
+  The ICDE 2027 IEEE manuscript retains the frozen experimental data and plots;
+  bibliography and venue-specific positioning were subsequently revised.
 - [Paper/evidence map](ARTIFACT_MAP.md): every current figure and result table.
 - [Plotting snapshot](../repro/paper/): original figure/table sources,
   derivation scripts and independent reference CSVs from the frozen manuscript.

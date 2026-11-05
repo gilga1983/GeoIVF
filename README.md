@@ -1,6 +1,6 @@
 # NavHints: Demand-Aware Navigation for Disk-Resident Vector Search
 
-**Code, reviewer evidence and experiment harness for the NavHints PVLDB/VLDB 2027 paper.** This is the code repository, historically named GeoIVF. All reviewer quickstart commands and standalone plot exports work from this public checkout. The authoring manuscript is maintained separately.
+**Code, reviewer evidence, and experiment harness for the NavHints ICDE 2027 research submission.** This is the code repository, historically named GeoIVF. All reviewer quickstart commands and standalone plot exports work from this public checkout. The IEEE-formatted manuscript is maintained separately. The experimental results and data underlying the ICDE submission are identical to the frozen October 2026 evidence package.
 
 **For artifact reviewers:** start with [ARTIFACT_QUICKSTART.md](docs/ARTIFACT_QUICKSTART.md) and the [paper-to-evidence map](docs/ARTIFACT_MAP.md). The [bundled evidence ZIP](repro/navhints-reviewer-evidence.zip) contains 48 aggregate JSON outputs from 35 original experiment archives, including both Table 5 studies. Its SHA-256 is frozen in [the release record](repro/release-20261025.json). Original raw archives are preserved separately. See [current release status](docs/RELEASE-READINESS-2026-10-25.md) and [review/reproduction permissions](LICENSE).
 

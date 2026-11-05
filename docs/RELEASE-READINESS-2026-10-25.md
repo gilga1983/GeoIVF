@@ -1,4 +1,10 @@
-# NavHints reviewer release (25 October 2026)
+# NavHints reviewer evidence release (25 October 2026)
+
+**ICDE 2027 note (November 5, 2026):** This record describes the frozen
+experimental source and the original October manuscript snapshot. The IEEE
+ICDE manuscript subsequently changed venue formatting, bibliography, and
+prose, while preserving the recorded results and their supporting inputs.
+The existing release record and all checksums are intentionally unchanged.
 
 The public entry point is https://github.com/gilga1983/GeoIVF.
 Reviewer numerical checks and standalone plot regeneration work from this
